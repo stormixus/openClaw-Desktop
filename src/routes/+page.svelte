@@ -19,26 +19,26 @@
 <main class="container">
   <section class="hero">
     <div class="hero-left">
-      <div class="badge">openclaw · AI agent</div>
+      <div class="badge">{$t("home.badge")}</div>
       <h1>{$t("app.title")}</h1>
       <p class="tagline">{$t("app.tagline")}</p>
       <div class="actions">
-        <a class="primary" href="/settings">{$t("nav.settings")}</a>
-        <button class="ghost" type="button">Learn more</button>
+        <a class="primary" href="/settings">{$t("home.primary")}</a>
+        <button class="ghost" type="button">{$t("home.secondary")}</button>
       </div>
       <div class="quick">
         <div class="quick-item">
           <span class="quick-dot"></span>
           <div>
-            <h3>Workflows</h3>
-            <p>Launch tasks faster with desktop-native flows.</p>
+            <h3>{$t("home.quick.workflows.title")}</h3>
+            <p>{$t("home.quick.workflows.desc")}</p>
           </div>
         </div>
         <div class="quick-item">
           <span class="quick-dot"></span>
           <div>
-            <h3>Agents</h3>
-            <p>Keep AI helpers close to your daily work.</p>
+            <h3>{$t("home.quick.agents.title")}</h3>
+            <p>{$t("home.quick.agents.desc")}</p>
           </div>
         </div>
       </div>
@@ -46,26 +46,30 @@
     <div class="hero-card">
       <div class="card-header">
         <div>
-          <h2>Activity</h2>
-          <p>Latest system check</p>
+          <h2>{$t("home.activity.title")}</h2>
+          <p>{$t("home.activity.desc")}</p>
         </div>
-        <span class="status">Healthy</span>
+        <span class="status">{$t("home.activity.status")}</span>
       </div>
       <div class="meter">
         <div class="meter-fill"></div>
       </div>
       <div class="card-grid">
         <div class="card-item">
-          <span class="pill">Latency</span>
+          <span class="pill">{$t("home.activity.latency")}</span>
           <strong>42ms</strong>
         </div>
         <div class="card-item">
-          <span class="pill">Queue</span>
+          <span class="pill">{$t("home.activity.queue")}</span>
           <strong>0</strong>
         </div>
         <div class="card-item">
-          <span class="pill">Agents</span>
+          <span class="pill">{$t("home.activity.agents")}</span>
           <strong>3</strong>
+        </div>
+        <div class="card-item">
+          <span class="pill">{$t("home.activity.last_sync")}</span>
+          <strong>{$t("home.activity.now")}</strong>
         </div>
       </div>
     </div>
@@ -75,7 +79,7 @@
     <div class="panel-head">
       <div>
         <h2>{$t("greet.title")}</h2>
-        <p class="panel-note">Bridge test for the Rust command.</p>
+        <p class="panel-note">{$t("home.panel.note")}</p>
       </div>
       <span class="pill">Dev</span>
     </div>

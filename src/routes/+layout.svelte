@@ -1,8 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { page } from "$app/stores";
+  import { initLocale, t } from "../lib/i18n";
   import { applyThemeToDocument, initTheme, theme } from "../lib/theme";
 
   onMount(() => {
+    initLocale();
     initTheme();
     const unsubscribe = theme.subscribe((value) => {
       applyThemeToDocument(value);
@@ -28,7 +31,25 @@
   });
 </script>
 
-<slot />
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo"></div>
+      <div>
+        <strong>{$t("app.title")}</strong>
+        <span>{$t("app.subtitle")}</span>
+      </div>
+    </div>
+    <nav class="nav">
+      <a class:active={$page.url.pathname === "/"} href="/">{$t("nav.home")}</a>
+      <a class:active={$page.url.pathname.startsWith("/settings")} href="/settings">{$t("nav.settings")}</a>
+      <a class:active={$page.url.pathname.startsWith("/onboarding")} href="/onboarding">
+        {$t("nav.onboarding")}
+      </a>
+    </nav>
+  </header>
+  <slot />
+</div>
 
 <style>
   :global(:root) {
@@ -59,5 +80,73 @@
     color: var(--text);
     background: radial-gradient(circle at top, rgba(47, 102, 255, 0.08), transparent 45%),
       var(--bg);
+  }
+
+  .app-shell {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    padding: 20px 6vw;
+  }
+
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo {
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    background: radial-gradient(circle at 30% 20%, #ff5a5f, #2f66ff);
+    box-shadow: 0 10px 20px rgba(47, 102, 255, 0.25);
+  }
+
+  .brand strong {
+    display: block;
+    font-size: 14px;
+  }
+
+  .brand span {
+    display: block;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .nav {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .nav a {
+    text-decoration: none;
+    color: var(--muted);
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+  }
+
+  .nav a.active {
+    color: var(--text);
+    background: var(--surface);
+    border-color: var(--border);
+    box-shadow: var(--shadow);
+  }
+
+  @media (max-width: 900px) {
+    .topbar {
+      flex-direction: column;
+      align-items: flex-start;
+    }
   }
 </style>
