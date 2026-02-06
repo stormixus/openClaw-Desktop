@@ -13,6 +13,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@noble/ed25519": "^3.0.0",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2"
   },

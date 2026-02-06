@@ -1,12 +1,28 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { page } from "$app/stores";
-  import { initLocale, t } from "../lib/i18n";
-  import { applyThemeToDocument, initTheme, theme } from "../lib/theme";
+  import { browser } from "$app/environment";
+  import { initLocale } from "$lib/i18n";
+  import { applyThemeToDocument, initTheme, theme } from "$lib/theme";
+  import { initGatewayStore } from "$lib/gateway/store.svelte";
+  import Sidebar from "$lib/components/Sidebar.svelte";
+  import SetupWizard from "$lib/components/Wizard/SetupWizard.svelte";
+
+  let showWizard = $state(false);
+  let initialized = $state(false);
 
   onMount(() => {
     initLocale();
     initTheme();
+    initGatewayStore();
+
+    // Check if first run
+    if (browser) {
+      const wizardComplete = localStorage.getItem("openclaw.wizardComplete");
+      showWizard = !wizardComplete;
+    }
+
+    initialized = true;
+
     const unsubscribe = theme.subscribe((value) => {
       applyThemeToDocument(value);
     });
@@ -29,124 +45,108 @@
       media.removeEventListener("change", listener);
     };
   });
+
+  function handleWizardComplete() {
+    showWizard = false;
+  }
 </script>
 
+{#if showWizard}
+  <SetupWizard oncomplete={handleWizardComplete} />
+{/if}
+
 <div class="app-shell">
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo"></div>
-      <div>
-        <strong>{$t("app.title")}</strong>
-        <span>{$t("app.subtitle")}</span>
-      </div>
-    </div>
-    <nav class="nav">
-      <a class:active={$page.url.pathname === "/"} href="/">{$t("nav.home")}</a>
-      <a class:active={$page.url.pathname.startsWith("/settings")} href="/settings">{$t("nav.settings")}</a>
-      <a class:active={$page.url.pathname.startsWith("/onboarding")} href="/onboarding">
-        {$t("nav.onboarding")}
-      </a>
-    </nav>
-  </header>
-  <slot />
+  <Sidebar />
+  <main class="main-content">
+    <slot />
+  </main>
 </div>
 
 <style>
+  /* ============================================================================
+   * CSS Variables - CleanMyMac Style
+   * ============================================================================ */
   :global(:root) {
-    --bg: #f5f7fb;
-    --surface: #ffffff;
-    --surface-strong: #eef1f6;
-    --text: #171a1f;
-    --muted: #5a6472;
-    --border: #d6dbe5;
-    --shadow: 0 12px 30px rgba(16, 24, 40, 0.08);
-    --accent: #2f66ff;
+    /* Colors - Light Theme */
+    --color-bg: #f5f7fb;
+    --color-surface: #ffffff;
+    --color-surface-elevated: #f8f9fc;
+    --color-surface-hover: rgba(0, 0, 0, 0.05);
+    --color-text: #171a1f;
+    --color-text-muted: #6b7280;
+    --color-border: #e5e7eb;
+    --color-primary: #3b82f6;
+    --color-accent: #8b5cf6;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+
+    /* Sidebar */
+    --sidebar-bg: #f0f2f5;
+    --sidebar-width: 80px;
+
+    /* Shadows */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.15);
+
+    /* Radius */
+    --radius-sm: 8px;
+    --radius-md: 12px;
+    --radius-lg: 16px;
+    --radius-xl: 20px;
   }
 
   :global(:root[data-theme="dark"]) {
-    --bg: #0e1117;
-    --surface: #141923;
-    --surface-strong: #1c2230;
-    --text: #f4f6fb;
-    --muted: #b7c0cc;
-    --border: #2a3240;
-    --shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
-    --accent: #2f66ff;
+    /* Colors - Dark Theme */
+    --color-bg: #0d0f14;
+    --color-surface: #141820;
+    --color-surface-elevated: #1a1f2a;
+    --color-surface-hover: rgba(255, 255, 255, 0.08);
+    --color-text: #f4f6fb;
+    --color-text-muted: #9ca3af;
+    --color-border: #2a3140;
+    --color-primary: #3b82f6;
+    --color-accent: #8b5cf6;
+    --color-success: #10b981;
+    --color-warning: #f59e0b;
+    --color-error: #ef4444;
+
+    /* Sidebar */
+    --sidebar-bg: #0a0c10;
+  }
+
+  :global(*) {
+    box-sizing: border-box;
   }
 
   :global(body) {
     margin: 0;
-    font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, sans-serif;
-    color: var(--text);
-    background: radial-gradient(circle at top, rgba(47, 102, 255, 0.08), transparent 45%),
-      var(--bg);
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", 
+                 "Noto Sans KR", system-ui, sans-serif;
+    color: var(--color-text);
+    background: var(--color-bg);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
+  :global(button) {
+    font-family: inherit;
+  }
+
+  /* App Shell Layout */
   .app-shell {
-    min-height: 100vh;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--color-bg);
+  }
+
+  .main-content {
+    flex: 1;
     display: flex;
     flex-direction: column;
-  }
-
-  .topbar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 16px;
-    padding: 20px 6vw;
-  }
-
-  .brand {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .logo {
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    background: radial-gradient(circle at 30% 20%, #ff5a5f, #2f66ff);
-    box-shadow: 0 10px 20px rgba(47, 102, 255, 0.25);
-  }
-
-  .brand strong {
-    display: block;
-    font-size: 14px;
-  }
-
-  .brand span {
-    display: block;
-    font-size: 12px;
-    color: var(--muted);
-  }
-
-  .nav {
-    display: flex;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  .nav a {
-    text-decoration: none;
-    color: var(--muted);
-    font-size: 13px;
-    padding: 8px 12px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-  }
-
-  .nav a.active {
-    color: var(--text);
-    background: var(--surface);
-    border-color: var(--border);
-    box-shadow: var(--shadow);
-  }
-
-  @media (max-width: 900px) {
-    .topbar {
-      flex-direction: column;
-      align-items: flex-start;
-    }
+    overflow: hidden;
   }
 </style>

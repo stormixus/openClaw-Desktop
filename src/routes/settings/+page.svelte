@@ -71,8 +71,9 @@
         <span class="pill">Global</span>
       </div>
         <div class="control">
-          <label>{$t("settings.language")}</label>
+          <label for="language-select">{$t("settings.language")}</label>
           <select
+            id="language-select"
             class="select"
             value={$locale}
             on:change={(event) => setLocale((event.currentTarget as HTMLSelectElement).value as Locale)}
@@ -105,8 +106,8 @@
         <span class="pill">Personal</span>
         </div>
         <div class="control">
-          <label>{$t("settings.theme")}</label>
-          <div class="segmented">
+          <label id="theme-label">{$t("settings.theme")}</label>
+          <div class="segmented" role="group" aria-labelledby="theme-label">
             {#each themes as entry}
               <button
                 type="button"
