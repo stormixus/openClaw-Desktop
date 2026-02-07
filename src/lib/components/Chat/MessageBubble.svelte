@@ -489,6 +489,9 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
   }
 
   .message-bubble.user .content-wrapper {
@@ -767,6 +770,8 @@
     border-radius: 16px;
     font-size: 14px;
     line-height: 1.6;
+    overflow: hidden;
+    min-width: 0;
   }
 
   /* Grouped message radius adjustments */
@@ -842,6 +847,8 @@
   /* Markdown Styles */
   .markdown-body {
     line-height: 1.6;
+    overflow: hidden;
+    max-width: 100%;
   }
 
   .markdown-body :global(p) {

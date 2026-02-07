@@ -178,13 +178,15 @@ export class GatewayClient {
     return parts.length > 0 ? parts.join("\n") : null;
   }
 
+  /**
+   * Normalize a server history message into our ChatMessage format.
+   * Server returns messages as: { role, content (string | array), timestamp (number) }
+   * We need to extract text and normalize the format.
+   */
   private normalizeHistoryMessage(raw: unknown, index: number): ChatMessage | null {
     if (!raw || typeof raw !== "object") return null;
 
-    const envelope = raw as UnknownRecord;
-    const entry = (envelope.message && typeof envelope.message === "object"
-      ? (envelope.message as UnknownRecord)
-      : envelope) as UnknownRecord;
+    const entry = raw as UnknownRecord;
 
     const roleRaw = typeof entry.role === "string" ? entry.role : "assistant";
     const role = roleRaw === "user" || roleRaw === "assistant" || roleRaw === "system"
@@ -194,7 +196,6 @@ export class GatewayClient {
     const text = this.extractTextFromContent(entry.content) ??
       (typeof entry.text === "string" ? entry.text : null);
 
-    // Keep non-text messages visible in timeline.
     const content = (text ?? "[non-text message]").trim();
     if (!content) return null;
 
@@ -209,9 +210,10 @@ export class GatewayClient {
       }
     }
 
+    // Server messages don't include IDs; generate stable ones from position
     const id = typeof entry.id === "string"
       ? entry.id
-      : `${role}-${index}-${timestamp}`;
+      : `msg-${index}-${timestamp}`;
 
     return { id, role, content, timestamp };
   }
@@ -621,7 +623,7 @@ export class GatewayClient {
     return this.request("status");
   }
 
-  async getSessions(params?: { kinds?: string[]; limit?: number; messageLimit?: number }): Promise<SessionInfo[]> {
+  async getSessions(params?: { limit?: number; includeDerivedTitles?: boolean; includeLastMessage?: boolean }): Promise<SessionInfo[]> {
     const result = await this.request<{ sessions: SessionInfo[] }>("sessions.list", params ?? {});
     return result?.sessions ?? [];
   }

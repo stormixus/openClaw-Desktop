@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { store, switchSession, loadSessions } from "$lib/gateway/store.svelte";
+  import { store, switchSession, loadSessions, createNewSession } from "$lib/gateway/store.svelte";
 
   interface Props {
     isOpen?: boolean;
@@ -15,9 +15,7 @@
   }
 
   function newSession() {
-    // Generate a new session key
-    const newKey = `desktop-${crypto.randomUUID().slice(0, 8)}`;
-    switchSession(newKey);
+    createNewSession();
     onclose?.();
   }
 

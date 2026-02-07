@@ -17,7 +17,8 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "openclaw.gateways";
-const MESSAGES_KEY_PREFIX = "openclaw.chat";
+const SESSION_KEY_PREFIX = "openclaw.session";
+
 
 // ============================================================================
 // Reactive State (Svelte 5 Runes) - wrapped in object for export
@@ -32,7 +33,7 @@ export const store = $state({
   modelsSnapshot: null as ModelsSnapshot | null,
   isStreaming: false,
   streamingContent: "",
-  sessionKey: "main",
+  sessionKey: "",
   sessions: [] as SessionInfo[],  // Available sessions
   notificationsEnabled: true,     // Notification setting
 });
@@ -101,93 +102,42 @@ export function getActiveClient(): GatewayClient | null {
 }
 
 // ============================================================================
-// Chat Message Persistence (localStorage cache)
+// Chat History (server-authoritative, matching official openClaw UI)
 // ============================================================================
 
-function getChatCacheKey(gatewayId: string, sessionKey: string): string {
-  return `${MESSAGES_KEY_PREFIX}.${gatewayId}.${sessionKey}`;
-}
-
-function saveChatMessages(): void {
-  if (!browser || !store.activeGatewayId) return;
-  const key = getChatCacheKey(store.activeGatewayId, store.sessionKey);
-  try {
-    const userMsgCount = store.chatMessages.filter(m => m.role === 'user').length;
-    
-    // Safety check: never save if we'd lose user messages
-    const existing = localStorage.getItem(key);
-    if (existing) {
-      const cached = JSON.parse(existing) as ChatMessage[];
-      const cachedUserCount = cached.filter(m => m.role === 'user').length;
-      if (userMsgCount < cachedUserCount) {
-        console.warn(`[Store] saveChatMessages BLOCKED: would lose user messages (${cachedUserCount} -> ${userMsgCount})`);
-        return;
-      }
-    }
-    
-    localStorage.setItem(key, JSON.stringify(store.chatMessages));
-  } catch (e) {
-    console.warn("[Store] Failed to save chat messages to cache:", e);
-  }
-}
-
-function loadCachedMessages(gatewayId: string, sessionKey: string): ChatMessage[] {
-  if (!browser) return [];
-  const key = getChatCacheKey(gatewayId, sessionKey);
-  try {
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      return JSON.parse(saved) as ChatMessage[];
-    }
-  } catch (e) {
-    console.warn("[Store] Failed to load cached messages:", e);
-  }
-  return [];
+/**
+ * Generate a unique session key for a new conversation.
+ */
+function generateSessionKey(): string {
+  return `desktop-${crypto.randomUUID().slice(0, 8)}`;
 }
 
 /**
- * Merge server messages with local messages.
- * Local user messages are CANONICAL (they have UUID IDs from sendMessage).
- * Server may return user messages with different generated IDs (e.g. user-0-timestamp).
- * We keep ALL local user messages and only add server user messages if content doesn't match.
- * For assistant messages, server takes priority (has updated content).
+ * Get or create a session key for a gateway.
+ * Returns the last-used session from localStorage, or creates a new one.
  */
-function mergeMessages(serverMessages: ChatMessage[], localMessages: ChatMessage[]): ChatMessage[] {
-  const merged = new Map<string, ChatMessage>();
+function resolveSessionKey(gatewayId: string): string {
+  if (!browser) return "main";
+  const storageKey = `${SESSION_KEY_PREFIX}.${gatewayId}`;
+  const saved = localStorage.getItem(storageKey);
   
-  // 1. Add ALL local messages first (these are our source of truth for user messages)
-  for (const msg of localMessages) {
-    merged.set(msg.id, msg);
+  // Default to "main" session for synchronization with other clients/CLI
+  // If user has a legacy "desktop-" key, migrate them to "main"
+  if (saved && !saved.startsWith("desktop-")) {
+    return saved;
   }
   
-  // Build a set of local user message content for dedup
-  const localUserContents = new Set(
-    localMessages
-      .filter(m => m.role === 'user')
-      .map(m => m.content.trim().toLowerCase())
-  );
-  
-  // 2. Add server messages
-  for (const msg of serverMessages) {
-    if (msg.role === 'user') {
-      // Only add server user messages if their content doesn't already exist locally
-      // (server may return user messages with different IDs like user-0-timestamp)
-      const contentKey = msg.content.trim().toLowerCase();
-      if (!localUserContents.has(contentKey)) {
-        merged.set(msg.id, msg);
-        localUserContents.add(contentKey); // prevent future dupes
-      }
-      // If content already exists locally, skip (keep local version with UUID)
-    } else {
-      // For assistant/system messages, server takes priority (may have updated content)
-      merged.set(msg.id, msg);
-    }
-  }
-  
-  // Sort by timestamp
-  return Array.from(merged.values()).sort((a, b) => 
-    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-  );
+  const newKey = "main";
+  localStorage.setItem(storageKey, newKey);
+  return newKey;
+}
+
+/**
+ * Persist the active session key for a gateway.
+ */
+function saveSessionKey(gatewayId: string, sessionKey: string): void {
+  if (!browser) return;
+  localStorage.setItem(`${SESSION_KEY_PREFIX}.${gatewayId}`, sessionKey);
 }
 
 // ============================================================================
@@ -355,6 +305,12 @@ async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<vo
 
   // Load models if this is the active gateway
   if (id === store.activeGatewayId) {
+    // Resolve session key (from localStorage or generate new)
+    if (!store.sessionKey) {
+      store.sessionKey = resolveSessionKey(id);
+      console.log("[Store] Session key resolved:", store.sessionKey);
+    }
+
     // First try from snapshot, then fetch if empty
     if (snapshot.models?.available?.length) {
       store.modelsSnapshot = snapshot.models;
@@ -568,41 +524,24 @@ function handleChatEvent(payload: ChatEventPayload): void {
       break;
 
     case "final": {
-      const savedContent = store.streamingContent;
-      console.log("[Store] Final: savedContent length:", savedContent?.length);
       stopStreaming();
+      console.log("[Store] Final event, reloading history from server");
 
-      const finalText = extractText(payload.message) || savedContent;
-      console.log("[Store] Final text extracted:", finalText?.substring(0, 100));
-      console.log("[Store] Final: payload.runId:", payload.runId);
-      
-      if (finalText) {
-        const newMessage: ChatMessage = {
-          id: payload.runId || crypto.randomUUID(),
-          role: "assistant",
-          content: finalText,
-          timestamp: new Date().toISOString(),
-        };
-        
-        const existingIdx = store.chatMessages.findIndex(m => m.id === newMessage.id && m.role === "assistant");
-        if (existingIdx < 0) {
-          store.chatMessages = [...store.chatMessages, newMessage];
-          saveChatMessages();
-          console.log("[Store] chatMessages updated, count:", store.chatMessages.length);
-          
-          // Send notification if enabled and app is not focused
-          if (store.notificationsEnabled) {
-            const agent = getCurrentAgent();
-            notifications.notifyNewMessage(
-              agent?.name || "Assistant",
-              finalText.substring(0, 100)
-            );
-          }
-        } else {
-          console.log("[Store] Final: duplicate assistant message found at index:", existingIdx);
-        }
-      } else {
-        console.log("[Store] Final: no finalText, skipping message add");
+      // Send notification from streaming content before reload
+      const savedContent = store.streamingContent;
+      if (savedContent && store.notificationsEnabled) {
+        const agent = getCurrentAgent();
+        notifications.notifyNewMessage(
+          agent?.name || "Assistant",
+          savedContent.substring(0, 100)
+        );
+      }
+
+      // Reload history from server (server is source of truth)
+      const activeId = store.activeGatewayId;
+      const activeClient = activeId ? clients.get(activeId) : null;
+      if (activeClient) {
+        loadChatHistory(activeClient);
       }
       break;
     }
@@ -622,7 +561,6 @@ function handleChatEvent(payload: ChatEventPayload): void {
         content: `Error: ${payload.errorMessage || "Unknown error"}`,
         timestamp: new Date().toISOString(),
       }];
-      saveChatMessages();
       break;
   }
 }
@@ -634,7 +572,6 @@ function handleChatMessage(message: ChatMessage): void {
   } else {
     store.chatMessages = [...store.chatMessages, message];
   }
-  saveChatMessages();
 }
 
 function handleError(id: string, error: string): void {
@@ -648,9 +585,13 @@ function handleError(id: string, error: string): void {
 
 let isLoadingHistory = false;
 
+/**
+ * Load chat history from server (server-authoritative).
+ * Matches the official openClaw UI pattern — server is the single source of truth.
+ * Optimistic messages (from sendMessage) are preserved until server responds.
+ */
 async function loadChatHistory(client: GatewayClient): Promise<void> {
-  const gatewayId = store.activeGatewayId;
-  if (!gatewayId) return;
+  if (!store.activeGatewayId) return;
   
   // Prevent concurrent calls (connect.ok and connect response both trigger this)
   if (isLoadingHistory) {
@@ -659,28 +600,14 @@ async function loadChatHistory(client: GatewayClient): Promise<void> {
   }
   isLoadingHistory = true;
   
-  const currentSessionKey = store.sessionKey;
-  
-  // Always load cached messages as baseline (includes user messages the server doesn't return)
-  const cached = loadCachedMessages(gatewayId, currentSessionKey);
-  
   try {
-    const serverMessages = await client.getChatHistory(currentSessionKey);
-    
-    // 3-way merge: cache (has user msgs) + current store + server (has latest assistant msgs)
-    const allLocal = mergeMessages(cached, store.chatMessages);
-    const merged = mergeMessages(serverMessages, allLocal);
-    
-    store.chatMessages = merged;
-    
-    saveChatMessages();
+    const serverMessages = await client.getChatHistory(store.sessionKey);
+    store.chatMessages = serverMessages;
     stopStreaming();
+    console.log("[Store] Chat history loaded from server:", serverMessages.length, "messages");
   } catch (e) {
     console.error("Failed to load chat history:", e);
-    // On error, use cached messages if we have nothing
-    if (store.chatMessages.length === 0 && cached.length > 0) {
-      store.chatMessages = cached;
-    }
+    // On error, keep current messages (may include optimistic UI messages)
   } finally {
     isLoadingHistory = false;
   }
@@ -756,8 +683,7 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
   };
   
   store.chatMessages = [...store.chatMessages, userMessage];
-  saveChatMessages();
-  console.log("[Store] User message added, count:", store.chatMessages.length);
+  console.log("[Store] User message added (optimistic), count:", store.chatMessages.length);
 
   try {
     store.isStreaming = true;
@@ -783,26 +709,8 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
       currentRunId = result.runId;
     }
 
-    // Reload history after send, merging with local messages
-    setTimeout(async () => {
-      const activeId = store.activeGatewayId;
-      const active = activeId ? clients.get(activeId) : null;
-      if (active && activeId) {
-        try {
-          const currentSK = store.sessionKey;
-          const serverHistory = await active.getChatHistory(currentSK);
-          // Also load cache to ensure user messages are never lost
-          const cached = loadCachedMessages(activeId, currentSK);
-          const allLocal = mergeMessages(cached, store.chatMessages);
-          store.chatMessages = mergeMessages(serverHistory, allLocal);
-        } catch (_) {
-          // If history load fails, keep locally-added messages
-        }
-      }
-      saveChatMessages();
-      // Always stop streaming after history reload
-      stopStreaming();
-    }, 500);
+    // History will be reloaded when the server sends a 'final' chat event
+    // No need for a timer — the event-driven reload ensures we get the latest data
   } catch (e) {
     console.error("Failed to send message:", e);
     stopStreaming();
@@ -857,13 +765,14 @@ export async function sendMessageToGateway(gatewayId: string, content: string): 
 
   try {
     const idempotencyKey = crypto.randomUUID();
+    const targetSessionKey = resolveSessionKey(gatewayId);
     await client.sendChat({
-      sessionKey: "main",  // Send to main session of target gateway
+      sessionKey: targetSessionKey,
       message: content,
       idempotencyKey,
       deliver: false,
     });
-    console.log("[Store] Message forwarded to gateway:", gatewayId);
+    console.log("[Store] Message forwarded to gateway:", gatewayId, "session:", targetSessionKey);
   } catch (e) {
     console.error("[Store] Failed to forward message:", e);
   }
@@ -881,7 +790,7 @@ export async function loadSessions(): Promise<void> {
   if (!client) return;
 
   try {
-    const sessions = await client.getSessions({ limit: 50, messageLimit: 1 });
+    const sessions = await client.getSessions({ limit: 50 });
     store.sessions = sessions;
     console.log("[Store] Sessions loaded:", sessions.length);
   } catch (e) {
@@ -896,28 +805,40 @@ export async function switchSession(sessionKey: string): Promise<void> {
   const client = clients.get(id);
   if (!client) return;
 
-  // Save current session messages before switching
-  saveChatMessages();
-
   store.sessionKey = sessionKey;
   store.streamingContent = "";
   store.isStreaming = false;
-  
-  // Load cached messages for the new session immediately
-  const cached = loadCachedMessages(id, sessionKey);
-  store.chatMessages = cached;
+  store.chatMessages = [];
+  saveSessionKey(id, sessionKey);
 
   try {
     const serverMessages = await client.getChatHistory(sessionKey);
-    // 3-way merge: cache + current + server
-    const allLocal = mergeMessages(cached, store.chatMessages);
-    store.chatMessages = mergeMessages(serverMessages, allLocal);
-    saveChatMessages();
+    store.chatMessages = serverMessages;
     console.log("[Store] Switched to session:", sessionKey, "messages:", store.chatMessages.length);
   } catch (e) {
     console.error("Failed to load session history:", e);
-    // Keep cached messages on error
   }
+}
+
+/**
+ * Create a new conversation session.
+ * Generates a fresh session key and clears chat messages.
+ */
+export function createNewSession(): string {
+  const id = store.activeGatewayId;
+  const newKey = generateSessionKey();
+  
+  store.sessionKey = newKey;
+  store.chatMessages = [];
+  store.streamingContent = "";
+  store.isStreaming = false;
+  
+  if (id) {
+    saveSessionKey(id, newKey);
+  }
+  
+  console.log("[Store] New session created:", newKey);
+  return newKey;
 }
 
 // ============================================================================
