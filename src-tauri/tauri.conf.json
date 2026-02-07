@@ -13,8 +13,14 @@
     "windows": [
       {
         "title": "openClaw Desktop",
-        "width": 800,
-        "height": 600
+        "width": 1000,
+        "height": 700,
+        "minWidth": 600,
+        "minHeight": 400,
+        "decorations": false,
+        "transparent": true,
+        "titleBarStyle": "overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {

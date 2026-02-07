@@ -17,6 +17,7 @@ import type {
   ChatSendResult,
   ChatMessage,
   ModelsSnapshot,
+  SessionInfo,
 } from "./types";
 
 import {
@@ -618,6 +619,11 @@ export class GatewayClient {
 
   async fetchStatus(): Promise<unknown> {
     return this.request("status");
+  }
+
+  async getSessions(params?: { kinds?: string[]; limit?: number; messageLimit?: number }): Promise<SessionInfo[]> {
+    const result = await this.request<{ sessions: SessionInfo[] }>("sessions.list", params ?? {});
+    return result?.sessions ?? [];
   }
 
   async getModels(): Promise<ModelsSnapshot> {

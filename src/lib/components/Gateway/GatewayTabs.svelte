@@ -3,7 +3,8 @@
     store, 
     connectGateway, 
     disconnectGateway, 
-    setActiveGateway 
+    setActiveGateway,
+    sendMessageToGateway 
   } from "$lib/gateway/store.svelte";
   import type { ConnectionStatus } from "$lib/gateway/types";
 
@@ -12,6 +13,9 @@
   }
 
   const { onadd }: Props = $props();
+
+  // Drag state for each tab
+  let dragOverTabId = $state<string | null>(null);
 
   function getStatusColor(status?: ConnectionStatus): string {
     switch (status) {
@@ -51,6 +55,36 @@
   function handleAdd() {
     onadd?.();
   }
+
+  // Drag and drop handlers
+  function handleDragOver(e: DragEvent, gatewayId: string) {
+    e.preventDefault();
+    const state = store.gatewayStates.get(gatewayId);
+    // Only allow drop on connected gateways that are not current
+    if (state?.status === "connected" && gatewayId !== store.activeGatewayId) {
+      e.dataTransfer!.dropEffect = "copy";
+      dragOverTabId = gatewayId;
+    } else {
+      e.dataTransfer!.dropEffect = "none";
+    }
+  }
+
+  function handleDragLeave(e: DragEvent) {
+    dragOverTabId = null;
+  }
+
+  async function handleDrop(e: DragEvent, gatewayId: string) {
+    e.preventDefault();
+    dragOverTabId = null;
+
+    const messageContent = e.dataTransfer?.getData("text/plain");
+    if (messageContent && gatewayId !== store.activeGatewayId) {
+      const state = store.gatewayStates.get(gatewayId);
+      if (state?.status === "connected") {
+        await sendMessageToGateway(gatewayId, messageContent);
+      }
+    }
+  }
 </script>
 
 <div class="gateway-tabs">
@@ -60,9 +94,13 @@
       <button
         class="tab"
         class:active={gateway.id === store.activeGatewayId}
+        class:drop-target={dragOverTabId === gateway.id}
         onclick={() => handleTabClick(gateway.id)}
         ondblclick={() => handleConnect(gateway.id)}
-        title={`${gateway.name}\nDouble-click to ${state?.status === "connected" ? "disconnect" : "connect"}`}
+        ondragover={(e) => handleDragOver(e, gateway.id)}
+        ondragleave={handleDragLeave}
+        ondrop={(e) => handleDrop(e, gateway.id)}
+        title={`${gateway.name}\nDouble-click to ${state?.status === "connected" ? "disconnect" : "connect"}\nDrag message here to forward`}
       >
         <span class="status-icon">{getStatusIcon(state?.status)}</span>
         <span class="name">{gateway.name}</span>
@@ -115,6 +153,12 @@
     background: var(--color-bg);
     color: var(--color-text);
     border-bottom: 2px solid var(--color-primary);
+  }
+
+  .tab.drop-target {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+    border: 2px dashed var(--color-primary);
+    transform: scale(1.05);
   }
 
   .status-icon {

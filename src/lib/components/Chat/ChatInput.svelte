@@ -1,7 +1,21 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { store, setModel } from "$lib/gateway/store.svelte";
+  import { store, setModel, toggleNotifications, getNotificationStatus } from "$lib/gateway/store.svelte";
   import ModelSelector from "./ModelSelector.svelte";
+  import SessionManager from "./SessionManager.svelte";
+  import { 
+    Plus, 
+    Globe, 
+    Link2, 
+    MessageSquare, 
+    Bot, 
+    ChevronDown, 
+    Mic, 
+    ArrowUp, 
+    Square,
+    Bell,
+    BellOff
+  } from "@lucide/svelte";
 
   interface Props {
     onsend?: (content: string) => void;
@@ -13,6 +27,7 @@
   let inputValue = $state("");
   let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
   let showModelSelector = $state(false);
+  let showSessionManager = $state(false);
 
   function handleSubmit() {
     if (store.isStreaming) {
@@ -23,11 +38,8 @@
     const message = inputValue.trim();
     if (!message) return;
     
-    // Clear input BEFORE sending
     inputValue = "";
     adjustHeight();
-    
-    // Then send the message
     onsend?.(message);
   }
 
@@ -52,7 +64,6 @@
 </script>
 
 <div class="chat-input-wrapper">
-  <!-- Input Field -->
   <div class="input-container">
     <textarea
       bind:this={textareaEl}
@@ -65,21 +76,34 @@
     ></textarea>
   </div>
 
-  <!-- Toolbar (Claude Style - Below Input) -->
   <div class="toolbar">
     <div class="toolbar-left">
       <button class="toolbar-btn" title={$t("toolbar.files")}>
-        <span>➕</span>
+        <Plus size={16} strokeWidth={2} />
       </button>
       <button class="toolbar-btn" title={$t("toolbar.web")}>
-        <span>🌐</span>
+        <Globe size={16} strokeWidth={2} />
       </button>
       <button class="toolbar-btn" title={$t("toolbar.mcp")}>
-        <span>🔗</span>
+        <Link2 size={16} strokeWidth={2} />
       </button>
-      <button class="toolbar-btn" title={$t("toolbar.session")}>
-        <span>📝</span>
-      </button>
+      
+      <!-- Session Manager -->
+      <div class="session-manager-wrapper">
+        <button 
+          class="toolbar-btn session-btn"
+          onclick={() => showSessionManager = !showSessionManager}
+          title={$t("toolbar.session")}
+        >
+          <MessageSquare size={14} strokeWidth={2} />
+          <span class="session-key">{store.sessionKey}</span>
+        </button>
+        
+        <SessionManager 
+          isOpen={showSessionManager}
+          onclose={() => showSessionManager = false}
+        />
+      </div>
 
       <!-- Model Selector -->
       <div class="model-selector-wrapper">
@@ -88,11 +112,11 @@
           onclick={() => showModelSelector = !showModelSelector}
           title={$t("toolbar.model")}
         >
-          <span>🤖</span>
+          <Bot size={14} strokeWidth={2} />
           <span class="model-name">
             {store.modelsSnapshot?.current?.displayName ?? store.modelsSnapshot?.current?.name ?? "Model"}
           </span>
-          <span class="dropdown-arrow">▼</span>
+          <ChevronDown size={12} strokeWidth={2} />
         </button>
 
         {#if showModelSelector}
@@ -106,8 +130,21 @@
     </div>
 
     <div class="toolbar-right">
+      <button 
+        class="toolbar-btn" 
+        class:active={store.notificationsEnabled}
+        onclick={() => toggleNotifications()}
+        title={store.notificationsEnabled ? "Notifications on" : "Notifications off"}
+      >
+        {#if store.notificationsEnabled}
+          <Bell size={16} strokeWidth={2} />
+        {:else}
+          <BellOff size={16} strokeWidth={2} />
+        {/if}
+      </button>
+      
       <button class="toolbar-btn" title={$t("toolbar.voice")}>
-        <span>🎙️</span>
+        <Mic size={16} strokeWidth={2} />
       </button>
       
       <button 
@@ -117,9 +154,9 @@
         title={store.isStreaming ? $t("chat.stop") : $t("chat.send")}
       >
         {#if store.isStreaming}
-          <span class="stop-icon">⏹</span>
+          <Square size={14} strokeWidth={2.5} />
         {:else}
-          <span class="send-icon">↑</span>
+          <ArrowUp size={16} strokeWidth={2.5} />
         {/if}
       </button>
     </div>
@@ -128,33 +165,37 @@
 
 <style>
   .chat-input-wrapper {
-    padding: 12px 16px;
+    padding: 16px 20px;
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
   }
 
   .input-container {
-    margin-bottom: 8px;
+    margin-bottom: 12px;
   }
 
   textarea {
     width: 100%;
-    padding: 12px 16px;
+    padding: 14px 18px;
     background: var(--color-surface-elevated);
     border: 1px solid var(--color-border);
-    border-radius: 16px;
+    border-radius: 20px;
     color: var(--color-text);
     font-size: 14px;
     font-family: inherit;
     resize: none;
     outline: none;
-    transition: border-color 0.2s ease;
-    min-height: 44px;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    min-height: 48px;
     max-height: 150px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
   }
 
   textarea:focus {
     border-color: var(--color-primary);
+    box-shadow: 
+      0 0 0 3px rgba(99, 102, 241, 0.1),
+      0 4px 12px rgba(0, 0, 0, 0.08);
   }
 
   textarea::placeholder {
@@ -162,7 +203,7 @@
   }
 
   textarea:disabled {
-    opacity: 0.7;
+    opacity: 0.6;
     cursor: not-allowed;
   }
 
@@ -170,9 +211,10 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 4px 8px;
+    padding: 6px 10px;
     background: var(--color-surface-elevated);
-    border-radius: 12px;
+    border-radius: 14px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
   }
 
   .toolbar-left,
@@ -185,14 +227,14 @@
   .toolbar-btn {
     display: flex;
     align-items: center;
-    gap: 4px;
-    padding: 6px 10px;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 10px;
     background: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: 10px;
     cursor: pointer;
     color: var(--color-text-muted);
-    font-size: 14px;
     transition: all 0.2s ease;
   }
 
@@ -201,19 +243,37 @@
     color: var(--color-text);
   }
 
+  .toolbar-btn.active {
+    color: var(--color-primary);
+  }
+
+  .session-manager-wrapper,
   .model-selector-wrapper {
     position: relative;
   }
 
+  .session-btn,
   .model-btn {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 16px;
-    padding: 4px 10px;
+    border-radius: 20px;
+    padding: 6px 12px;
   }
 
+  .session-btn:hover,
   .model-btn:hover {
     border-color: var(--color-primary);
+    background: var(--color-surface);
+  }
+
+  .session-key {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    color: var(--color-text);
+    font-family: 'SF Mono', monospace;
   }
 
   .model-name {
@@ -223,39 +283,39 @@
     white-space: nowrap;
     font-size: 12px;
     color: var(--color-text);
-  }
-
-  .dropdown-arrow {
-    font-size: 8px;
-    margin-left: 2px;
+    font-weight: 500;
   }
 
   .send-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
     border: none;
-    border-radius: 50%;
+    border-radius: 12px;
     cursor: pointer;
     color: white;
-    font-size: 16px;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
   }
 
   .send-btn:hover {
-    transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+  }
+
+  .send-btn:active {
+    transform: translateY(0);
   }
 
   .send-btn.abort {
-    background: var(--color-error);
+    background: linear-gradient(135deg, #ef4444, #f97316);
+    box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
   }
 
-  .send-icon,
-  .stop-icon {
-    line-height: 1;
+  .send-btn.abort:hover {
+    box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
   }
 </style>

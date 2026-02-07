@@ -1,36 +1,24 @@
-<script context="module" lang="ts">
-  export interface Session {
-    id: string;
-    shortId: string;
-    title?: string;
-    createdAt?: string;
-    thinking?: boolean;
-    verbose?: boolean;
-  }
-</script>
-
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
   import { t } from "$lib/i18n";
+  import { store, switchSession, loadSessions } from "$lib/gateway/store.svelte";
 
-  export let sessions: Session[] = [];
-  export let currentSession: string = "";
-  export let isOpen = false;
+  interface Props {
+    isOpen?: boolean;
+    onclose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher<{
-    select: string;
-    new: void;
-    close: void;
-  }>();
+  const { isOpen = false, onclose }: Props = $props();
 
   function selectSession(id: string) {
-    dispatch("select", id);
-    dispatch("close");
+    switchSession(id);
+    onclose?.();
   }
 
   function newSession() {
-    dispatch("new");
-    dispatch("close");
+    // Generate a new session key
+    const newKey = `desktop-${crypto.randomUUID().slice(0, 8)}`;
+    switchSession(newKey);
+    onclose?.();
   }
 
   function formatDate(dateStr?: string): string {
@@ -43,50 +31,58 @@
       minute: "2-digit"
     });
   }
+
+  function refreshSessions() {
+    loadSessions();
+  }
 </script>
 
 {#if isOpen}
-  <div class="session-manager" on:click|stopPropagation role="menu">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="session-manager" onclick={(e) => e.stopPropagation()}>
     <div class="header">
       <h4>{$t("session.title")}</h4>
-      <button class="new-btn" on:click={newSession} title="New Session">
-        <span>+</span>
-      </button>
+      <div class="header-actions">
+        <button class="icon-btn" onclick={refreshSessions} title="Refresh">
+          <span>🔄</span>
+        </button>
+        <button class="icon-btn" onclick={newSession} title="New Session">
+          <span>+</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="current-session">
+      <span class="label">Current:</span>
+      <span class="value">{store.sessionKey}</span>
     </div>
 
     <div class="session-list">
-      {#if sessions.length === 0}
+      {#if store.sessions.length === 0}
         <div class="empty">
           <span class="icon">📝</span>
-          <p>No sessions yet</p>
-          <button class="create-btn" on:click={newSession}>
+          <p>No sessions found</p>
+          <button class="create-btn" onclick={newSession}>
             Create New Session
           </button>
         </div>
       {:else}
-        {#each sessions as session}
+        {#each store.sessions as session}
           <button
             class="session-item"
-            class:active={session.id === currentSession}
-            on:click={() => selectSession(session.id)}
+            class:active={session.key === store.sessionKey}
+            onclick={() => selectSession(session.key)}
           >
             <div class="session-info">
               <span class="session-title">
-                {session.title || `Session ${session.shortId}`}
+                {session.key}
               </span>
-              {#if session.createdAt}
-                <span class="session-date">{formatDate(session.createdAt)}</span>
+              {#if session.lastActiveAt}
+                <span class="session-date">{formatDate(session.lastActiveAt)}</span>
               {/if}
             </div>
-            <div class="session-badges">
-              {#if session.thinking}
-                <span class="badge thinking" title="Thinking enabled">🧠</span>
-              {/if}
-              {#if session.verbose}
-                <span class="badge verbose" title="Verbose enabled">📋</span>
-              {/if}
-            </div>
-            {#if session.id === currentSession}
+            {#if session.key === store.sessionKey}
               <span class="active-dot"></span>
             {/if}
           </button>
@@ -102,7 +98,7 @@
     bottom: 100%;
     left: 0;
     margin-bottom: 8px;
-    width: 300px;
+    width: 320px;
     background: var(--color-surface);
     border: 1px solid var(--color-border);
     border-radius: 12px;
@@ -126,7 +122,12 @@
     color: var(--color-text);
   }
 
-  .new-btn {
+  .header-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .icon-btn {
     width: 24px;
     height: 24px;
     display: flex;
@@ -137,14 +138,32 @@
     border-radius: 6px;
     cursor: pointer;
     color: var(--color-text);
-    font-size: 16px;
+    font-size: 14px;
     transition: all 0.15s ease;
   }
 
-  .new-btn:hover {
+  .icon-btn:hover {
     background: var(--color-primary);
     border-color: var(--color-primary);
     color: white;
+  }
+
+  .current-session {
+    padding: 8px 16px;
+    background: var(--color-surface-elevated);
+    border-bottom: 1px solid var(--color-border);
+    font-size: 12px;
+  }
+
+  .current-session .label {
+    color: var(--color-text-muted);
+    margin-right: 6px;
+  }
+
+  .current-session .value {
+    color: var(--color-primary);
+    font-weight: 500;
+    font-family: monospace;
   }
 
   .session-list {
@@ -215,9 +234,10 @@
   }
 
   .session-title {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     color: var(--color-text);
+    font-family: monospace;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -228,13 +248,12 @@
     color: var(--color-text-muted);
   }
 
-  .session-badges {
-    display: flex;
-    gap: 4px;
-  }
-
-  .badge {
-    font-size: 12px;
+  .session-preview {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
     opacity: 0.7;
   }
 

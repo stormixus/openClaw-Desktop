@@ -4,6 +4,7 @@
   import { initLocale } from "$lib/i18n";
   import { applyThemeToDocument, initTheme, theme } from "$lib/theme";
   import { initGatewayStore } from "$lib/gateway/store.svelte";
+  import TitleBar from "$lib/components/TitleBar.svelte";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SetupWizard from "$lib/components/Wizard/SetupWizard.svelte";
 
@@ -55,78 +56,82 @@
   <SetupWizard oncomplete={handleWizardComplete} />
 {/if}
 
-<div class="app-shell">
-  <Sidebar />
-  <main class="main-content">
-    <slot />
-  </main>
+<div class="app-container">
+  <TitleBar />
+  <div class="app-shell">
+    <Sidebar />
+    <main class="main-content">
+      <slot />
+    </main>
+  </div>
 </div>
 
 <style>
   /* ============================================================================
-   * CSS Variables - CleanMyMac Style
+   * CSS Variables - CleanMyMac Premium Style
    * ============================================================================ */
   :global(:root) {
     /* Colors - Light Theme */
-    --color-bg: #f5f7fb;
+    --color-bg: #f8fafc;
     --color-surface: #ffffff;
-    --color-surface-elevated: #f8f9fc;
-    --color-surface-hover: rgba(0, 0, 0, 0.05);
-    --color-text: #171a1f;
-    --color-text-muted: #6b7280;
-    --color-border: #e5e7eb;
-    --color-primary: #3b82f6;
+    --color-surface-elevated: #f1f5f9;
+    --color-surface-hover: rgba(99, 102, 241, 0.08);
+    --color-text: #0f172a;
+    --color-text-muted: #64748b;
+    --color-border: #e2e8f0;
+    --color-primary: #6366f1;
     --color-accent: #8b5cf6;
     --color-success: #10b981;
     --color-warning: #f59e0b;
     --color-error: #ef4444;
 
     /* Sidebar */
-    --sidebar-bg: #f0f2f5;
+    --sidebar-bg: rgba(241, 245, 249, 0.8);
     --sidebar-width: 80px;
 
     /* Shadows */
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
-    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-    --shadow-lg: 0 12px 30px rgba(0, 0, 0, 0.15);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+    --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.12);
+    --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
 
     /* Radius */
     --radius-sm: 8px;
     --radius-md: 12px;
     --radius-lg: 16px;
-    --radius-xl: 20px;
+    --radius-xl: 24px;
   }
 
   :global(:root[data-theme="dark"]) {
-    /* Colors - Dark Theme */
-    --color-bg: #0d0f14;
-    --color-surface: #141820;
-    --color-surface-elevated: #1a1f2a;
-    --color-surface-hover: rgba(255, 255, 255, 0.08);
-    --color-text: #f4f6fb;
-    --color-text-muted: #9ca3af;
-    --color-border: #2a3140;
-    --color-primary: #3b82f6;
-    --color-accent: #8b5cf6;
-    --color-success: #10b981;
-    --color-warning: #f59e0b;
-    --color-error: #ef4444;
+    /* Colors - Dark Theme (Premium dark) */
+    --color-bg: #09090b;
+    --color-surface: #18181b;
+    --color-surface-elevated: #27272a;
+    --color-surface-hover: rgba(99, 102, 241, 0.12);
+    --color-text: #fafafa;
+    --color-text-muted: #a1a1aa;
+    --color-border: #3f3f46;
+    --color-primary: #818cf8;
+    --color-accent: #a78bfa;
+    --color-success: #34d399;
+    --color-warning: #fbbf24;
+    --color-error: #f87171;
 
     /* Sidebar */
-    --sidebar-bg: #0a0c10;
+    --sidebar-bg: rgba(24, 24, 27, 0.9);
   }
 
   :global(*) {
     box-sizing: border-box;
   }
 
-  :global(body) {
+  :global(html), :global(body) {
     margin: 0;
     padding: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", 
                  "Noto Sans KR", system-ui, sans-serif;
     color: var(--color-text);
-    background: var(--color-bg);
+    background: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -135,12 +140,35 @@
     font-family: inherit;
   }
 
-  /* App Shell Layout */
-  .app-shell {
+  /* App Container */
+  .app-container {
     display: flex;
+    flex-direction: column;
     height: 100vh;
     overflow: hidden;
     background: var(--color-bg);
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+  }
+
+  /* Vibrancy effect for macOS */
+  @supports (-webkit-backdrop-filter: blur(20px)) or (backdrop-filter: blur(20px)) {
+    .app-container {
+      background: rgba(248, 250, 252, 0.85);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      backdrop-filter: blur(20px) saturate(180%);
+    }
+
+    :global(:root[data-theme="dark"]) .app-container {
+      background: rgba(9, 9, 11, 0.85);
+    }
+  }
+
+  /* App Shell Layout */
+  .app-shell {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
   }
 
   .main-content {

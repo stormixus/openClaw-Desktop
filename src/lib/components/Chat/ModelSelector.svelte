@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { ModelsSnapshot, ModelInfo } from "$lib/gateway/types";
   import { t } from "$lib/i18n";
+  import ProviderLogo from "$lib/components/Icons/ProviderLogo.svelte";
 
   interface Props {
     models: ModelsSnapshot | null;
@@ -10,8 +11,11 @@
 
   const { models, onselect, onclose }: Props = $props();
 
-  // Group models by provider
-  const groupedModels = $derived(groupByProvider(models?.available ?? []));
+  // Filter enabled models and group by provider
+  const enabledModels = $derived(
+    (models?.available ?? []).filter(m => m.enabled !== false)
+  );
+  const groupedModels = $derived(groupByProvider(enabledModels));
 
   function groupByProvider(models: ModelInfo[]): Map<string, ModelInfo[]> {
     const grouped = new Map<string, ModelInfo[]>();
@@ -45,6 +49,7 @@
     <div class="current-model">
       <span class="label">{$t("model.current")}</span>
       <span class="model-item current">
+        <ProviderLogo provider={models.current.provider} size={14} />
         <span class="provider">{models.current.provider}</span>
         <span class="name">{models.current.displayName ?? models.current.name}</span>
       </span>
@@ -54,7 +59,10 @@
   <div class="model-list">
     {#each [...groupedModels.entries()] as [provider, providerModels]}
       <div class="provider-group">
-        <div class="provider-name">{provider}</div>
+        <div class="provider-name">
+          <ProviderLogo {provider} size={14} />
+          <span>{provider}</span>
+        </div>
         {#each providerModels as model}
           <button
             class="model-option"
@@ -112,18 +120,24 @@
   }
 
   .model-item {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
 
   .model-item.current {
-    padding: 8px 12px;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
     background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
     border-radius: 8px;
     color: white;
   }
 
   .provider {
-    display: block;
     font-size: 10px;
     opacity: 0.8;
   }
@@ -131,6 +145,7 @@
   .name {
     font-size: 13px;
     font-weight: 500;
+    flex: 1;
   }
 
   .model-list {
@@ -146,6 +161,9 @@
   }
 
   .provider-name {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 8px;
     font-size: 11px;
     font-weight: 600;

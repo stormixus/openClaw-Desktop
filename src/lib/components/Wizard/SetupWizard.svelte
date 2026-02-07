@@ -76,7 +76,7 @@
 
   function addGatewayAndContinue() {
     if (gatewayName && gatewayUrl) {
-      const id = addGateway({
+      const result = addGateway({
         name: gatewayName,
         url: gatewayUrl,
         authMethod: gatewayToken ? "token" : "tailscale",
@@ -84,9 +84,9 @@
       });
       
       // Auto-connect if local gateway was detected
-      if (localConfig?.found) {
-        setActiveGateway(id);
-        connectGateway(id);
+      if (!result.error && localConfig?.found) {
+        setActiveGateway(result.id);
+        connectGateway(result.id);
       }
     }
     nextStep();

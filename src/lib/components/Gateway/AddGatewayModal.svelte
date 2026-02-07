@@ -1,6 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { addGateway, connectGateway, setActiveGateway } from "$lib/gateway/store.svelte";
+  import { addGateway, connectGateway, setActiveGateway, isGatewayDuplicate, getGatewayByUrl } from "$lib/gateway/store.svelte";
   import type { AuthMethod } from "$lib/gateway/types";
 
   interface Props {
@@ -15,9 +15,13 @@
   let authMethod = $state<AuthMethod>("tailscale");
   let token = $state("");
   let password = $state("");
+  let error = $state<string | null>(null);
+
+  const isDuplicate = $derived(() => isGatewayDuplicate(url));
+  const existingGateway = $derived(() => getGatewayByUrl(url));
 
   const isValid = $derived(() => {
-    let valid = name.trim().length > 0 && isValidUrl(url);
+    let valid = name.trim().length > 0 && isValidUrl(url) && !isDuplicate();
     if (authMethod === "token") {
       valid = valid && token.trim().length > 0;
     } else if (authMethod === "password") {
@@ -41,8 +45,10 @@
 
   function handleSubmit() {
     if (!isValid()) return;
+    
+    error = null;
 
-    const id = addGateway({
+    const result = addGateway({
       name: name.trim(),
       url: url.trim(),
       authMethod,
@@ -50,11 +56,16 @@
       password: authMethod === "password" ? password : undefined,
     });
 
-    // Auto-connect and set as active
-    setActiveGateway(id);
-    connectGateway(id);
+    if (result.error) {
+      error = result.error;
+      return;
+    }
 
-    onadded?.(id);
+    // Auto-connect and set as active
+    setActiveGateway(result.id);
+    connectGateway(result.id);
+
+    onadded?.(result.id);
     onclose?.();
   }
 </script>
@@ -87,8 +98,13 @@
           type="text"
           bind:value={url}
           placeholder="ws://192.168.1.100:18789"
+          class:error={isDuplicate()}
         />
-        <span class="hint">WebSocket URL (ws:// or wss://)</span>
+        {#if isDuplicate()}
+          <span class="error-text">⚠️ Gateway already exists: {existingGateway()?.name}</span>
+        {:else}
+          <span class="hint">WebSocket URL (ws:// or wss://)</span>
+        {/if}
       </div>
 
       <div class="form-group">
@@ -261,6 +277,22 @@
     font-size: 11px;
     color: var(--color-text-muted);
     margin-top: 6px;
+  }
+
+  .error-text {
+    display: block;
+    font-size: 11px;
+    color: var(--color-error);
+    margin-top: 6px;
+  }
+
+  input.error {
+    border-color: var(--color-error);
+  }
+
+  input.error:focus {
+    border-color: var(--color-error);
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
   }
 
   .auth-options {

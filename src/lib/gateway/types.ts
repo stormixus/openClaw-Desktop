@@ -133,6 +133,7 @@ export interface ModelInfo {
   provider: string;
   name: string;
   displayName?: string;
+  enabled?: boolean;  // false if API key not configured
 }
 
 // ============================================================================
@@ -143,6 +144,8 @@ export interface AgentInfo {
   id: string;
   name: string;
   description?: string;
+  avatar?: string;  // URL to avatar image
+  emoji?: string;   // Emoji to display
 }
 
 export interface SessionInfo {
@@ -170,6 +173,16 @@ export interface ChatMessage {
   timestamp: string;
   toolCalls?: ToolCall[];
   thinking?: string;
+  buttons?: InlineButton[][];  // 2D array: rows of buttons
+  selectedButton?: string;     // callback_data of selected button (single)
+  selectedButtons?: string[];  // callback_data array (multi)
+  selectMode?: "single" | "multi";  // default: single
+}
+
+export interface InlineButton {
+  text: string;
+  callback_data?: string;
+  url?: string;
 }
 
 export interface ToolCall {
@@ -190,9 +203,10 @@ export interface ChatSendParams {
 }
 
 export interface ChatAttachment {
-  type: "image";
+  type: "image" | "file";
   mimeType: string;
   content: string;  // base64 data
+  fileName?: string;
 }
 
 export interface FileAttachment {

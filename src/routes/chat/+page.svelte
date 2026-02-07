@@ -1,11 +1,15 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import GatewayTabs from "$lib/components/Gateway/GatewayTabs.svelte";
   import AddGatewayModal from "$lib/components/Gateway/AddGatewayModal.svelte";
   import ChatPanel from "$lib/components/Chat/ChatPanel.svelte";
-  import { store } from "$lib/gateway/store.svelte";
+  import ShortcutsModal from "$lib/components/ShortcutsModal.svelte";
+  import { store, abortMessage } from "$lib/gateway/store.svelte";
+  import { shortcuts } from "$lib/services/shortcuts";
   import { t } from "$lib/i18n";
 
   let showAddGatewayModal = $state(false);
+  let showShortcutsModal = $state(false);
 
   // Derived values for the active gateway
   const activeGateway = $derived(store.gateways.find(g => g.id === store.activeGatewayId) ?? null);
@@ -18,6 +22,51 @@
   function closeAddModal() {
     showAddGatewayModal = false;
   }
+
+  // Register keyboard shortcuts
+  onMount(() => {
+    const unregister = shortcuts.registerMany([
+      {
+        key: "k",
+        meta: true,
+        ctrl: true,
+        description: "Show keyboard shortcuts",
+        action: () => showShortcutsModal = !showShortcutsModal,
+      },
+      {
+        key: "n",
+        meta: true,
+        ctrl: true,
+        description: "Add new gateway",
+        action: () => showAddGatewayModal = true,
+      },
+      {
+        key: "Escape",
+        description: "Stop streaming / Close modal",
+        action: () => {
+          if (store.isStreaming) {
+            abortMessage();
+          } else if (showAddGatewayModal) {
+            showAddGatewayModal = false;
+          } else if (showShortcutsModal) {
+            showShortcutsModal = false;
+          }
+        },
+      },
+      {
+        key: "/",
+        meta: true,
+        ctrl: true,
+        description: "Focus chat input",
+        action: () => {
+          const input = document.querySelector(".chat-input-wrapper textarea") as HTMLTextAreaElement;
+          input?.focus();
+        },
+      },
+    ]);
+
+    return unregister;
+  });
 </script>
 
 <svelte:head>
@@ -26,6 +75,10 @@
 
 {#if showAddGatewayModal}
   <AddGatewayModal onclose={closeAddModal} />
+{/if}
+
+{#if showShortcutsModal}
+  <ShortcutsModal onclose={() => showShortcutsModal = false} />
 {/if}
 
 <div class="chat-page">

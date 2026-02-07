@@ -3,6 +3,7 @@
  */
 
 import { browser } from "$app/environment";
+import { notifications } from "$lib/services/notifications";
 import { GatewayClient } from "./client";
 import type {
   GatewayConfig,
@@ -12,9 +13,11 @@ import type {
   ChatMessage,
   ChatEventPayload,
   ModelsSnapshot,
+  SessionInfo,
 } from "./types";
 
 const STORAGE_KEY = "openclaw.gateways";
+const MESSAGES_KEY_PREFIX = "openclaw.chat";
 
 // ============================================================================
 // Reactive State (Svelte 5 Runes) - wrapped in object for export
@@ -30,6 +33,8 @@ export const store = $state({
   isStreaming: false,
   streamingContent: "",
   sessionKey: "main",
+  sessions: [] as SessionInfo[],  // Available sessions
+  notificationsEnabled: true,     // Notification setting
 });
 
 // Active gateway clients (id -> client) - not reactive, just a cache
@@ -81,8 +86,108 @@ export function getActiveGatewayState(): GatewayState | null {
   return store.activeGatewayId ? store.gatewayStates.get(store.activeGatewayId) ?? null : null;
 }
 
+export function getCurrentAgent(): import("./types").AgentInfo | null {
+  const state = getActiveGatewayState();
+  if (!state?.snapshot?.agents) return null;
+  // For now, return the first agent or "main" agent
+  const agentId = store.sessionKey.includes("/") 
+    ? store.sessionKey.split("/")[0] 
+    : "main";
+  return state.snapshot.agents.find(a => a.id === agentId) ?? state.snapshot.agents[0] ?? null;
+}
+
 export function getActiveClient(): GatewayClient | null {
   return store.activeGatewayId ? clients.get(store.activeGatewayId) ?? null : null;
+}
+
+// ============================================================================
+// Chat Message Persistence (localStorage cache)
+// ============================================================================
+
+function getChatCacheKey(gatewayId: string, sessionKey: string): string {
+  return `${MESSAGES_KEY_PREFIX}.${gatewayId}.${sessionKey}`;
+}
+
+function saveChatMessages(): void {
+  if (!browser || !store.activeGatewayId) return;
+  const key = getChatCacheKey(store.activeGatewayId, store.sessionKey);
+  try {
+    const userMsgCount = store.chatMessages.filter(m => m.role === 'user').length;
+    
+    // Safety check: never save if we'd lose user messages
+    const existing = localStorage.getItem(key);
+    if (existing) {
+      const cached = JSON.parse(existing) as ChatMessage[];
+      const cachedUserCount = cached.filter(m => m.role === 'user').length;
+      if (userMsgCount < cachedUserCount) {
+        console.warn(`[Store] saveChatMessages BLOCKED: would lose user messages (${cachedUserCount} -> ${userMsgCount})`);
+        return;
+      }
+    }
+    
+    localStorage.setItem(key, JSON.stringify(store.chatMessages));
+  } catch (e) {
+    console.warn("[Store] Failed to save chat messages to cache:", e);
+  }
+}
+
+function loadCachedMessages(gatewayId: string, sessionKey: string): ChatMessage[] {
+  if (!browser) return [];
+  const key = getChatCacheKey(gatewayId, sessionKey);
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      return JSON.parse(saved) as ChatMessage[];
+    }
+  } catch (e) {
+    console.warn("[Store] Failed to load cached messages:", e);
+  }
+  return [];
+}
+
+/**
+ * Merge server messages with local messages.
+ * Local user messages are CANONICAL (they have UUID IDs from sendMessage).
+ * Server may return user messages with different generated IDs (e.g. user-0-timestamp).
+ * We keep ALL local user messages and only add server user messages if content doesn't match.
+ * For assistant messages, server takes priority (has updated content).
+ */
+function mergeMessages(serverMessages: ChatMessage[], localMessages: ChatMessage[]): ChatMessage[] {
+  const merged = new Map<string, ChatMessage>();
+  
+  // 1. Add ALL local messages first (these are our source of truth for user messages)
+  for (const msg of localMessages) {
+    merged.set(msg.id, msg);
+  }
+  
+  // Build a set of local user message content for dedup
+  const localUserContents = new Set(
+    localMessages
+      .filter(m => m.role === 'user')
+      .map(m => m.content.trim().toLowerCase())
+  );
+  
+  // 2. Add server messages
+  for (const msg of serverMessages) {
+    if (msg.role === 'user') {
+      // Only add server user messages if their content doesn't already exist locally
+      // (server may return user messages with different IDs like user-0-timestamp)
+      const contentKey = msg.content.trim().toLowerCase();
+      if (!localUserContents.has(contentKey)) {
+        merged.set(msg.id, msg);
+        localUserContents.add(contentKey); // prevent future dupes
+      }
+      // If content already exists locally, skip (keep local version with UUID)
+    } else {
+      // For assistant/system messages, server takes priority (may have updated content)
+      merged.set(msg.id, msg);
+    }
+  }
+  
+  // Sort by timestamp
+  return Array.from(merged.values()).sort((a, b) => 
+    new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+  );
 }
 
 // ============================================================================
@@ -114,14 +219,38 @@ export function saveGateways(): void {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
-export function addGateway(config: Omit<GatewayConfig, "id">): string {
+export function addGateway(config: Omit<GatewayConfig, "id">): { id: string; error?: string } {
+  // Check for duplicate URL
+  const normalizedUrl = config.url.replace(/\/+$/, "").toLowerCase();
+  const existing = store.gateways.find(g => 
+    g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
+  );
+  
+  if (existing) {
+    return { id: "", error: `Gateway already exists: ${existing.name}` };
+  }
+
   const id = crypto.randomUUID();
   const gateway: GatewayConfig = { ...config, id };
   
   store.gateways = [...store.gateways, gateway];
   saveGateways();
   
-  return id;
+  return { id };
+}
+
+export function isGatewayDuplicate(url: string): boolean {
+  const normalizedUrl = url.replace(/\/+$/, "").toLowerCase();
+  return store.gateways.some(g => 
+    g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
+  );
+}
+
+export function getGatewayByUrl(url: string): GatewayConfig | undefined {
+  const normalizedUrl = url.replace(/\/+$/, "").toLowerCase();
+  return store.gateways.find(g => 
+    g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
+  );
 }
 
 export function updateGateway(id: string, updates: Partial<GatewayConfig>): void {
@@ -216,7 +345,7 @@ function handleStatusChange(id: string, status: ConnectionStatus): void {
   store.gatewayStates = newStates;
 }
 
-function handleSnapshot(id: string, snapshot: GatewaySnapshot): void {
+async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<void> {
   const newStates = new Map(store.gatewayStates);
   const state = newStates.get(id);
   if (state) {
@@ -226,7 +355,24 @@ function handleSnapshot(id: string, snapshot: GatewaySnapshot): void {
 
   // Load models if this is the active gateway
   if (id === store.activeGatewayId) {
-    store.modelsSnapshot = snapshot.models;
+    // First try from snapshot, then fetch if empty
+    if (snapshot.models?.available?.length) {
+      store.modelsSnapshot = snapshot.models;
+    } else {
+      // Fetch models separately
+      const client = clients.get(id);
+      if (client) {
+        try {
+          const models = await client.getModels();
+          store.modelsSnapshot = models;
+        } catch (e) {
+          console.warn("[Store] Failed to load models:", e);
+        }
+      }
+    }
+    
+    // Load sessions list
+    loadSessions();
     
     // Load chat history
     const client = clients.get(id);
@@ -240,8 +386,8 @@ function handleSnapshot(id: string, snapshot: GatewaySnapshot): void {
 let currentRunId: string | null = null;
 let streamWatchdog: ReturnType<typeof setTimeout> | null = null;
 let streamHardDeadline: ReturnType<typeof setTimeout> | null = null;
-const STREAM_IDLE_TIMEOUT_MS = 2500;
-const STREAM_HARD_TIMEOUT_MS = 15000;
+const STREAM_IDLE_TIMEOUT_MS = 1500;
+const STREAM_HARD_TIMEOUT_MS = 10000;
 
 function clearStreamWatchdog(): void {
   if (streamWatchdog) {
@@ -441,7 +587,17 @@ function handleChatEvent(payload: ChatEventPayload): void {
         const existingIdx = store.chatMessages.findIndex(m => m.id === newMessage.id && m.role === "assistant");
         if (existingIdx < 0) {
           store.chatMessages = [...store.chatMessages, newMessage];
+          saveChatMessages();
           console.log("[Store] chatMessages updated, count:", store.chatMessages.length);
+          
+          // Send notification if enabled and app is not focused
+          if (store.notificationsEnabled) {
+            const agent = getCurrentAgent();
+            notifications.notifyNewMessage(
+              agent?.name || "Assistant",
+              finalText.substring(0, 100)
+            );
+          }
         } else {
           console.log("[Store] Final: duplicate assistant message found at index:", existingIdx);
         }
@@ -466,6 +622,7 @@ function handleChatEvent(payload: ChatEventPayload): void {
         content: `Error: ${payload.errorMessage || "Unknown error"}`,
         timestamp: new Date().toISOString(),
       }];
+      saveChatMessages();
       break;
   }
 }
@@ -477,6 +634,7 @@ function handleChatMessage(message: ChatMessage): void {
   } else {
     store.chatMessages = [...store.chatMessages, message];
   }
+  saveChatMessages();
 }
 
 function handleError(id: string, error: string): void {
@@ -488,27 +646,87 @@ function handleError(id: string, error: string): void {
   store.gatewayStates = newStates;
 }
 
+let isLoadingHistory = false;
+
 async function loadChatHistory(client: GatewayClient): Promise<void> {
+  const gatewayId = store.activeGatewayId;
+  if (!gatewayId) return;
+  
+  // Prevent concurrent calls (connect.ok and connect response both trigger this)
+  if (isLoadingHistory) {
+    console.log("[Store] loadChatHistory: skipping, already in progress");
+    return;
+  }
+  isLoadingHistory = true;
+  
+  const currentSessionKey = store.sessionKey;
+  
+  // Always load cached messages as baseline (includes user messages the server doesn't return)
+  const cached = loadCachedMessages(gatewayId, currentSessionKey);
+  
   try {
-    const currentSessionKey = store.sessionKey;
-    console.log("[Store] Loading chat history for session:", currentSessionKey);
-    const messages = await client.getChatHistory(currentSessionKey);
-    console.log("[Store] Chat history loaded, message count:", messages.length);
-    if (messages.length > 0) {
-      console.log("[Store] Last message:", messages[messages.length - 1]);
-    }
-    store.chatMessages = messages;
+    const serverMessages = await client.getChatHistory(currentSessionKey);
+    
+    // 3-way merge: cache (has user msgs) + current store + server (has latest assistant msgs)
+    const allLocal = mergeMessages(cached, store.chatMessages);
+    const merged = mergeMessages(serverMessages, allLocal);
+    
+    store.chatMessages = merged;
+    
+    saveChatMessages();
     stopStreaming();
   } catch (e) {
     console.error("Failed to load chat history:", e);
+    // On error, use cached messages if we have nothing
+    if (store.chatMessages.length === 0 && cached.length > 0) {
+      store.chatMessages = cached;
+    }
+  } finally {
+    isLoadingHistory = false;
   }
+}
+
+// ============================================================================
+// File Utilities
+// ============================================================================
+
+async function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove data URL prefix (e.g., "data:image/png;base64,")
+      const base64 = result.split(',')[1] || result;
+      resolve(base64);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function filesToAttachments(files: File[]): Promise<import("./types").ChatAttachment[]> {
+  const attachments: import("./types").ChatAttachment[] = [];
+  
+  for (const file of files) {
+    const content = await fileToBase64(file);
+    const isImage = file.type.startsWith('image/');
+    
+    attachments.push({
+      type: isImage ? 'image' : 'file',
+      mimeType: file.type || 'application/octet-stream',
+      content,
+      fileName: file.name,
+    });
+  }
+  
+  return attachments;
 }
 
 // ============================================================================
 // Chat Actions
 // ============================================================================
 
-export async function sendMessage(content: string): Promise<void> {
+export async function sendMessage(content: string, files?: File[]): Promise<void> {
   const id = store.activeGatewayId;
   if (!id) return;
 
@@ -516,19 +734,29 @@ export async function sendMessage(content: string): Promise<void> {
   if (!client) return;
 
   const message = content.trim();
-  if (!message) return;
+  const hasFiles = files && files.length > 0;
+  
+  if (!message && !hasFiles) return;
 
   const idempotencyKey = crypto.randomUUID();
   const currentSessionKey = store.sessionKey;
 
+  // Build display content with file names
+  let displayContent = message;
+  if (hasFiles) {
+    const fileNames = files.map(f => `📎 ${f.name}`).join('\n');
+    displayContent = message ? `${message}\n\n${fileNames}` : fileNames;
+  }
+
   const userMessage: ChatMessage = {
     id: idempotencyKey,
     role: "user",
-    content: message,
+    content: displayContent,
     timestamp: new Date().toISOString(),
   };
   
   store.chatMessages = [...store.chatMessages, userMessage];
+  saveChatMessages();
   console.log("[Store] User message added, count:", store.chatMessages.length);
 
   try {
@@ -538,11 +766,15 @@ export async function sendMessage(content: string): Promise<void> {
     armStreamWatchdog();
     armStreamHardDeadline();
     
+    // Convert files to attachments
+    const attachments = hasFiles ? await filesToAttachments(files) : undefined;
+    
     const result = await client.sendChat({
       sessionKey: currentSessionKey,
-      message,
+      message: message || "Please analyze these files.",
       idempotencyKey,
       deliver: false,
+      attachments,
     });
     
     console.log("[Store] sendChat result:", JSON.stringify(result));
@@ -551,21 +783,26 @@ export async function sendMessage(content: string): Promise<void> {
       currentRunId = result.runId;
     }
 
-    if (result?.status === "ok" || !result?.runId) {
-      stopStreaming();
-      const active = store.activeGatewayId ? clients.get(store.activeGatewayId) : null;
-      if (active) {
+    // Reload history after send, merging with local messages
+    setTimeout(async () => {
+      const activeId = store.activeGatewayId;
+      const active = activeId ? clients.get(activeId) : null;
+      if (active && activeId) {
         try {
           const currentSK = store.sessionKey;
-          const history = await active.getChatHistory(currentSK);
-          if (history.length > 0) {
-            store.chatMessages = history;
-          }
+          const serverHistory = await active.getChatHistory(currentSK);
+          // Also load cache to ensure user messages are never lost
+          const cached = loadCachedMessages(activeId, currentSK);
+          const allLocal = mergeMessages(cached, store.chatMessages);
+          store.chatMessages = mergeMessages(serverHistory, allLocal);
         } catch (_) {
           // If history load fails, keep locally-added messages
         }
       }
-    }
+      saveChatMessages();
+      // Always stop streaming after history reload
+      stopStreaming();
+    }, 500);
   } catch (e) {
     console.error("Failed to send message:", e);
     stopStreaming();
@@ -597,12 +834,185 @@ export async function setModel(modelId: string): Promise<void> {
   if (!client) return;
 
   try {
+    console.log("[Store] Setting model to:", modelId);
     await client.setModel(modelId);
     const models = await client.getModels();
     store.modelsSnapshot = models;
+    console.log("[Store] Model set successfully, current:", models.current?.name);
   } catch (e) {
     console.error("Failed to set model:", e);
   }
+}
+
+// ============================================================================
+// Cross-Gateway Messaging
+// ============================================================================
+
+export async function sendMessageToGateway(gatewayId: string, content: string): Promise<void> {
+  const client = clients.get(gatewayId);
+  if (!client) {
+    console.error("[Store] Gateway not connected:", gatewayId);
+    return;
+  }
+
+  try {
+    const idempotencyKey = crypto.randomUUID();
+    await client.sendChat({
+      sessionKey: "main",  // Send to main session of target gateway
+      message: content,
+      idempotencyKey,
+      deliver: false,
+    });
+    console.log("[Store] Message forwarded to gateway:", gatewayId);
+  } catch (e) {
+    console.error("[Store] Failed to forward message:", e);
+  }
+}
+
+// ============================================================================
+// Session Management
+// ============================================================================
+
+export async function loadSessions(): Promise<void> {
+  const id = store.activeGatewayId;
+  if (!id) return;
+
+  const client = clients.get(id);
+  if (!client) return;
+
+  try {
+    const sessions = await client.getSessions({ limit: 50, messageLimit: 1 });
+    store.sessions = sessions;
+    console.log("[Store] Sessions loaded:", sessions.length);
+  } catch (e) {
+    console.error("Failed to load sessions:", e);
+  }
+}
+
+export async function switchSession(sessionKey: string): Promise<void> {
+  const id = store.activeGatewayId;
+  if (!id) return;
+
+  const client = clients.get(id);
+  if (!client) return;
+
+  // Save current session messages before switching
+  saveChatMessages();
+
+  store.sessionKey = sessionKey;
+  store.streamingContent = "";
+  store.isStreaming = false;
+  
+  // Load cached messages for the new session immediately
+  const cached = loadCachedMessages(id, sessionKey);
+  store.chatMessages = cached;
+
+  try {
+    const serverMessages = await client.getChatHistory(sessionKey);
+    // 3-way merge: cache + current + server
+    const allLocal = mergeMessages(cached, store.chatMessages);
+    store.chatMessages = mergeMessages(serverMessages, allLocal);
+    saveChatMessages();
+    console.log("[Store] Switched to session:", sessionKey, "messages:", store.chatMessages.length);
+  } catch (e) {
+    console.error("Failed to load session history:", e);
+    // Keep cached messages on error
+  }
+}
+
+// ============================================================================
+// Inline Button Actions
+// ============================================================================
+
+export async function selectButton(messageId: string, callbackData: string, buttonText: string): Promise<void> {
+  const msg = store.chatMessages.find(m => m.id === messageId);
+  if (!msg) return;
+
+  const isMulti = msg.selectMode === "multi";
+
+  if (isMulti) {
+    // Multi-select: toggle selection
+    const currentSelections = msg.selectedButtons ?? [];
+    const isSelected = currentSelections.includes(callbackData);
+    
+    store.chatMessages = store.chatMessages.map(m => {
+      if (m.id === messageId) {
+        const newSelections = isSelected
+          ? currentSelections.filter(s => s !== callbackData)
+          : [...currentSelections, callbackData];
+        return { ...m, selectedButtons: newSelections };
+      }
+      return m;
+    });
+  } else {
+    // Single-select: mark and send immediately
+    store.chatMessages = store.chatMessages.map(m => {
+      if (m.id === messageId) {
+        return { ...m, selectedButton: callbackData };
+      }
+      return m;
+    });
+
+    await sendMessage(buttonText);
+  }
+}
+
+export async function confirmMultiSelect(messageId: string): Promise<void> {
+  const msg = store.chatMessages.find(m => m.id === messageId);
+  if (!msg || !msg.selectedButtons?.length) return;
+
+  // Get selected button texts
+  const selectedTexts: string[] = [];
+  for (const row of msg.buttons ?? []) {
+    for (const btn of row) {
+      if (btn.callback_data && msg.selectedButtons.includes(btn.callback_data)) {
+        selectedTexts.push(btn.text);
+      }
+    }
+  }
+
+  // Mark as submitted
+  store.chatMessages = store.chatMessages.map(m => {
+    if (m.id === messageId) {
+      return { ...m, selectedButton: "confirmed" };  // Lock buttons
+    }
+    return m;
+  });
+
+  // Send combined selection
+  await sendMessage(selectedTexts.join(", "));
+}
+
+// ============================================================================
+// Notification Settings
+// ============================================================================
+
+export function toggleNotifications(enabled?: boolean): void {
+  store.notificationsEnabled = enabled ?? !store.notificationsEnabled;
+  
+  // Request permission if enabling
+  if (store.notificationsEnabled) {
+    notifications.requestPermission();
+  }
+}
+
+export function getNotificationStatus(): { enabled: boolean; permitted: boolean } {
+  return {
+    enabled: store.notificationsEnabled,
+    permitted: notifications.isEnabled(),
+  };
+}
+
+export function setNotificationSound(sound: import("$lib/services/notifications").NotificationSound): void {
+  notifications.sound = sound;
+}
+
+export function getNotificationSound(): import("$lib/services/notifications").NotificationSound {
+  return notifications.sound;
+}
+
+export function getAvailableSounds(): import("$lib/services/notifications").NotificationSound[] {
+  return notifications.getAvailableSounds();
 }
 
 // ============================================================================
@@ -618,4 +1028,9 @@ export function initGatewayStore(): void {
       connectGateway(g.id);
     }
   });
+  
+  // Request notification permission on startup
+  if (store.notificationsEnabled) {
+    notifications.requestPermission();
+  }
 }
