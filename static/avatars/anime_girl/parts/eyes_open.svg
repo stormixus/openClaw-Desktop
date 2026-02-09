@@ -1,0 +1,37 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="irisL" cx="50%" cy="38%" r="58%">
+      <stop offset="0%" stop-color="#B29BFF"/>
+      <stop offset="42%" stop-color="#8A72E6"/>
+      <stop offset="100%" stop-color="#4D3F97"/>
+    </radialGradient>
+    <radialGradient id="irisR" cx="50%" cy="38%" r="58%">
+      <stop offset="0%" stop-color="#B29BFF"/>
+      <stop offset="42%" stop-color="#8A72E6"/>
+      <stop offset="100%" stop-color="#4D3F97"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="47" cy="46" rx="9" ry="10" fill="#FBFAFF"/>
+  <ellipse cx="47" cy="47" rx="7" ry="8" fill="url(#irisL)"/>
+  <circle cx="47" cy="46" r="3" fill="#120E22"/>
+  <circle cx="44" cy="43" r="2.5" fill="#FFFFFF" opacity="0.88"/>
+  <circle cx="50" cy="49" r="1.2" fill="#FFFFFF" opacity="0.45"/>
+  <path d="M38 39 Q42 35 47 36 Q52 35 56 39" fill="none" stroke="#2A2249" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M40 54 Q44 56 47 56 Q50 56 54 54" fill="none" stroke="#3D3366" stroke-width="0.8" opacity="0.5"/>
+  <line x1="39" y1="38" x2="37" y2="34" stroke="#2A2249" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="43" y1="36" x2="41" y2="33" stroke="#2A2249" stroke-width="1.1" stroke-linecap="round"/>
+
+  <ellipse cx="73" cy="46" rx="9" ry="10" fill="#FBFAFF"/>
+  <ellipse cx="73" cy="47" rx="7" ry="8" fill="url(#irisR)"/>
+  <circle cx="73" cy="46" r="3" fill="#120E22"/>
+  <circle cx="70" cy="43" r="2.5" fill="#FFFFFF" opacity="0.88"/>
+  <circle cx="76" cy="49" r="1.2" fill="#FFFFFF" opacity="0.45"/>
+  <path d="M64 39 Q68 35 73 36 Q78 35 82 39" fill="none" stroke="#2A2249" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M66 54 Q70 56 73 56 Q76 56 80 54" fill="none" stroke="#3D3366" stroke-width="0.8" opacity="0.5"/>
+  <line x1="81" y1="38" x2="83" y2="34" stroke="#2A2249" stroke-width="1.4" stroke-linecap="round"/>
+  <line x1="77" y1="36" x2="79" y2="33" stroke="#2A2249" stroke-width="1.1" stroke-linecap="round"/>
+
+  <path d="M39 32 Q45 29 52 31" fill="none" stroke="#4E3F7A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M81 32 Q75 29 68 31" fill="none" stroke="#4E3F7A" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+</svg>

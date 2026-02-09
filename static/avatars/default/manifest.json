@@ -1,0 +1,81 @@
+{
+  "id": "default",
+  "name": "Default Agent",
+  "description": "Standard AI assistant robot with expressive face and articulated arms",
+  "author": "openClaw",
+  "version": "1.0.0",
+  "avatar": "🤖",
+  "background": "default",
+  "viewBox": "0 0 120 140",
+  "parts": {
+    "body": {
+      "file": "parts/body.svg",
+      "description": "Robot head, torso, neck, antenna, and ear indicators",
+      "zIndex": 2
+    },
+    "eyes_open": {
+      "file": "parts/eyes_open.svg",
+      "description": "Eyes in open state with indigo iris and highlight",
+      "zIndex": 3
+    },
+    "eyes_closed": {
+      "file": "parts/eyes_closed.svg",
+      "description": "Eyes in closed/blink state (curved lines)",
+      "zIndex": 3
+    },
+    "face_neutral": {
+      "file": "parts/face_neutral.svg",
+      "description": "Neutral expression — straight mouth line",
+      "zIndex": 3
+    },
+    "face_happy": {
+      "file": "parts/face_happy.svg",
+      "description": "Happy expression — smiling mouth, blush marks",
+      "zIndex": 3
+    },
+    "face_angry": {
+      "file": "parts/face_angry.svg",
+      "description": "Angry expression — furrowed brows, red accents, angular mouth",
+      "zIndex": 3
+    },
+    "arm_left": {
+      "file": "parts/arm_left.svg",
+      "description": "Left arm with ball joint shoulder",
+      "zIndex": 1,
+      "origin": "50% 60%"
+    },
+    "arm_right": {
+      "file": "parts/arm_right.svg",
+      "description": "Right arm with ball joint shoulder",
+      "zIndex": 1,
+      "origin": "50% 60%"
+    }
+  },
+  "expressions": {
+    "neutral": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "happy": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "angry": ["body", "eyes_open", "face_angry", "arm_left", "arm_right"],
+    "sad": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "thinking": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "surprised": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "excited": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "calm": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"]
+  },
+  "animations": {
+    "idle": {
+      "type": "bob",
+      "duration": "3s",
+      "distance": "6px"
+    },
+    "blink": {
+      "interval": [3000, 7000],
+      "duration": 150,
+      "swap": ["eyes_open", "eyes_closed"]
+    },
+    "armSwing": {
+      "targets": ["arm_left", "arm_right"],
+      "duration": "4s",
+      "angle": 5
+    }
+  }
+}

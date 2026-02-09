@@ -1,0 +1,13 @@
+<svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Angry face: sharp brows, red eyes, tight mouth -->
+  <!-- Angry brows -->
+  <line x1="40" y1="35" x2="50" y2="32" stroke="#4a5568" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="80" y1="35" x2="70" y2="32" stroke="#4a5568" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Eyes -->
+  <ellipse cx="47" cy="42" rx="5.5" ry="5" fill="#1a1a2e"/>
+  <ellipse cx="73" cy="42" rx="5.5" ry="5" fill="#1a1a2e"/>
+  <circle cx="47" cy="42" r="2.5" fill="#ef4444"/>
+  <circle cx="73" cy="42" r="2.5" fill="#ef4444"/>
+  <!-- Tight mouth -->
+  <path d="M48 57 L55 54 L65 54 L72 57" stroke="#4a5568" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

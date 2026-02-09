@@ -1,0 +1,70 @@
+{
+  "id": "anime_girl",
+  "name": "Sakura",
+  "description": "A cheerful anime-style assistant with pink hair and purple eyes",
+  "author": "openClaw",
+  "version": "1.0.0",
+  "avatar": "🌸",
+  "background": "sunset",
+  "parts": {
+    "body": {
+      "file": "parts/body.svg",
+      "zIndex": 0,
+      "description": "Base body with pink gradient hair, purple outfit, ribbon collar"
+    },
+    "face_neutral": {
+      "file": "parts/face_neutral.svg",
+      "zIndex": 2,
+      "description": "Neutral expression with tiny nose, small mouth, subtle blush"
+    },
+    "face_happy": {
+      "file": "parts/face_happy.svg",
+      "zIndex": 2,
+      "description": "Happy smile with strong blush and sparkle"
+    },
+    "face_angry": {
+      "file": "parts/face_angry.svg",
+      "zIndex": 2,
+      "description": "Angry pout with slanted brows and anger cross mark"
+    },
+    "eyes_open": {
+      "file": "parts/eyes_open.svg",
+      "zIndex": 1,
+      "description": "Big anime eyes with purple iris gradients and dramatic lashes"
+    },
+    "eyes_closed": {
+      "file": "parts/eyes_closed.svg",
+      "zIndex": 1,
+      "description": "Cute closed eye arcs with lashes for blink animation"
+    },
+    "arm_left": {
+      "file": "parts/arm_left.svg",
+      "zIndex": -1,
+      "description": "Left arm with puffy purple sleeve"
+    },
+    "arm_right": {
+      "file": "parts/arm_right.svg",
+      "zIndex": -1,
+      "description": "Right arm with puffy purple sleeve"
+    }
+  },
+  "expressions": {
+    "neutral": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "happy": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "angry": ["body", "eyes_open", "face_angry", "arm_left", "arm_right"],
+    "thinking": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "surprised": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "blink": ["body", "eyes_closed", "face_neutral", "arm_left", "arm_right"]
+  },
+  "animations": {
+    "idle": {
+      "type": "breathe",
+      "amplitude": 3,
+      "duration": 3000
+    },
+    "blink": {
+      "interval": 4000,
+      "duration": 150
+    }
+  }
+}

@@ -1,0 +1,25 @@
+<svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B9DC3"/>
+      <stop offset="100%" stop-color="#5C6B8A"/>
+    </linearGradient>
+    <linearGradient id="head" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C8D6E5"/>
+      <stop offset="100%" stop-color="#8395A7"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <rect x="30" y="80" width="60" height="50" rx="12" fill="url(#body)"/>
+  <rect x="38" y="88" width="44" height="10" rx="5" fill="#6366f1" opacity="0.3"/>
+  <!-- Neck -->
+  <rect x="50" y="72" width="20" height="12" rx="4" fill="#8395A7"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="45" rx="32" ry="30" fill="url(#head)"/>
+  <!-- Antenna -->
+  <line x1="60" y1="15" x2="60" y2="8" stroke="#8395A7" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="60" cy="6" r="3" fill="#6366f1"/>
+  <!-- Ears -->
+  <rect x="24" y="38" width="6" height="14" rx="3" fill="#6366f1" opacity="0.5"/>
+  <rect x="90" y="38" width="6" height="14" rx="3" fill="#6366f1" opacity="0.5"/>
+</svg>

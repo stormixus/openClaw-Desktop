@@ -144,11 +144,68 @@ fn check_port_available(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+pub struct AssistantMeta {
+    pub name: Option<String>,
+    pub avatar: Option<String>,
+}
+
+/// Fetch assistant metadata from the gateway's web UI HTML.
+/// Parses window.__OPENCLAW_ASSISTANT_NAME__ and __OPENCLAW_ASSISTANT_AVATAR__.
+/// This runs on the Rust side to bypass browser CORS restrictions.
+#[tauri::command]
+async fn fetch_assistant_meta(url: String) -> Result<AssistantMeta, String> {
+    // Convert ws:// to http://, wss:// to https://
+    let http_url = url
+        .replace("ws://", "http://")
+        .replace("wss://", "https://");
+    
+    // Ensure path ends with /chat
+    let fetch_url = if http_url.ends_with('/') {
+        format!("{}chat", http_url)
+    } else if http_url.ends_with("/chat") {
+        http_url.clone()
+    } else {
+        format!("{}/chat", http_url.trim_end_matches('/'))
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    let response = client.get(&fetch_url)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP fetch failed: {}", e))?;
+
+    let html = response.text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // Parse window.__OPENCLAW_ASSISTANT_NAME__="value"
+    let name = extract_window_var(&html, "__OPENCLAW_ASSISTANT_NAME__");
+    let avatar = extract_window_var(&html, "__OPENCLAW_ASSISTANT_AVATAR__");
+
+    Ok(AssistantMeta { name, avatar })
+}
+
+fn extract_window_var(html: &str, var_name: &str) -> Option<String> {
+    let pattern = format!("{}=\"", var_name);
+    if let Some(start) = html.find(&pattern) {
+        let value_start = start + pattern.len();
+        if let Some(end) = html[value_start..].find('"') {
+            return Some(html[value_start..value_start + end].to_string());
+        }
+    }
+    None
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, detect_local_openclaw])
+        .invoke_handler(tauri::generate_handler![greet, detect_local_openclaw, fetch_assistant_meta])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

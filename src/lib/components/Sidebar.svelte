@@ -53,61 +53,67 @@
 
 <style>
   .sidebar {
-    width: 80px;
-    height: 100vh;
+    width: var(--sidebar-width);
+    height: 100%;
     background: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 16px 0;
+    padding: var(--space-lg) 0;
     border-right: 1px solid var(--color-border);
-    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    backdrop-filter: blur(24px) saturate(180%);
+    position: relative;
+    z-index: 10;
   }
 
   .logo {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
-    border-radius: 14px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
-    margin-bottom: 32px;
+    margin-bottom: var(--space-2xl);
     color: white;
     box-shadow: 
-      0 4px 12px rgba(99, 102, 241, 0.4),
+      0 4px 16px rgba(99, 102, 241, 0.35),
       inset 0 1px 1px rgba(255, 255, 255, 0.2);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    transition: transform var(--duration-normal) var(--ease-spring),
+                box-shadow var(--duration-normal) var(--ease-out);
+    cursor: pointer;
   }
 
   .logo:hover {
-    transform: scale(1.05) rotate(-3deg);
+    transform: scale(1.08) rotate(-3deg);
     box-shadow: 
-      0 8px 24px rgba(99, 102, 241, 0.5),
-      inset 0 1px 1px rgba(255, 255, 255, 0.2);
+      0 8px 28px rgba(99, 102, 241, 0.5),
+      0 0 0 1px rgba(99, 102, 241, 0.2),
+      inset 0 1px 1px rgba(255, 255, 255, 0.25);
   }
 
   .nav {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
     width: 100%;
-    padding: 0 10px;
+    padding: 0 var(--space-sm);
   }
 
   .nav-item {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
-    padding: 14px 8px;
-    border-radius: 14px;
+    gap: var(--space-xs);
+    padding: var(--space-md) var(--space-sm);
+    border-radius: var(--radius-md);
     cursor: pointer;
     text-decoration: none;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all var(--duration-normal) var(--ease-out);
     position: relative;
-    color: var(--color-text-muted);
+    color: var(--color-text-subtle);
   }
 
   .nav-item:hover {
@@ -116,55 +122,64 @@
   }
 
   .nav-item.active {
-    background: linear-gradient(135deg, 
-      rgba(99, 102, 241, 0.15), 
-      rgba(168, 85, 247, 0.1)
-    );
+    background: var(--color-surface-hover);
     color: var(--color-primary);
   }
 
   .nav-item.active::before {
     content: "";
     position: absolute;
-    left: -10px;
+    left: -8px;
     top: 50%;
     transform: translateY(-50%);
     width: 3px;
-    height: 28px;
-    background: linear-gradient(180deg, #6366f1, #a855f7);
-    border-radius: 0 4px 4px 0;
-    box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+    height: 20px;
+    background: linear-gradient(180deg, var(--color-primary), var(--color-accent));
+    border-radius: 0 var(--radius-full) var(--radius-full) 0;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
+    animation: slideIn var(--duration-normal) var(--ease-spring);
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; height: 0; }
+    to { opacity: 1; height: 20px; }
   }
 
   .nav-icon {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: transform 0.2s ease;
+    transition: transform var(--duration-fast) var(--ease-out);
   }
 
   .nav-item:hover .nav-icon {
-    transform: scale(1.1);
+    transform: scale(1.08);
   }
 
   .nav-item.active .nav-icon {
-    filter: drop-shadow(0 0 6px var(--color-primary));
+    filter: drop-shadow(0 0 4px rgba(99, 102, 241, 0.4));
   }
 
   .nav-label {
     font-size: 10px;
     font-weight: 500;
-    letter-spacing: 0.3px;
+    letter-spacing: 0.2px;
     white-space: nowrap;
-    opacity: 0.9;
+    opacity: 0.8;
+    transition: opacity var(--duration-fast) var(--ease-out);
+  }
+
+  .nav-item:hover .nav-label {
+    opacity: 1;
   }
 
   .nav-item.active .nav-label {
     color: var(--color-primary);
     font-weight: 600;
+    opacity: 1;
   }
 
   .sidebar-footer {
-    padding: 16px;
+    padding: var(--space-lg);
   }
 </style>

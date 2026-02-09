@@ -1,0 +1,40 @@
+<svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B9DC3"/>
+      <stop offset="100%" stop-color="#5C6B8A"/>
+    </linearGradient>
+    <linearGradient id="head" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C8D6E5"/>
+      <stop offset="100%" stop-color="#8395A7"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <rect x="30" y="80" width="60" height="50" rx="12" fill="url(#body)"/>
+  <rect x="38" y="88" width="44" height="10" rx="5" fill="#3b82f6" opacity="0.3"/>
+  <!-- Neck -->
+  <rect x="50" y="72" width="20" height="12" rx="4" fill="#8395A7"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="45" rx="32" ry="30" fill="url(#head)"/>
+  <!-- Antenna (droopy) -->
+  <path d="M60 15 Q58 6 55 8" stroke="#8395A7" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <circle cx="55" cy="8" r="3" fill="#3b82f6" opacity="0.6"/>
+  <!-- Eyes (sad) -->
+  <ellipse cx="47" cy="42" rx="5.5" ry="6" fill="#1a1a2e"/>
+  <ellipse cx="73" cy="42" rx="5.5" ry="6" fill="#1a1a2e"/>
+  <circle cx="48" cy="41" r="2" fill="#3b82f6"/>
+  <circle cx="74" cy="41" r="2" fill="#3b82f6"/>
+  <!-- Sad brows -->
+  <line x1="41" y1="33" x2="49" y2="35" stroke="#5C6B8A" stroke-width="2" stroke-linecap="round"/>
+  <line x1="79" y1="33" x2="71" y2="35" stroke="#5C6B8A" stroke-width="2" stroke-linecap="round"/>
+  <!-- Tear -->
+  <ellipse cx="53" cy="50" rx="1.5" ry="2.5" fill="#60a5fa" opacity="0.6"/>
+  <!-- Mouth (frown) -->
+  <path d="M48 58 Q60 52 72 58" stroke="#4a5568" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Ears -->
+  <rect x="24" y="38" width="6" height="14" rx="3" fill="#3b82f6" opacity="0.4"/>
+  <rect x="90" y="38" width="6" height="14" rx="3" fill="#3b82f6" opacity="0.4"/>
+  <!-- Arms (droopy) -->
+  <rect x="18" y="88" width="12" height="35" rx="6" fill="url(#body)"/>
+  <rect x="90" y="88" width="12" height="35" rx="6" fill="url(#body)"/>
+</svg>

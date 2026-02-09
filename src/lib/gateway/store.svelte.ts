@@ -15,9 +15,11 @@ import type {
   ModelsSnapshot,
   SessionInfo,
 } from "./types";
+import { getActiveTheme, loadThemeForGateway } from "./npcThemeStore.svelte";
 
 const STORAGE_KEY = "openclaw.gateways";
 const SESSION_KEY_PREFIX = "openclaw.session";
+const CHATMODE_KEY_PREFIX = "openclaw.chatmode";
 
 
 // ============================================================================
@@ -36,6 +38,11 @@ export const store = $state({
   sessionKey: "",
   sessions: [] as SessionInfo[],  // Available sessions
   notificationsEnabled: true,     // Notification setting
+  chatMode: "chat" as "chat" | "npc",  // Chat display mode
+  npcEmotion: "neutral" as string,      // Current NPC emotion state
+  npcAction: null as string | null,     // Current NPC action (wave, nod, shake, bounce, bow)
+  npcBackground: "default" as string,   // Current NPC background theme or image path
+  assistantMeta: null as { name: string; emoji: string } | null,  // Agent identity from gateway
 });
 
 // Active gateway clients (id -> client) - not reactive, just a cache
@@ -76,6 +83,116 @@ export function getStreamingContent(): string {
 
 export function getSessionKey(): string {
   return store.sessionKey;
+}
+
+export function getChatMode(): "chat" | "npc" {
+  return store.chatMode;
+}
+
+export function getNpcEmotion(): string {
+  return store.npcEmotion;
+}
+
+// ============================================================================
+// NPC Directing Tags Parser
+// ============================================================================
+
+/** Strip <npc_persona>...</npc_persona> prefix injected for NPC mode — keep display clean */
+function stripSystemPrefix(msg: ChatMessage): ChatMessage {
+  if (msg.role !== "user" || !msg.content) return msg;
+  const stripped = msg.content.replace(/^<npc_persona>[\s\S]*?<\/npc_persona>\s*/s, "").trim();
+  if (stripped === msg.content) return msg;
+  return { ...msg, content: stripped };
+}
+
+// Valid face/emotion values
+const VALID_FACES = ["neutral", "happy", "thinking", "excited", "sad", "surprised", "angry", "calm"];
+// Valid action values
+const VALID_ACTIONS = ["wave", "nod", "shake", "bounce", "bow"];
+// Valid preset background names
+const VALID_BG_PRESETS = ["default", "forest", "space", "cozy", "ocean", "sunset"];
+
+// Matches [face:happy], [act:wave], [bg:space], [bg:/path/to/image.png]
+const DIRECTIVE_REGEX = /\[(face|act|bg):([^\]]+)\]/gi;
+// Backward-compatible: standalone [happy], [sad], etc.
+const LEGACY_EMOTION_REGEX = /\[(neutral|happy|thinking|excited|sad|surprised|angry|calm)\]/gi;
+
+export interface NpcDirectives {
+  cleanContent: string;
+  face: string | null;
+  act: string | null;
+  bg: string | null;
+}
+
+/**
+ * Parse and strip directing tags from message content.
+ * Supports:
+ *   [face:happy]  - expression/emotion
+ *   [act:wave]    - character action animation
+ *   [bg:space]    - preset background theme
+ *   [bg:/path/to/image.png] - dynamic image background
+ *   [happy]       - backward-compat emotion (mapped to face)
+ */
+export function parseNpcDirectives(content: string): NpcDirectives {
+  let face: string | null = null;
+  let act: string | null = null;
+  let bg: string | null = null;
+
+  // Parse [face:], [act:], [bg:] tags
+  let cleaned = content.replace(DIRECTIVE_REGEX, (_match, type, value) => {
+    const t = type.toLowerCase();
+    const v = value.trim();
+    if (t === "face" && VALID_FACES.includes(v.toLowerCase())) {
+      face = v.toLowerCase();
+    } else if (t === "act" && VALID_ACTIONS.includes(v.toLowerCase())) {
+      act = v.toLowerCase();
+    } else if (t === "bg") {
+      // bg can be a preset name or an image file path
+      bg = VALID_BG_PRESETS.includes(v.toLowerCase()) ? v.toLowerCase() : v;
+    }
+    return "";
+  });
+
+  // Backward compat: parse standalone [happy] style tags
+  cleaned = cleaned.replace(LEGACY_EMOTION_REGEX, (_match, emotion) => {
+    if (!face) face = emotion.toLowerCase();
+    return "";
+  });
+
+  return { cleanContent: cleaned.trim(), face, act, bg };
+}
+
+/** @deprecated Use parseNpcDirectives instead */
+export function parseNpcEmotion(content: string): { cleanContent: string; emotion: string | null } {
+  const { cleanContent, face } = parseNpcDirectives(content);
+  return { cleanContent, emotion: face };
+}
+
+export function toggleChatMode(): void {
+  store.chatMode = store.chatMode === "chat" ? "npc" : "chat";
+  // Persist per-gateway
+  if (browser && store.activeGatewayId) {
+    localStorage.setItem(
+      `${CHATMODE_KEY_PREFIX}.${store.activeGatewayId}`,
+      store.chatMode
+    );
+  }
+}
+
+export function setNpcEmotion(emotion: string): void {
+  store.npcEmotion = emotion;
+}
+
+export function setNpcAction(action: string | null): void {
+  store.npcAction = action;
+}
+
+export function setNpcBackground(bg: string): void {
+  store.npcBackground = bg;
+}
+
+export function getAssistantMeta(): { name: string; emoji: string } | null {
+  return store.assistantMeta;
 }
 
 // Derived getters
@@ -153,6 +270,13 @@ export function loadGateways(): void {
       const data = JSON.parse(saved);
       store.gateways = data.gateways ?? [];
       store.activeGatewayId = data.activeId ?? null;
+
+      // Restore per-gateway chat mode preference
+      if (store.activeGatewayId) {
+        const savedMode = localStorage.getItem(`${CHATMODE_KEY_PREFIX}.${store.activeGatewayId}`);
+        store.chatMode = (savedMode === "npc" ? "npc" : "chat") as "chat" | "npc";
+        loadThemeForGateway(store.activeGatewayId);
+      }
     } catch (e) {
       console.error("Failed to load gateways:", e);
     }
@@ -225,11 +349,24 @@ export function removeGateway(id: string): void {
 export function setActiveGateway(id: string): void {
   store.activeGatewayId = id;
   saveGateways();
+
+  // Restore per-gateway chat mode preference
+  if (browser) {
+    const saved = localStorage.getItem(`${CHATMODE_KEY_PREFIX}.${id}`);
+    store.chatMode = (saved === "npc" ? "npc" : "chat") as "chat" | "npc";
+    loadThemeForGateway(id);
+  }
   
-  // Load chat history for new active gateway
+  // Reload data for newly active gateway
   const client = clients.get(id);
   if (client && client.getStatus() === "connected") {
-    loadChatHistory(client);
+    // Reset current data
+    store.modelsSnapshot = null;
+    store.sessions = [];
+    store.chatMessages = [];
+    
+    // Load everything for the new active gateway
+    loadGatewayData(id);
   }
 }
 
@@ -293,9 +430,62 @@ function handleStatusChange(id: string, status: ConnectionStatus): void {
     newStates.set(id, { ...state, status });
   }
   store.gatewayStates = newStates;
+
+  // When connected, load models/sessions/history for the active gateway
+  if (status === "connected" && id === store.activeGatewayId) {
+    loadGatewayData(id);
+  }
+}
+
+/**
+ * Load all gateway data (models, sessions, chat history) for the given gateway.
+ * Called when a gateway first connects or when switching active gateways.
+ */
+async function loadGatewayData(id: string): Promise<void> {
+  const client = clients.get(id);
+  if (!client) return;
+
+  // Resolve session key
+  if (!store.sessionKey) {
+    store.sessionKey = resolveSessionKey(id);
+    console.log("[Store] Session key resolved:", store.sessionKey);
+  }
+
+  // Fetch models
+  try {
+    const models = await client.getModels();
+    console.log("[Store] Models loaded:", JSON.stringify(models));
+    if (models?.available?.length || models?.current) {
+      store.modelsSnapshot = models;
+    }
+  } catch (e) {
+    console.warn("[Store] Failed to load models:", e);
+  }
+
+  // Load sessions (also extracts model defaults as fallback)
+  await loadSessionsWithDefaults(client);
+
+  // Fetch assistant identity metadata from gateway HTML (non-blocking)
+  client.fetchAssistantMeta().then(meta => {
+    if (meta.name || meta.avatar) {
+      store.assistantMeta = {
+        name: meta.name ?? "Agent",
+        emoji: meta.avatar ?? "🤖",
+      };
+      console.log("[Store] Assistant meta loaded:", store.assistantMeta);
+    }
+  }).catch(e => {
+    console.warn("[Store] Failed to load assistant meta:", e);
+  });
+
+  // Load chat history
+  loadChatHistory(client);
 }
 
 async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<void> {
+  console.log("[Store] handleSnapshot called for:", id, "snapshot keys:", Object.keys(snapshot));
+  console.log("[Store] snapshot.models:", JSON.stringify(snapshot.models));
+
   const newStates = new Map(store.gatewayStates);
   const state = newStates.get(id);
   if (state) {
@@ -313,17 +503,22 @@ async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<vo
 
     // First try from snapshot, then fetch if empty
     if (snapshot.models?.available?.length) {
+      console.log("[Store] Models found in snapshot:", snapshot.models.available.length);
       store.modelsSnapshot = snapshot.models;
     } else {
+      console.log("[Store] No models in snapshot, fetching via getModels...");
       // Fetch models separately
       const client = clients.get(id);
       if (client) {
         try {
           const models = await client.getModels();
+          console.log("[Store] getModels response:", JSON.stringify(models));
           store.modelsSnapshot = models;
         } catch (e) {
           console.warn("[Store] Failed to load models:", e);
         }
+      } else {
+        console.warn("[Store] No client found for id:", id);
       }
     }
     
@@ -335,11 +530,14 @@ async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<vo
     if (client) {
       loadChatHistory(client);
     }
+  } else {
+    console.log("[Store] Snapshot for non-active gateway, active is:", store.activeGatewayId);
   }
 }
 
 // Current runId being tracked
 let currentRunId: string | null = null;
+let lastSentMode: "chat" | "npc" | null = null;
 let streamWatchdog: ReturnType<typeof setTimeout> | null = null;
 let streamHardDeadline: ReturnType<typeof setTimeout> | null = null;
 const STREAM_IDLE_TIMEOUT_MS = 1500;
@@ -567,10 +765,11 @@ function handleChatEvent(payload: ChatEventPayload): void {
 
 function handleChatMessage(message: ChatMessage): void {
   const exists = store.chatMessages.some(m => m.id === message.id);
+  const clean = stripSystemPrefix(message);
   if (exists) {
-    store.chatMessages = store.chatMessages.map(m => m.id === message.id ? message : m);
+    store.chatMessages = store.chatMessages.map(m => m.id === message.id ? clean : m);
   } else {
-    store.chatMessages = [...store.chatMessages, message];
+    store.chatMessages = [...store.chatMessages, clean];
   }
 }
 
@@ -602,7 +801,7 @@ async function loadChatHistory(client: GatewayClient): Promise<void> {
   
   try {
     const serverMessages = await client.getChatHistory(store.sessionKey);
-    store.chatMessages = serverMessages;
+    store.chatMessages = serverMessages.map(stripSystemPrefix);
     stopStreaming();
     console.log("[Store] Chat history loaded from server:", serverMessages.length, "messages");
   } catch (e) {
@@ -695,9 +894,21 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
     // Convert files to attachments
     const attachments = hasFiles ? await filesToAttachments(files) : undefined;
     
+    // Build the actual message to send — inject NPC system prompt when entering NPC mode
+    let gatewayMessage = message || "Please analyze these files.";
+    if (store.chatMode === "npc") {
+      const theme = getActiveTheme();
+      // Inject if: first NPC message, or mode changed since last send
+      const needsPrompt = theme.systemPrompt && lastSentMode !== "npc";
+      if (needsPrompt) {
+        gatewayMessage = `<npc_persona>${theme.systemPrompt}</npc_persona>\n\n${gatewayMessage}`;
+      }
+    }
+    lastSentMode = store.chatMode;
+
     const result = await client.sendChat({
       sessionKey: currentSessionKey,
-      message: message || "Please analyze these files.",
+      message: gatewayMessage,
       idempotencyKey,
       deliver: false,
       attachments,
@@ -789,10 +1000,44 @@ export async function loadSessions(): Promise<void> {
   const client = clients.get(id);
   if (!client) return;
 
+  await loadSessionsWithDefaults(client);
+}
+
+/**
+ * Load sessions and extract model defaults from the response.
+ * The sessions.list response contains a 'defaults' field with model info.
+ */
+async function loadSessionsWithDefaults(client: GatewayClient): Promise<void> {
   try {
-    const sessions = await client.getSessions({ limit: 50 });
-    store.sessions = sessions;
-    console.log("[Store] Sessions loaded:", sessions.length);
+    const result = await client.getSessionsRaw({ limit: 50 });
+    store.sessions = result?.sessions ?? [];
+    console.log("[Store] Sessions loaded:", store.sessions.length);
+    
+    // Extract model info from defaults if modelsSnapshot is empty
+    if (!store.modelsSnapshot?.current && result?.defaults) {
+      const defaults = result.defaults as Record<string, unknown>;
+      const modelName = (defaults.model as string) ?? "";
+      const provider = (defaults.modelProvider as string) ?? "";
+      
+      if (modelName) {
+        console.log("[Store] Setting current model from session defaults:", modelName);
+        store.modelsSnapshot = {
+          current: {
+            id: modelName,
+            provider: provider,
+            name: modelName,
+            displayName: modelName,
+          },
+          fallback: [],
+          available: [{
+            id: modelName,
+            provider: provider,
+            name: modelName,
+            displayName: modelName,
+          }],
+        };
+      }
+    }
   } catch (e) {
     console.error("Failed to load sessions:", e);
   }
@@ -813,7 +1058,7 @@ export async function switchSession(sessionKey: string): Promise<void> {
 
   try {
     const serverMessages = await client.getChatHistory(sessionKey);
-    store.chatMessages = serverMessages;
+    store.chatMessages = serverMessages.map(stripSystemPrefix);
     console.log("[Store] Switched to session:", sessionKey, "messages:", store.chatMessages.length);
   } catch (e) {
     console.error("Failed to load session history:", e);
@@ -943,9 +1188,20 @@ export function getAvailableSounds(): import("$lib/services/notifications").Noti
 export function initGatewayStore(): void {
   loadGateways();
   
-  // Auto-connect to saved gateways
+  // Auto-connect gateways that have saved credentials.
+  // Connect the active gateway first for faster perceived load.
+  const activeId = store.activeGatewayId;
+  
+  if (activeId) {
+    const activeGw = store.gateways.find(g => g.id === activeId);
+    if (activeGw && (activeGw.token || activeGw.deviceToken || activeGw.password)) {
+      connectGateway(activeId);
+    }
+  }
+  
+  // Connect remaining gateways with credentials
   store.gateways.forEach(g => {
-    if (g.deviceToken) {
+    if (g.id !== activeId && (g.token || g.deviceToken || g.password)) {
       connectGateway(g.id);
     }
   });

@@ -1,0 +1,30 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF7777"/>
+      <stop offset="100%" stop-color="#CC4444"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <path d="M60 8 C30 8 15 33 15 53 C15 73 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 73 105 53 C105 33 90 8 60 8Z" fill="url(#lg)"/>
+  <!-- Left Claw (wide open) -->
+  <path d="M16 40 C0 32 -5 45 3 58 C10 70 22 63 25 52 C27 45 22 38 16 40Z" fill="url(#lg)"/>
+  <!-- Right Claw (wide open) -->
+  <path d="M104 40 C120 32 125 45 117 58 C110 70 98 63 95 52 C93 45 98 38 104 40Z" fill="url(#lg)"/>
+  <!-- Antenna (alert) -->
+  <path d="M45 12 Q32 0 27 4" stroke="#FF7777" stroke-width="2" stroke-linecap="round"/>
+  <path d="M75 12 Q88 0 93 4" stroke="#FF7777" stroke-width="2" stroke-linecap="round"/>
+  <!-- Surprised Eyes (BIG) -->
+  <circle cx="45" cy="34" r="9" fill="#0a0a1a"/>
+  <circle cx="75" cy="34" r="9" fill="#0a0a1a"/>
+  <circle cx="46" cy="33" r="3" fill="#00FFFF"/>
+  <circle cx="76" cy="33" r="3" fill="#00FFFF"/>
+  <!-- Sparkle in eyes -->
+  <circle cx="43" cy="31" r="1.5" fill="white" opacity="0.8"/>
+  <circle cx="73" cy="31" r="1.5" fill="white" opacity="0.8"/>
+  <!-- O mouth -->
+  <circle cx="60" cy="54" r="6" fill="#0a0a1a"/>
+  <!-- Exclamation marks -->
+  <text x="28" y="20" font-size="12" fill="#FFFF00" font-weight="bold" opacity="0.8">!</text>
+  <text x="88" y="20" font-size="12" fill="#FFFF00" font-weight="bold" opacity="0.8">!</text>
+</svg>

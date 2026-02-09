@@ -1,0 +1,27 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D95A5A"/>
+      <stop offset="100%" stop-color="#AA3333"/>
+    </linearGradient>
+  </defs>
+  <!-- Body (slightly droopy) -->
+  <path d="M60 12 C30 12 15 37 15 57 C15 77 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 77 105 57 C105 37 90 12 60 12Z" fill="url(#lg)"/>
+  <!-- Left Claw (drooping) -->
+  <path d="M22 50 C7 50 2 60 7 68 C12 76 22 70 26 60 C28 54 25 50 22 50Z" fill="url(#lg)"/>
+  <!-- Right Claw (drooping) -->
+  <path d="M98 50 C113 50 118 60 113 68 C108 76 98 70 94 60 C92 54 95 50 98 50Z" fill="url(#lg)"/>
+  <!-- Antenna (droopy) -->
+  <path d="M45 16 Q38 10 34 14" stroke="#D95A5A" stroke-width="2" stroke-linecap="round"/>
+  <path d="M75 16 Q82 10 86 14" stroke="#D95A5A" stroke-width="2" stroke-linecap="round"/>
+  <!-- Sad Eyes (big, watery) -->
+  <circle cx="45" cy="36" r="7" fill="#0a0a1a"/>
+  <circle cx="75" cy="36" r="7" fill="#0a0a1a"/>
+  <circle cx="46" cy="35" r="2.5" fill="#66CCFF"/>
+  <circle cx="76" cy="35" r="2.5" fill="#66CCFF"/>
+  <!-- Tear drops -->
+  <path d="M52 38 Q53 44 51 48" stroke="#66CCFF" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <path d="M82 38 Q83 44 81 48" stroke="#66CCFF" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.7"/>
+  <!-- Sad mouth -->
+  <path d="M50 55 Q60 50 70 55" stroke="#0a0a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

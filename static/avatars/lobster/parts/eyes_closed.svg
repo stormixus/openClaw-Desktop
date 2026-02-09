@@ -1,0 +1,5 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Eyes closed overlay (horizontal lines) -->
+  <path d="M39 35 Q45 33 51 35" stroke="#0a0a1a" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M69 35 Q75 33 81 35" stroke="#0a0a1a" stroke-width="3" stroke-linecap="round" fill="none"/>
+</svg>

@@ -1,0 +1,79 @@
+{
+  "id": "ghost_charm",
+  "name": "Momo Ghost",
+  "description": "A charming kawaii ghost with a tiny top hat and bow tie",
+  "author": "openClaw",
+  "version": "1.0.0",
+  "avatar": "👻",
+  "background": "sky",
+  "viewBox": "0 0 120 160",
+  "parts": {
+    "body": {
+      "file": "parts/body.svg",
+      "zIndex": 0,
+      "description": "Ghost body, hat, bow tie, and pastel sky card background"
+    },
+    "face_neutral": {
+      "file": "parts/face_neutral.svg",
+      "zIndex": 2,
+      "description": "Tiny smile with gentle blush"
+    },
+    "face_happy": {
+      "file": "parts/face_happy.svg",
+      "zIndex": 2,
+      "description": "Open happy mouth with vivid blush"
+    },
+    "face_angry": {
+      "file": "parts/face_angry.svg",
+      "zIndex": 2,
+      "description": "Pout with angled brows"
+    },
+    "eyes_open": {
+      "file": "parts/eyes_open.svg",
+      "zIndex": 1,
+      "description": "Glossy kawaii eyes"
+    },
+    "eyes_closed": {
+      "file": "parts/eyes_closed.svg",
+      "zIndex": 1,
+      "description": "Closed smiling arcs"
+    },
+    "arm_left": {
+      "file": "parts/arm_left.svg",
+      "zIndex": 1,
+      "description": "Left floating ghost hand"
+    },
+    "arm_right": {
+      "file": "parts/arm_right.svg",
+      "zIndex": 1,
+      "description": "Right floating ghost hand"
+    }
+  },
+  "expressions": {
+    "neutral": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "happy": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "angry": ["body", "eyes_open", "face_angry", "arm_left", "arm_right"],
+    "sad": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "thinking": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "surprised": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "excited": ["body", "eyes_open", "face_happy", "arm_left", "arm_right"],
+    "calm": ["body", "eyes_open", "face_neutral", "arm_left", "arm_right"],
+    "blink": ["body", "eyes_closed", "face_neutral", "arm_left", "arm_right"]
+  },
+  "animations": {
+    "idle": {
+      "type": "bob",
+      "duration": "3s",
+      "distance": "6px"
+    },
+    "blink": {
+      "interval": 3800,
+      "duration": 140
+    },
+    "armSwing": {
+      "targets": ["arm_left", "arm_right"],
+      "duration": "3.8s",
+      "angle": 7
+    }
+  }
+}

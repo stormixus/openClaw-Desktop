@@ -12,6 +12,13 @@
   import CodeSnippets from "./CodeSnippets.svelte";
   import ForwardModal from "./ForwardModal.svelte";
   import { Upload } from "@lucide/svelte";
+  import {
+    getActiveTheme,
+    getCharacterImage,
+    getCharacterFaceLayer,
+    getThemeAvatar,
+  } from "$lib/gateway/npcThemeStore.svelte";
+  import { getCachedBackground } from "$lib/gateway/npcBackgroundService";
 
   let messagesContainer: HTMLDivElement | undefined = $state(undefined);
   let isDragOver = $state(false);
@@ -25,6 +32,124 @@
   
   // Code snippets ref
   let codeSnippetsComponent: CodeSnippets;
+
+  // NPC mode state
+  const isNpcMode = $derived(store.chatMode === "npc");
+  const npcTheme = $derived(getActiveTheme());
+  let npcEmotion = $state("neutral");
+  let eyesOpen = $state(true);
+
+  // Eye blink timer for NPC
+  $effect(() => {
+    if (!isNpcMode) return;
+    const blink = () => {
+      eyesOpen = false;
+      setTimeout(() => { eyesOpen = true; }, 150);
+    };
+    const interval = setInterval(blink, 3000 + Math.random() * 4000);
+    return () => clearInterval(interval);
+  });
+
+  // Emotion synonym map — groups related words to our 8 canonical emotions
+  const EMOTION_SYNONYMS: Record<string, string[]> = {
+    happy:     ["happy", "glad", "cheerful", "joyful", "delighted", "pleased", "grateful", "relieved", "amused", "laughing", "haha", "lol", "great", "wonderful", "smile", "smiling", "grin", "기뻐", "좋아", "감사", "웃", "행복", "즐거"],
+    sad:       ["sad", "sorry", "unfortunate", "sorrow", "upset", "crying", "tearful", "heartbroken", "depressed", "gloomy", "miserable", "미안", "슬퍼", "우울", "안타깝", "눈물", "서운"],
+    angry:     ["angry", "furious", "rage", "frustrated", "annoyed", "irritated", "mad", "outraged", "livid", "grumpy", "pissed", "화나", "짜증", "분노", "화남", "열받"],
+    thinking:  ["think", "thinking", "hmm", "ponder", "consider", "wonder", "curious", "analyze", "contemplat", "musing", "deliberat", "생각", "음", "고민", "궁금", "흠"],
+    surprised: ["surprised", "surprise", "shocked", "startled", "stunned", "astonished", "amazed", "gasp", "gasping", "faint", "whoa", "wow", "omg", "oh my", "unbelievable", "jaw", "놀라", "헐", "세상에", "맙소사", "어머", "깜짝", "충격", "멎"],
+    excited:   ["excited", "thrilled", "pumped", "hyped", "ecstatic", "elated", "stoked", "enthusias", "eager", "fired up", "awesome", "amazing", "fantastic", "incredible", "신나", "대박", "우와", "짱", "최고", "흥분"],
+    calm:      ["calm", "peace", "serene", "tranquil", "relax", "gentle", "soothing", "mellow", "composed", "zen", "meditat", "평온", "편안", "차분", "고요", "평화", "안정"],
+  };
+
+  // Map of face tag values → canonical emotion
+  const FACE_TAG_MAP: Record<string, string> = {};
+  for (const [emotion, synonyms] of Object.entries(EMOTION_SYNONYMS)) {
+    for (const syn of synonyms) {
+      FACE_TAG_MAP[syn] = emotion;
+    }
+  }
+
+  // Derive emotion from latest assistant message
+  $effect(() => {
+    if (!isNpcMode) return;
+    const lastAssistant = [...store.chatMessages].reverse().find(m => m.role === "assistant");
+    if (!lastAssistant) { npcEmotion = "neutral"; return; }
+    const text = (lastAssistant.content || "");
+    const textLower = text.toLowerCase();
+
+    // 1. Check [face:XXX] tags first (highest priority — last one wins)
+    const faceTags = [...textLower.matchAll(/\[face:(\w+)\]/g)];
+    if (faceTags.length > 0) {
+      const lastTag = faceTags[faceTags.length - 1][1];
+      if (FACE_TAG_MAP[lastTag]) {
+        npcEmotion = FACE_TAG_MAP[lastTag];
+        return;
+      }
+      // Direct match to our 8 emotions
+      const validEmotions = ["happy", "sad", "angry", "thinking", "surprised", "excited", "calm", "neutral"];
+      if (validEmotions.includes(lastTag)) {
+        npcEmotion = lastTag;
+        return;
+      }
+    }
+
+    // 2. Emoji detection
+    if (/😊|😄|😃|🥰|😁/.test(text)) { npcEmotion = "happy"; return; }
+    if (/😢|😭|😥|🥺/.test(text)) { npcEmotion = "sad"; return; }
+    if (/😠|😡|🤬|💢/.test(text)) { npcEmotion = "angry"; return; }
+    if (/🤔|🧐|💭/.test(text)) { npcEmotion = "thinking"; return; }
+    if (/😮|😲|😱|🫣|😳/.test(text)) { npcEmotion = "surprised"; return; }
+    if (/🤩|🎉|✨|🔥/.test(text)) { npcEmotion = "excited"; return; }
+    if (/😌|🧘|☮️|🌿/.test(text)) { npcEmotion = "calm"; return; }
+
+    // 3. Keyword matching — check each emotion group
+    for (const [emotion, keywords] of Object.entries(EMOTION_SYNONYMS)) {
+      for (const kw of keywords) {
+        if (textLower.includes(kw)) {
+          npcEmotion = emotion;
+          return;
+        }
+      }
+    }
+
+    npcEmotion = "neutral";
+  });
+
+  // Override emotion to 'thinking' while streaming
+  const npcDisplayEmotion = $derived(
+    isNpcMode && store.isStreaming ? "thinking" : npcEmotion
+  );
+
+  const npcCharSrc = $derived(getCharacterImage(npcTheme, npcDisplayEmotion));
+
+  // NPC background map
+  const NPC_BACKGROUNDS: Record<string, string> = {
+    default: "linear-gradient(180deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+    space:   "linear-gradient(180deg, #0b0c1e 0%, #1a1040 40%, #2d1b69 70%, #0b0c1e 100%)",
+    forest:  "linear-gradient(180deg, #0a1f0a 0%, #1a3a1a 40%, #2d4a2d 70%, #0f2b0f 100%)",
+    ocean:   "linear-gradient(180deg, #0a1628 0%, #0d2137 40%, #164060 70%, #0a1628 100%)",
+    sunset:  "linear-gradient(180deg, #1a0a1e 0%, #4a1942 30%, #8b3a4a 60%, #d4724a 100%)",
+  };
+  const npcBg = $derived(isNpcMode ? (NPC_BACKGROUNDS[npcTheme.background] ?? NPC_BACKGROUNDS.default) : "");
+  // AI-generated background takes priority over gradient
+  const npcBgImage = $derived(isNpcMode ? getCachedBackground(npcTheme.id) : null);
+
+  // Thinking indicator phrases
+  const THINKING_PHRASES = [
+    "Thinking...", "Pondering...", "Hmm...", "Let me think...",
+    "Processing...", "Considering...", "Working on it...",
+    "생각 중...", "고민 중...", "분석 중...", "음...",
+    "잠시만요...", "생각하는 중...",
+  ];
+  let thinkingPhraseIdx = $state(0);
+  $effect(() => {
+    if (!store.isStreaming || store.streamingContent) return;
+    thinkingPhraseIdx = Math.floor(Math.random() * THINKING_PHRASES.length);
+    const interval = setInterval(() => {
+      thinkingPhraseIdx = (thinkingPhraseIdx + 1) % THINKING_PHRASES.length;
+    }, 2500);
+    return () => clearInterval(interval);
+  });
 
   // Expose addSnippet globally for code blocks
   if (typeof window !== 'undefined') {
@@ -157,6 +282,11 @@
 <div 
   class="chat-container" 
   class:drag-over={isDragOver}
+  class:npc-mode={isNpcMode}
+  style:background={npcBgImage ? undefined : (npcBg || undefined)}
+  style:background-image={npcBgImage ? `url(${npcBgImage})` : undefined}
+  style:background-size={npcBgImage ? 'cover' : undefined}
+  style:background-position={npcBgImage ? 'center' : undefined}
   ondragenter={handleDragEnter}
   ondragleave={handleDragLeave}
   ondragover={handleDragOver}
@@ -175,10 +305,36 @@
     </div>
   {/if}
 
+  <!-- NPC Character Layer (behind messages) -->
+  {#if isNpcMode}
+    <div class="npc-character-layer">
+      {#if npcTheme.characterParts}
+        <!-- Parts-based layered rendering with animation -->
+        <div class="npc-parts-container">
+          <img src={npcTheme.characterParts.arm_left} alt="" class="npc-part npc-arm npc-arm-left" />
+          <img src={npcTheme.characterParts.arm_right} alt="" class="npc-part npc-arm npc-arm-right" />
+          <img src={npcTheme.characterParts.body} alt="" class="npc-part npc-body" />
+          {#if eyesOpen}
+            <img src={npcTheme.characterParts.eyes_open} alt="" class="npc-part npc-eyes" />
+          {:else}
+            <img src={npcTheme.characterParts.eyes_closed} alt="" class="npc-part npc-eyes" />
+          {/if}
+          {#if getCharacterFaceLayer(npcTheme, npcDisplayEmotion)}
+            <img src={getCharacterFaceLayer(npcTheme, npcDisplayEmotion)} alt="" class="npc-part npc-face" />
+          {/if}
+        </div>
+      {:else if npcCharSrc}
+        <img src={npcCharSrc} alt={npcTheme.name} class="npc-character-img" />
+      {:else}
+        <div class="npc-character-emoji">{getThemeAvatar(npcTheme, npcEmotion)}</div>
+      {/if}
+    </div>
+  {/if}
+
   <div class="messages" bind:this={messagesContainer}>
     {#if store.chatMessages.length === 0 && !store.streamingContent}
       <div class="empty-state">
-        <div class="empty-icon">💬</div>
+        <div class="empty-icon">{isNpcMode ? getThemeAvatar(npcTheme, 'neutral') : '💬'}</div>
         <p>{$t("chat.empty")}</p>
       </div>
     {:else}
@@ -209,6 +365,16 @@
             isFirst={true}
             isLast={true}
           />
+        </div>
+      {/if}
+
+      <!-- Standalone thinking indicator (before first content arrives) -->
+      {#if store.isStreaming && !store.streamingContent}
+        <div class="message-group assistant">
+          <div class="thinking-standalone">
+            <span class="thinking-dot"></span>
+            <span class="thinking-text">{THINKING_PHRASES[thinkingPhraseIdx]}</span>
+          </div>
         </div>
       {/if}
     {/if}
@@ -283,15 +449,15 @@
   .drop-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(99, 102, 241, 0.1);
+    background: rgba(99, 102, 241, 0.08);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 100;
-    border: 3px dashed var(--color-primary);
-    border-radius: 16px;
-    margin: 8px;
+    border: 2px dashed var(--color-primary);
+    border-radius: var(--radius-lg);
+    margin: var(--space-sm);
     animation: pulse 1.5s ease-in-out infinite;
   }
 
@@ -306,14 +472,14 @@
   }
 
   .drop-icon {
-    width: 80px;
-    height: 80px;
-    margin: 0 auto 16px;
+    width: 72px;
+    height: 72px;
+    margin: 0 auto var(--space-lg);
     display: flex;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
-    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1));
+    border-radius: var(--radius-xl);
     animation: bounce 0.6s ease infinite alternate;
   }
 
@@ -338,8 +504,8 @@
   .files-preview {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    padding: 12px 20px;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-xl);
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
   }
@@ -349,15 +515,15 @@
     position: relative;
     width: 80px;
     height: 80px;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     overflow: hidden;
     border: 2px solid var(--color-border);
-    transition: all 0.2s ease;
+    transition: all var(--duration-fast) var(--ease-out);
   }
 
   .image-preview:hover {
     border-color: var(--color-primary);
-    transform: scale(1.05);
+    transform: scale(1.03);
   }
 
   .image-preview img {
@@ -453,10 +619,12 @@
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
+    padding: var(--space-xl);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--space-lg);
+    position: relative;
+    z-index: 1;
   }
 
   .message-group {
@@ -485,11 +653,142 @@
 
   .empty-icon {
     font-size: 48px;
-    margin-bottom: 16px;
-    opacity: 0.5;
+    margin-bottom: var(--space-lg);
+    opacity: 0.4;
   }
 
   .empty-state p {
-    font-size: 14px;
+    font-size: 13px;
+    color: var(--color-text-subtle);
+  }
+
+  /* ====== NPC Mode Styles ====== */
+  .chat-container.npc-mode {
+    position: relative;
+  }
+
+  .npc-character-layer {
+    position: absolute;
+    left: 0;
+    top: 40%;
+    transform: translateY(-50%);
+    width: 38%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .npc-character-img {
+    width: 85%;
+    max-height: 75%;
+    object-fit: contain;
+    object-position: bottom;
+    filter: drop-shadow(0 4px 24px rgba(0,0,0,0.3));
+    transition: opacity 0.3s ease;
+  }
+
+  .npc-character-emoji {
+    font-size: 120px;
+    filter: drop-shadow(0 4px 16px rgba(0,0,0,0.2));
+    user-select: none;
+  }
+
+  .npc-parts-container {
+    position: relative;
+    width: 240px;
+    height: 280px;
+    animation: npcIdle 3s ease-in-out infinite;
+  }
+
+  .npc-part {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .npc-body { z-index: 2; }
+  .npc-eyes { z-index: 3; }
+  .npc-face { z-index: 3; }
+  
+  .npc-arm {
+    z-index: 1;
+    transform-origin: 50% 60%;
+  }
+
+  .npc-arm-left {
+    animation: armSwingLeft 4s ease-in-out infinite;
+  }
+
+  .npc-arm-right {
+    animation: armSwingRight 4s ease-in-out infinite;
+  }
+
+  @keyframes npcIdle {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-6px); }
+  }
+
+  @keyframes armSwingLeft {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-5deg); }
+  }
+
+  @keyframes armSwingRight {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(5deg); }
+  }
+
+  /* Push messages to the right in NPC mode */
+  .chat-container.npc-mode .messages {
+    padding-left: 38%;
+  }
+
+  .chat-container.npc-mode .files-preview {
+    padding-left: 38%;
+  }
+
+  .thinking-standalone {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 18px;
+    background: rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(12px);
+    border-radius: var(--radius-lg);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    max-width: 240px;
+    animation: fadeInUp 0.3s ease-out;
+  }
+
+  .thinking-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-primary, #6366f1);
+    animation: pulse 1.4s ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .thinking-text {
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.6);
+    font-style: italic;
+    transition: opacity 0.3s ease;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.1); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 </style>

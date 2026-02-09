@@ -1,0 +1,40 @@
+<svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B9DC3"/>
+      <stop offset="100%" stop-color="#5C6B8A"/>
+    </linearGradient>
+    <linearGradient id="head" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C8D6E5"/>
+      <stop offset="100%" stop-color="#8395A7"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <rect x="30" y="80" width="60" height="50" rx="12" fill="url(#body)"/>
+  <rect x="38" y="88" width="44" height="10" rx="5" fill="#f59e0b" opacity="0.3"/>
+  <!-- Neck -->
+  <rect x="50" y="72" width="20" height="12" rx="4" fill="#8395A7"/>
+  <!-- Head -->
+  <ellipse cx="60" cy="45" rx="32" ry="30" fill="url(#head)"/>
+  <!-- Antenna (upright) -->
+  <line x1="60" y1="15" x2="60" y2="5" stroke="#8395A7" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="60" cy="4" r="4" fill="#f59e0b"/>
+  <!-- Raised brows -->
+  <path d="M39 32 Q45 28 52 31" stroke="#5C6B8A" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M81 32 Q75 28 68 31" stroke="#5C6B8A" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Eyes (wide) -->
+  <ellipse cx="47" cy="42" rx="7" ry="8" fill="#1a1a2e"/>
+  <ellipse cx="73" cy="42" rx="7" ry="8" fill="#1a1a2e"/>
+  <circle cx="47" cy="41" r="3" fill="#f59e0b"/>
+  <circle cx="73" cy="41" r="3" fill="#f59e0b"/>
+  <circle cx="49" cy="39" r="1.5" fill="white" opacity="0.8"/>
+  <circle cx="75" cy="39" r="1.5" fill="white" opacity="0.8"/>
+  <!-- Mouth (O shape) -->
+  <ellipse cx="60" cy="57" rx="5" ry="5.5" fill="#4a5568"/>
+  <!-- Ears -->
+  <rect x="24" y="38" width="6" height="14" rx="3" fill="#f59e0b" opacity="0.5"/>
+  <rect x="90" y="38" width="6" height="14" rx="3" fill="#f59e0b" opacity="0.5"/>
+  <!-- Arms (up) -->
+  <rect x="14" y="76" width="12" height="35" rx="6" fill="url(#body)" transform="rotate(-20 20 76)"/>
+  <rect x="94" y="76" width="12" height="35" rx="6" fill="url(#body)" transform="rotate(20 100 76)"/>
+</svg>

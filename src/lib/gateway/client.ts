@@ -18,6 +18,7 @@ import type {
   ChatMessage,
   ModelsSnapshot,
   SessionInfo,
+  ToolCall,
 } from "./types";
 
 import {
@@ -172,10 +173,54 @@ export class GatewayClient {
       const type = typeof entry.type === "string" ? entry.type : "";
       if ((type === "text" || type === "output_text" || type === "input_text") && typeof entry.text === "string") {
         parts.push(entry.text);
+      } else if (type === "tool_result") {
+        // tool_result can have nested content array or a string content
+        const resultText = this.extractTextFromContent(entry.content);
+        if (resultText) parts.push(resultText);
       }
     }
 
     return parts.length > 0 ? parts.join("\n") : null;
+  }
+
+  private extractToolCalls(content: unknown): ToolCall[] | undefined {
+    if (!Array.isArray(content)) return undefined;
+
+    const tools: ToolCall[] = [];
+    for (const item of content) {
+      if (!item || typeof item !== "object") continue;
+      const entry = item as UnknownRecord;
+      const type = typeof entry.type === "string" ? entry.type : "";
+
+      if (type === "tool_use") {
+        const id = typeof entry.id === "string" ? entry.id : `tool-${tools.length}`;
+        const name = typeof entry.name === "string" ? entry.name : "unknown";
+        const args = (entry.input && typeof entry.input === "object"
+          ? entry.input
+          : {}) as Record<string, unknown>;
+
+        tools.push({ id, name, args, status: "complete" });
+      }
+    }
+
+    // Match tool_result blocks to their corresponding tool_use
+    for (const item of content) {
+      if (!item || typeof item !== "object") continue;
+      const entry = item as UnknownRecord;
+      if (typeof entry.type === "string" && entry.type === "tool_result") {
+        const toolUseId = typeof entry.tool_use_id === "string" ? entry.tool_use_id : "";
+        const matchingTool = tools.find(t => t.id === toolUseId);
+        if (matchingTool) {
+          const resultText = this.extractTextFromContent(entry.content);
+          matchingTool.result = resultText ?? entry.content;
+          if (typeof entry.is_error === "boolean" && entry.is_error) {
+            matchingTool.status = "error";
+          }
+        }
+      }
+    }
+
+    return tools.length > 0 ? tools : undefined;
   }
 
   /**
@@ -196,8 +241,11 @@ export class GatewayClient {
     const text = this.extractTextFromContent(entry.content) ??
       (typeof entry.text === "string" ? entry.text : null);
 
-    const content = (text ?? "[non-text message]").trim();
-    if (!content) return null;
+    const toolCalls = this.extractToolCalls(entry.content);
+
+    // Allow messages that have either text or tool calls
+    const content = (text ?? (toolCalls ? "" : "[non-text message]")).trim();
+    if (!content && !toolCalls) return null;
 
     const ts = entry.timestamp;
     let timestamp = new Date().toISOString();
@@ -215,7 +263,7 @@ export class GatewayClient {
       ? entry.id
       : `msg-${index}-${timestamp}`;
 
-    return { id, role, content, timestamp };
+    return { id, role, content, timestamp, toolCalls };
   }
 
   disconnect(): void {
@@ -628,6 +676,10 @@ export class GatewayClient {
     return result?.sessions ?? [];
   }
 
+  async getSessionsRaw(params?: { limit?: number; includeDerivedTitles?: boolean; includeLastMessage?: boolean }): Promise<{ sessions: SessionInfo[]; defaults?: unknown }> {
+    return this.request<{ sessions: SessionInfo[]; defaults?: unknown }>("sessions.list", params ?? {});
+  }
+
   async getModels(): Promise<ModelsSnapshot> {
     return this.request<ModelsSnapshot>("models.list");
   }
@@ -677,5 +729,47 @@ export class GatewayClient {
 
   async injectNote(message: string, sessionKey: string): Promise<void> {
     await this.request("chat.inject", { message, sessionKey });
+  }
+
+  /**
+   * Fetch assistant identity metadata from the gateway's web UI.
+   * OpenClaw injects window.__OPENCLAW_ASSISTANT_NAME__ and
+   * window.__OPENCLAW_ASSISTANT_AVATAR__ in the served HTML at /chat.
+   * Uses Tauri invoke (Rust-side HTTP) to bypass CORS.
+   */
+  async fetchAssistantMeta(): Promise<{ name: string | null; avatar: string | null }> {
+    try {
+      // Try Tauri invoke first (CORS-free, Rust-side HTTP fetch)
+      const { invoke } = await import("@tauri-apps/api/core");
+      const result = await invoke<{ name: string | null; avatar: string | null }>(
+        "fetch_assistant_meta",
+        { url: this.config.url }
+      );
+      return result;
+    } catch (e) {
+      // Fallback to browser fetch (works when not in Tauri or invoke fails)
+      try {
+        const wsUrl = new URL(this.config.url);
+        const protocol = wsUrl.protocol === "wss:" ? "https" : "http";
+        const httpUrl = `${protocol}://${wsUrl.host}/chat`;
+
+        const res = await fetch(httpUrl, { signal: AbortSignal.timeout(5000) });
+        if (!res.ok) return { name: null, avatar: null };
+
+        const html = await res.text();
+        if (!html) return { name: null, avatar: null };
+
+        const nameMatch = html.match(/__OPENCLAW_ASSISTANT_NAME__\s*=\s*"([^"]+)"/);
+        const avatarMatch = html.match(/__OPENCLAW_ASSISTANT_AVATAR__\s*=\s*"([^"]+)"/);
+
+        return {
+          name: nameMatch?.[1] ?? null,
+          avatar: avatarMatch?.[1] ?? null,
+        };
+      } catch (fallbackErr) {
+        console.warn("[Gateway] Failed to fetch assistant meta:", fallbackErr);
+        return { name: null, avatar: null };
+      }
+    }
   }
 }

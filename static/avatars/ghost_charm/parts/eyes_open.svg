@@ -1,0 +1,22 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="eyeL" cx="40%" cy="34%" r="66%">
+      <stop offset="0%" stop-color="#A77A8F"/>
+      <stop offset="100%" stop-color="#7D3F5F"/>
+    </radialGradient>
+    <radialGradient id="eyeR" cx="40%" cy="34%" r="66%">
+      <stop offset="0%" stop-color="#A77A8F"/>
+      <stop offset="100%" stop-color="#7D3F5F"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="50" cy="66" rx="6.1" ry="6.8" fill="url(#eyeL)" stroke="#8A4762" stroke-width="1.2"/>
+  <circle cx="50" cy="63.7" r="1.9" fill="#FFFFFF"/>
+  <circle cx="47.9" cy="68.8" r="1.15" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="52.5" cy="69.9" r="0.82" fill="#FFFFFF" opacity="0.78"/>
+
+  <ellipse cx="70" cy="66" rx="6.1" ry="6.8" fill="url(#eyeR)" stroke="#8A4762" stroke-width="1.2"/>
+  <circle cx="70" cy="63.7" r="1.9" fill="#FFFFFF"/>
+  <circle cx="67.9" cy="68.8" r="1.15" fill="#FFFFFF" opacity="0.9"/>
+  <circle cx="72.5" cy="69.9" r="0.82" fill="#FFFFFF" opacity="0.78"/>
+</svg>

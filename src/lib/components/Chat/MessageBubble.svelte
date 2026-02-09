@@ -94,12 +94,45 @@
   };
   marked.use({ renderer });
 
+  // Detect and format JSON content as code blocks
+  function formatJsonContent(text: string): string {
+    // Try parsing the entire trimmed text as JSON
+    const trimmed = text.trim();
+    if ((trimmed.startsWith('{') && trimmed.endsWith('}')) || 
+        (trimmed.startsWith('[') && trimmed.endsWith(']'))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        const formatted = JSON.stringify(parsed, null, 2);
+        return '```json\n' + formatted + '\n```';
+      } catch { /* not valid JSON, continue */ }
+    }
+    
+    // Try to find JSON blocks embedded in text (e.g., "Some text:\n{...}")
+    return text.replace(/^(.*?)(\{[\s\S]*\})([\s\S]*)$/m, (_match, before, jsonStr, after) => {
+      try {
+        const parsed = JSON.parse(jsonStr);
+        const formatted = JSON.stringify(parsed, null, 2);
+        return (before ? before + '\n' : '') + '```json\n' + formatted + '\n```' + (after?.trim() ? '\n' + after.trim() : '');
+      } catch {
+        return _match;
+      }
+    });
+  }
+
+  // Strip NPC directive tags from display text
+  function stripDirectives(text: string): string {
+    return text.replace(/\[(?:face|act|bg):[^\]]*\]/gi, '').trim();
+  }
+
   // Render markdown to HTML
-  const renderedContent = $derived(
-    message.role === "assistant" 
-      ? marked.parse(message.content) as string
-      : message.content
-  );
+  const renderedContent = $derived.by(() => {
+    let content = message.content;
+    // Strip NPC directive tags before rendering
+    content = stripDirectives(content);
+    // Auto-detect JSON for all message roles
+    content = formatJsonContent(content);
+    return marked.parse(content) as string;
+  });
 
   // Truncated content for system messages
   const truncatedContent = $derived(() => {
@@ -213,15 +246,20 @@
     }}
   >
     {#if message.role === "assistant" && isFirst}
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
-      <div class="avatar assistant-avatar clickable" onclick={() => showAgentProfile = true}>
-        {#if agent?.avatar}
-          <img src={agent.avatar} alt={agent.name} class="avatar-img" />
-        {:else if agent?.emoji}
-          <span class="avatar-emoji">{agent.emoji}</span>
-        {:else}
-          <Bot size={18} strokeWidth={1.5} />
+      <div class="avatar-column">
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="avatar assistant-avatar clickable" onclick={() => showAgentProfile = true}>
+          {#if agent?.avatar}
+            <img src={agent.avatar} alt={agent.name} class="avatar-img" />
+          {:else if agent?.emoji}
+            <span class="avatar-emoji">{agent.emoji}</span>
+          {:else}
+            <Bot size={18} strokeWidth={1.5} />
+          {/if}
+        </div>
+        {#if agent?.name}
+          <span class="agent-label">{agent.name}</span>
         {/if}
       </div>
     {:else if message.role === "assistant" && isGrouped}
@@ -292,7 +330,9 @@
             {@html renderedContent}
           </div>
         {:else}
-          <p>{message.content}</p>
+          <div class="markdown-body">
+            {@html renderedContent}
+          </div>
         {/if}
         {#if showIndicator && store.isStreaming}
           <span class="typing-indicator">
@@ -398,7 +438,7 @@
     border: 1px solid var(--color-border);
     border-radius: 12px;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all var(--duration-normal) var(--ease-out);
   }
 
   .system-message:hover {
@@ -458,7 +498,7 @@
   /* Regular Message Styles */
   .message-bubble {
     display: flex;
-    gap: 10px;
+    gap: var(--space-sm);
     max-width: 85%;
     cursor: grab;
   }
@@ -481,8 +521,28 @@
   }
 
   .avatar-spacer {
-    width: 36px;
+    width: 46px;
     flex-shrink: 0;
+  }
+
+  .avatar-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    flex-shrink: 0;
+    width: 46px;
+  }
+
+  .agent-label {
+    font-size: 9px;
+    color: var(--color-text-subtle);
+    text-align: center;
+    max-width: 46px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1;
   }
 
   .content-wrapper {
@@ -609,11 +669,11 @@
   }
 
   .tool-call {
-    background: rgba(99, 102, 241, 0.1);
-    border: 1px solid rgba(99, 102, 241, 0.2);
-    border-radius: 10px;
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.15);
+    border-radius: var(--radius-md);
     overflow: hidden;
-    transition: all 0.2s ease;
+    transition: all var(--duration-fast) var(--ease-out);
   }
 
   .tool-call.running {
@@ -667,7 +727,7 @@
     flex: 1;
     font-size: 12px;
     font-weight: 500;
-    font-family: 'SF Mono', monospace;
+    font-family: var(--font-mono);
     color: var(--color-text);
   }
 
@@ -712,7 +772,7 @@
     padding: 8px 10px;
     background: rgba(0, 0, 0, 0.2);
     border-radius: 6px;
-    font-family: 'SF Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--color-text);
     overflow-x: auto;
@@ -725,12 +785,12 @@
   .avatar {
     width: 36px;
     height: 36px;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: all 0.2s ease;
+    transition: all var(--duration-fast) var(--ease-out);
   }
 
   .avatar.clickable {
@@ -754,7 +814,7 @@
   }
 
   .assistant-avatar {
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
     color: white;
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
   }
@@ -766,12 +826,14 @@
   }
 
   .content {
-    padding: 12px 16px;
-    border-radius: 16px;
+    padding: var(--space-md) var(--space-lg);
+    border-radius: var(--radius-lg);
     font-size: 14px;
     line-height: 1.6;
     overflow: hidden;
     min-width: 0;
+    max-width: 100%;
+    word-break: break-word;
   }
 
   /* Grouped message radius adjustments */
@@ -784,8 +846,8 @@
   .assistant .content.last { border-top-left-radius: 6px; }
 
   .user .content {
-    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
-    color: white;
+    background: rgba(99, 102, 241, 0.18);
+    color: var(--color-text);
   }
 
   .assistant .content {
@@ -884,15 +946,15 @@
   }
 
   .markdown-body :global(code) {
-    background: rgba(0, 0, 0, 0.15);
+    background: var(--color-surface);
     padding: 0.15em 0.4em;
     border-radius: 4px;
-    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-family: var(--font-mono);
     font-size: 0.9em;
   }
 
   .markdown-body :global(pre) {
-    background: rgba(0, 0, 0, 0.2);
+    background: var(--color-surface);
     padding: 12px 16px;
     border-radius: 8px;
     overflow-x: auto;
@@ -986,11 +1048,12 @@
 
   /* Code Block Styles */
   :global(.code-block) {
-    margin: 12px 0;
-    border-radius: 12px;
+    margin: 0.75em 0;
+    border-radius: var(--radius-md);
     overflow: hidden;
-    background: #1e1e2e;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    max-width: 100%;
   }
 
   :global(.code-header) {
@@ -998,14 +1061,14 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--color-surface-hover);
+    border-bottom: 1px solid var(--color-border);
   }
 
   :global(.code-lang) {
     font-size: 11px;
     font-weight: 500;
-    color: #a6adc8;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.5px;
   }
@@ -1023,16 +1086,16 @@
     height: 28px;
     padding: 0;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    color: #fde68a;
+    color: var(--color-accent);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   :global(.note-btn:hover) {
-    background: rgba(253, 230, 138, 0.2);
-    border-color: #fde68a;
+    background: var(--color-surface-elevated);
+    border-color: var(--color-accent);
     transform: scale(1.1);
   }
 
@@ -1042,18 +1105,18 @@
     gap: 4px;
     padding: 4px 8px;
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.2);
+    border: 1px solid var(--color-border);
     border-radius: 6px;
-    color: #a6adc8;
+    color: var(--color-text-muted);
     font-size: 11px;
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   :global(.copy-btn:hover) {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.3);
+    background: var(--color-surface-elevated);
+    color: var(--color-text);
+    border-color: var(--color-border-strong);
   }
 
   :global(.copy-btn:active) {
@@ -1067,29 +1130,29 @@
   }
 
   :global(.code-block code) {
-    font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.5;
   }
 
-  /* Highlight.js Theme (Catppuccin Mocha inspired) */
+  /* Highlight.js Theme - adapts to light/dark via CSS variables */
   :global(.hljs) {
     background: transparent !important;
-    color: #cdd6f4;
+    color: var(--color-text);
   }
 
-  :global(.hljs-keyword) { color: #cba6f7; }
-  :global(.hljs-string) { color: #a6e3a1; }
-  :global(.hljs-number) { color: #fab387; }
-  :global(.hljs-function) { color: #89b4fa; }
-  :global(.hljs-title) { color: #89b4fa; }
-  :global(.hljs-params) { color: #f5c2e7; }
-  :global(.hljs-comment) { color: #6c7086; font-style: italic; }
-  :global(.hljs-built_in) { color: #f38ba8; }
-  :global(.hljs-type) { color: #f9e2af; }
-  :global(.hljs-attr) { color: #89dceb; }
-  :global(.hljs-property) { color: #89dceb; }
-  :global(.hljs-variable) { color: #f5e0dc; }
-  :global(.hljs-operator) { color: #94e2d5; }
-  :global(.hljs-punctuation) { color: #9399b2; }
+  :global(.hljs-keyword) { color: var(--color-primary); }
+  :global(.hljs-string) { color: #16a34a; }
+  :global(.hljs-number) { color: #ea580c; }
+  :global(.hljs-function) { color: #2563eb; }
+  :global(.hljs-title) { color: #2563eb; }
+  :global(.hljs-params) { color: #c026d3; }
+  :global(.hljs-comment) { color: var(--color-text-muted); font-style: italic; }
+  :global(.hljs-built_in) { color: #dc2626; }
+  :global(.hljs-type) { color: #ca8a04; }
+  :global(.hljs-attr) { color: #0891b2; }
+  :global(.hljs-property) { color: #0891b2; }
+  :global(.hljs-variable) { color: var(--color-text); }
+  :global(.hljs-operator) { color: #0d9488; }
+  :global(.hljs-punctuation) { color: var(--color-text-muted); }
 </style>

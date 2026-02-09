@@ -1,0 +1,8 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Happy face overlay -->
+  <path d="M39 35 Q45 29 51 35" stroke="#0a0a1a" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <path d="M69 35 Q75 29 81 35" stroke="#0a0a1a" stroke-width="3" stroke-linecap="round" fill="none"/>
+  <circle cx="38" cy="42" r="5" fill="#FF9999" opacity="0.5"/>
+  <circle cx="82" cy="42" r="5" fill="#FF9999" opacity="0.5"/>
+  <path d="M50 50 Q60 60 70 50" stroke="#0a0a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

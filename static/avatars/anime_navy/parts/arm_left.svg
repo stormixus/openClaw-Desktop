@@ -1,0 +1,11 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="leftSleeve" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2E385C"/>
+      <stop offset="100%" stop-color="#151D36"/>
+    </linearGradient>
+  </defs>
+  <path d="M30 92 Q24 101 22 116 Q22 122 27 121 Q29 119 31 109 L35 94 Z" fill="url(#leftSleeve)"/>
+  <path d="M22 116 Q24 117 27 116" stroke="#445176" stroke-width="0.6" fill="none"/>
+  <path d="M22 119 Q20 123 22 127 Q24 129 27 127 Q29 123 27 119 Z" fill="#ECCEB8"/>
+</svg>

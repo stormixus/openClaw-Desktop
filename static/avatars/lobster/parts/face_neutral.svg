@@ -1,0 +1,7 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Neutral face overlay (eyes) -->
+  <circle cx="45" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="75" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="46" cy="34" r="2" fill="#00FFFF"/>
+  <circle cx="76" cy="34" r="2" fill="#00FFFF"/>
+</svg>

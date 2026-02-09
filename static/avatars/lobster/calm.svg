@@ -1,0 +1,29 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E07070"/>
+      <stop offset="100%" stop-color="#BB4444"/>
+    </linearGradient>
+  </defs>
+  <!-- Body (relaxed) -->
+  <path d="M60 12 C30 12 15 37 15 57 C15 77 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 77 105 57 C105 37 90 12 60 12Z" fill="url(#lg)"/>
+  <!-- Left Claw (resting) -->
+  <path d="M22 50 C8 48 4 58 9 66 C14 74 24 68 26 58 C27 53 25 50 22 50Z" fill="url(#lg)"/>
+  <!-- Right Claw (resting) -->
+  <path d="M98 50 C112 48 116 58 111 66 C106 74 96 68 94 58 C93 53 95 50 98 50Z" fill="url(#lg)"/>
+  <!-- Antenna (relaxed) -->
+  <path d="M45 16 Q37 8 33 12" stroke="#E07070" stroke-width="2" stroke-linecap="round"/>
+  <path d="M75 16 Q83 8 87 12" stroke="#E07070" stroke-width="2" stroke-linecap="round"/>
+  <!-- Calm Eyes (half-closed, sleepy) -->
+  <path d="M39 36 Q45 33 51 36" stroke="#0a0a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M69 36 Q75 33 81 36" stroke="#0a0a1a" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <!-- Tiny eye peek -->
+  <circle cx="45" cy="35" r="1" fill="#00BBBB"/>
+  <circle cx="75" cy="35" r="1" fill="#00BBBB"/>
+  <!-- Gentle smile -->
+  <path d="M53 52 Q60 56 67 52" stroke="#0a0a1a" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+  <!-- Zzz -->
+  <text x="88" y="24" font-size="8" fill="#88BBFF" opacity="0.4" font-style="italic">z</text>
+  <text x="95" y="18" font-size="10" fill="#88BBFF" opacity="0.3" font-style="italic">z</text>
+  <text x="103" y="11" font-size="12" fill="#88BBFF" opacity="0.2" font-style="italic">z</text>
+</svg>

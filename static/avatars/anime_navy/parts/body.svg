@@ -1,0 +1,82 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="hairBack" x1="20%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#23263A"/>
+      <stop offset="45%" stop-color="#151A2D"/>
+      <stop offset="100%" stop-color="#0B1021"/>
+    </linearGradient>
+    <linearGradient id="hairFront" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#2A2E44"/>
+      <stop offset="50%" stop-color="#171C31"/>
+      <stop offset="100%" stop-color="#0C1122"/>
+    </linearGradient>
+    <linearGradient id="skinTone" x1="40%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#F7E6D7"/>
+      <stop offset="100%" stop-color="#ECCEB8"/>
+    </linearGradient>
+    <linearGradient id="blazer" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2E385C"/>
+      <stop offset="55%" stop-color="#1F2847"/>
+      <stop offset="100%" stop-color="#151D36"/>
+    </linearGradient>
+    <linearGradient id="trim" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#6B789D"/>
+      <stop offset="50%" stop-color="#A7B0CC"/>
+      <stop offset="100%" stop-color="#6B789D"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Hair (back volume) -->
+  <path d="M20 43 Q14 72 12 112 Q12 142 24 153 Q28 156 33 152 L39 48 Z" fill="url(#hairBack)"/>
+  <path d="M100 43 Q106 72 108 112 Q108 142 96 153 Q92 156 87 152 L81 48 Z" fill="url(#hairBack)"/>
+  <path d="M30 54 Q24 84 22 132" stroke="#3A405D" stroke-width="0.8" opacity="0.4" fill="none"/>
+  <path d="M90 54 Q96 84 98 132" stroke="#3A405D" stroke-width="0.8" opacity="0.4" fill="none"/>
+
+  <!-- Jacket body -->
+  <path d="M33 88 Q28 98 26 138 Q26 151 40 155 L80 155 Q94 151 94 138 Q92 98 87 88 Z" fill="url(#blazer)"/>
+  <path d="M35 90 Q30 100 30 138" stroke="#12192E" stroke-width="1" opacity="0.4" fill="none"/>
+  <path d="M85 90 Q90 100 90 138" stroke="#12192E" stroke-width="1" opacity="0.4" fill="none"/>
+
+  <!-- Lapel and trim -->
+  <path d="M44 89 L53 109 L60 89" fill="none" stroke="url(#trim)" stroke-width="1.4"/>
+  <path d="M76 89 L67 109 L60 89" fill="none" stroke="url(#trim)" stroke-width="1.4"/>
+  <path d="M43 89 Q50 85 60 84 Q70 85 77 89" fill="none" stroke="url(#trim)" stroke-width="1"/>
+
+  <!-- Shirt and ribbon -->
+  <path d="M48 86 L55 100 L60 87" fill="#FFFFFF" stroke="#D9DEE9" stroke-width="0.6"/>
+  <path d="M72 86 L65 100 L60 87" fill="#FFFFFF" stroke="#D9DEE9" stroke-width="0.6"/>
+  <path d="M55 100 L60 87 L65 100 L62.5 111 L57.5 111 Z" fill="#F7F9FD"/>
+  <path d="M54 94 Q50 88 47 92 Q49 97 55 97 Z" fill="#D45A9A"/>
+  <path d="M66 94 Q70 88 73 92 Q71 97 65 97 Z" fill="#D45A9A"/>
+  <ellipse cx="60" cy="95" rx="2.6" ry="2.2" fill="#BE4785"/>
+  <path d="M58.9 97.4 L58.1 109" stroke="#BE4785" stroke-width="1.3" stroke-linecap="round"/>
+  <path d="M61.1 97.4 L61.9 109" stroke="#BE4785" stroke-width="1.3" stroke-linecap="round"/>
+
+  <!-- Neck and face -->
+  <rect x="52" y="76" width="16" height="14" rx="6" fill="url(#skinTone)"/>
+  <ellipse cx="60" cy="45" rx="28" ry="33" fill="url(#skinTone)"/>
+  <path d="M36 51 Q40 72 60 78 Q80 72 84 51" fill="url(#skinTone)"/>
+
+  <!-- Front hair -->
+  <path d="M32 44 Q29 20 44 10 Q52 4 60 6 Q68 4 76 10 Q91 20 88 44 Q86 30 78 24 Q70 18 60 21 Q50 18 42 24 Q34 30 32 44 Z" fill="url(#hairFront)"/>
+  <path d="M35 42 Q40 26 47 27 Q45 36 41 45 Z" fill="url(#hairFront)"/>
+  <path d="M43 37 Q48 21 54 24 Q51 32 47 41 Z" fill="url(#hairFront)"/>
+  <path d="M52 33 Q56 20 62 23 Q59 31 55 39 Z" fill="url(#hairFront)"/>
+  <path d="M60 33 Q64 21 70 25 Q67 33 63 41 Z" fill="url(#hairFront)"/>
+  <path d="M68 36 Q72 24 78 28 Q75 36 71 43 Z" fill="url(#hairFront)"/>
+  <path d="M75 40 Q79 30 84 35 Q82 40 78 46 Z" fill="url(#hairFront)"/>
+
+  <!-- Side locks -->
+  <path d="M33 45 Q25 56 22 72 Q25 71 35 57 Z" fill="url(#hairFront)"/>
+  <path d="M87 45 Q95 56 98 72 Q95 71 85 57 Z" fill="url(#hairFront)"/>
+
+  <!-- Hair gloss -->
+  <path d="M44 15 Q48 11 53 15" stroke="#59607B" stroke-width="1.6" opacity="0.3" fill="none" stroke-linecap="round"/>
+  <path d="M62 13 Q66 9 71 13" stroke="#59607B" stroke-width="1.6" opacity="0.3" fill="none" stroke-linecap="round"/>
+  <path d="M30 58 Q24 83 21 125" stroke="#4E5672" stroke-width="0.7" opacity="0.28" fill="none"/>
+  <path d="M90 58 Q96 83 99 125" stroke="#4E5672" stroke-width="0.7" opacity="0.28" fill="none"/>
+
+  <!-- Ears -->
+  <ellipse cx="33" cy="50" rx="3" ry="5" fill="url(#skinTone)"/>
+  <ellipse cx="87" cy="50" rx="3" ry="5" fill="url(#skinTone)"/>
+</svg>

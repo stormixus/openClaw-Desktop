@@ -1,0 +1,11 @@
+# openClaw Desktop - Project Rules
+
+## Icons
+- Always import icons from `@lucide/svelte`, NOT from `lucide-svelte`.
+  ```svelte
+  <!-- ✅ Correct -->
+  import { Send } from '@lucide/svelte';
+
+  <!-- ❌ Wrong -->
+  import { Send } from 'lucide-svelte';
+  ```

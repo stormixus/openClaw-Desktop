@@ -3,6 +3,12 @@
   import { store, setModel, toggleNotifications, getNotificationStatus } from "$lib/gateway/store.svelte";
   import ModelSelector from "./ModelSelector.svelte";
   import SessionManager from "./SessionManager.svelte";
+  import ThemeSelector from "./ThemeSelector.svelte";
+  import { 
+    getActiveTheme,
+  } from "$lib/gateway/npcThemeStore.svelte";
+  import { hasGoogleAiKey, generateNpcBackground, getCachedBackground } from "$lib/gateway/npcBackgroundService";
+  import { settings } from "$lib/settings";
   import { 
     Plus, 
     Globe, 
@@ -14,7 +20,10 @@
     ArrowUp, 
     Square,
     Bell,
-    BellOff
+    BellOff,
+    Palette,
+    Image,
+    LoaderCircle
   } from "@lucide/svelte";
 
   interface Props {
@@ -28,6 +37,26 @@
   let textareaEl: HTMLTextAreaElement | undefined = $state(undefined);
   let showModelSelector = $state(false);
   let showSessionManager = $state(false);
+  let showThemeSelector = $state(false);
+  let isGeneratingBg = $state(false);
+
+  const isNpcMode = $derived(store.chatMode === "npc");
+  const npcTheme = $derived(getActiveTheme());
+  const showBgGenBtn = $derived(isNpcMode && hasGoogleAiKey());
+  const hasCachedBg = $derived(isNpcMode ? !!getCachedBackground(npcTheme.id) : false);
+
+  async function handleGenerateBg() {
+    if (isGeneratingBg) return;
+    isGeneratingBg = true;
+    try {
+      const result = await generateNpcBackground(npcTheme.id, npcTheme.background);
+      if (!result.success) {
+        console.error("[BG] Generation failed:", result.error);
+      }
+    } finally {
+      isGeneratingBg = false;
+    }
+  }
 
   function handleSubmit() {
     if (store.isStreaming) {
@@ -41,6 +70,8 @@
     inputValue = "";
     adjustHeight();
     onsend?.(message);
+    // Re-focus textarea after sending
+    requestAnimationFrame(() => textareaEl?.focus());
   }
 
   function handleKeydown(e: KeyboardEvent) {
@@ -127,6 +158,42 @@
           />
         {/if}
       </div>
+
+      <!-- NPC Theme Selector (only in NPC mode) -->
+      {#if isNpcMode}
+        <div class="model-selector-wrapper">
+          <button 
+            class="toolbar-btn model-btn npc-theme-btn"
+            onclick={() => showThemeSelector = !showThemeSelector}
+            title="NPC Theme"
+          >
+            <Palette size={14} strokeWidth={2} />
+            <span class="model-name">{npcTheme.name}</span>
+            <ChevronDown size={12} strokeWidth={2} />
+          </button>
+
+          {#if showThemeSelector}
+            <ThemeSelector onclose={() => showThemeSelector = false} />
+          {/if}
+        </div>
+
+        <!-- AI Background Generate Button -->
+        {#if showBgGenBtn}
+          <button 
+            class="toolbar-btn npc-bg-btn"
+            class:has-bg={hasCachedBg}
+            onclick={handleGenerateBg}
+            disabled={isGeneratingBg}
+            title={hasCachedBg ? "Regenerate background" : "Generate AI background"}
+          >
+            {#if isGeneratingBg}
+              <LoaderCircle size={14} strokeWidth={2} class="spin" />
+            {:else}
+              <Image size={14} strokeWidth={2} />
+            {/if}
+          </button>
+        {/if}
+      {/if}
     </div>
 
     <div class="toolbar-right">
@@ -165,45 +232,46 @@
 
 <style>
   .chat-input-wrapper {
-    padding: 16px 20px;
+    padding: var(--space-lg) var(--space-xl);
     background: var(--color-surface);
     border-top: 1px solid var(--color-border);
   }
 
   .input-container {
-    margin-bottom: 12px;
+    margin-bottom: var(--space-md);
   }
 
   textarea {
     width: 100%;
-    padding: 14px 18px;
+    padding: var(--space-md) 18px;
     background: var(--color-surface-elevated);
     border: 1px solid var(--color-border);
-    border-radius: 20px;
+    border-radius: var(--radius-xl);
     color: var(--color-text);
     font-size: 14px;
-    font-family: inherit;
+    font-family: var(--font-sans);
     resize: none;
     outline: none;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all var(--duration-normal) var(--ease-out);
     min-height: 48px;
     max-height: 150px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--shadow-xs);
+    line-height: 1.5;
   }
 
   textarea:focus {
     border-color: var(--color-primary);
     box-shadow: 
-      0 0 0 3px rgba(99, 102, 241, 0.1),
-      0 4px 12px rgba(0, 0, 0, 0.08);
+      0 0 0 3px rgba(99, 102, 241, 0.08),
+      var(--shadow-sm);
   }
 
   textarea::placeholder {
-    color: var(--color-text-muted);
+    color: var(--color-text-subtle);
   }
 
   textarea:disabled {
-    opacity: 0.6;
+    opacity: 0.5;
     cursor: not-allowed;
   }
 
@@ -211,31 +279,31 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 10px;
+    padding: var(--space-xs) var(--space-sm);
     background: var(--color-surface-elevated);
-    border-radius: 14px;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-xs);
   }
 
   .toolbar-left,
   .toolbar-right {
     display: flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
   }
 
   .toolbar-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 8px 10px;
+    gap: var(--space-xs);
+    padding: var(--space-sm) 10px;
     background: transparent;
     border: none;
-    border-radius: 10px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-    color: var(--color-text-muted);
-    transition: all 0.2s ease;
+    color: var(--color-text-subtle);
+    transition: all var(--duration-fast) var(--ease-out);
   }
 
   .toolbar-btn:hover {
@@ -256,13 +324,13 @@
   .model-btn {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: 20px;
-    padding: 6px 12px;
+    border-radius: var(--radius-full);
+    padding: var(--space-xs) var(--space-md);
   }
 
   .session-btn:hover,
   .model-btn:hover {
-    border-color: var(--color-primary);
+    border-color: var(--color-border-strong);
     background: var(--color-surface);
   }
 
@@ -272,8 +340,8 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     font-size: 11px;
-    color: var(--color-text);
-    font-family: 'SF Mono', monospace;
+    color: var(--color-text-muted);
+    font-family: var(--font-mono);
   }
 
   .model-name {
@@ -290,14 +358,14 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 36px;
-    height: 36px;
-    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    width: 34px;
+    height: 34px;
+    background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
     border: none;
-    border-radius: 12px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     color: white;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all var(--duration-normal) var(--ease-out);
     box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
   }
 
@@ -317,5 +385,27 @@
 
   .send-btn.abort:hover {
     box-shadow: 0 4px 16px rgba(239, 68, 68, 0.4);
+  }
+
+  .npc-bg-btn {
+    position: relative;
+  }
+
+  .npc-bg-btn.has-bg {
+    color: var(--color-success, #22c55e);
+  }
+
+  .npc-bg-btn:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+
+  :global(.spin) {
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
   }
 </style>

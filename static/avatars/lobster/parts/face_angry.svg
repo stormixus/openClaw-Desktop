@@ -1,0 +1,10 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Angry face overlay -->
+  <circle cx="45" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="75" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="46" cy="34" r="2" fill="#FF3333"/>
+  <circle cx="76" cy="34" r="2" fill="#FF3333"/>
+  <line x1="37" y1="25" x2="50" y2="28" stroke="#AA2222" stroke-width="3" stroke-linecap="round"/>
+  <line x1="83" y1="25" x2="70" y2="28" stroke="#AA2222" stroke-width="3" stroke-linecap="round"/>
+  <path d="M47 52 L53 48 L60 52 L67 48 L73 52" stroke="#0a0a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+</svg>

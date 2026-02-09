@@ -7,11 +7,11 @@
   import { store, abortMessage } from "$lib/gateway/store.svelte";
   import { shortcuts } from "$lib/services/shortcuts";
   import { t } from "$lib/i18n";
+  import { Globe, AlertCircle, Unplug, Loader2, Plus } from "@lucide/svelte";
 
   let showAddGatewayModal = $state(false);
   let showShortcutsModal = $state(false);
 
-  // Derived values for the active gateway
   const activeGateway = $derived(store.gateways.find(g => g.id === store.activeGatewayId) ?? null);
   const activeGatewayState = $derived(store.activeGatewayId ? store.gatewayStates.get(store.activeGatewayId) ?? null : null);
 
@@ -23,7 +23,6 @@
     showAddGatewayModal = false;
   }
 
-  // Register keyboard shortcuts
   onMount(() => {
     const unregister = shortcuts.registerMany([
       {
@@ -82,37 +81,46 @@
 {/if}
 
 <div class="chat-page">
-  <!-- Gateway Tabs -->
   <GatewayTabs onadd={openAddModal} />
 
-  <!-- Chat Content -->
   {#if activeGateway}
     {#if activeGatewayState?.status === "connected"}
       <ChatPanel />
     {:else if activeGatewayState?.status === "connecting" || activeGatewayState?.status === "authenticating"}
       <div class="status-message">
-        <div class="spinner"></div>
+        <div class="status-icon connecting">
+          <Loader2 size={28} strokeWidth={1.5} />
+        </div>
         <p>{$t("gateway.status.connecting")}</p>
       </div>
     {:else if activeGatewayState?.status === "error"}
       <div class="status-message error">
-        <span class="icon">❌</span>
+        <div class="status-icon error-icon">
+          <AlertCircle size={28} strokeWidth={1.5} />
+        </div>
         <p>{$t("gateway.status.error")}</p>
         <p class="error-detail">{activeGatewayState?.error}</p>
       </div>
     {:else}
       <div class="status-message">
-        <span class="icon">🔌</span>
+        <div class="status-icon">
+          <Unplug size={28} strokeWidth={1.5} />
+        </div>
         <p>{$t("gateway.status.disconnected")}</p>
         <p class="hint">Double-click the tab to connect</p>
       </div>
     {/if}
   {:else}
     <div class="empty-state">
-      <span class="icon">🌐</span>
+      <div class="empty-icon">
+        <Globe size={36} strokeWidth={1} />
+      </div>
       <h2>{$t("gateway.title")}</h2>
       <p>Add a gateway to get started</p>
-      <button class="primary-btn" onclick={openAddModal}>{$t("gateway.add")}</button>
+      <button class="primary-btn" onclick={openAddModal}>
+        <Plus size={16} strokeWidth={2} />
+        {$t("gateway.add")}
+      </button>
     </div>
   {/if}
 </div>
@@ -133,13 +141,34 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 12px;
+    gap: var(--space-md);
     color: var(--color-text-muted);
   }
 
-  .status-message .icon {
-    font-size: 48px;
-    opacity: 0.5;
+  .status-icon {
+    width: 56px;
+    height: 56px;
+    border-radius: var(--radius-lg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-elevated);
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-sm);
+  }
+
+  .status-icon.connecting {
+    color: var(--color-warning);
+    animation: spin 1.2s linear infinite;
+  }
+
+  .status-icon.error-icon {
+    color: var(--color-error);
+    background: rgba(239, 68, 68, 0.1);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
   }
 
   .status-message p {
@@ -154,24 +183,13 @@
   .error-detail {
     font-size: 12px;
     opacity: 0.7;
+    max-width: 400px;
+    text-align: center;
   }
 
   .hint {
     font-size: 12px;
-    opacity: 0.6;
-  }
-
-  .spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid var(--color-border);
-    border-top-color: var(--color-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
+    color: var(--color-text-subtle);
   }
 
   .empty-state {
@@ -180,43 +198,54 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 16px;
+    gap: var(--space-md);
     color: var(--color-text-muted);
     text-align: center;
   }
 
-  .empty-state .icon {
-    font-size: 64px;
-    opacity: 0.4;
+  .empty-icon {
+    width: 72px;
+    height: 72px;
+    border-radius: var(--radius-xl);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-elevated);
+    color: var(--color-text-subtle);
+    margin-bottom: var(--space-sm);
   }
 
   .empty-state h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;
     font-weight: 600;
     color: var(--color-text);
   }
 
   .empty-state p {
     margin: 0;
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .primary-btn {
-    margin-top: 8px;
-    padding: 10px 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-sm);
+    margin-top: var(--space-sm);
+    padding: 10px 20px;
     background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
     border: none;
-    border-radius: 20px;
+    border-radius: var(--radius-md);
     color: white;
-    font-size: 14px;
-    font-weight: 500;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all var(--duration-normal) var(--ease-out);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
   }
 
   .primary-btn:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(99, 102, 241, 0.4);
   }
 </style>

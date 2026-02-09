@@ -1,0 +1,44 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="ghostFill" x1="22%" y1="0%" x2="78%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FFF8F7"/>
+    </linearGradient>
+    <linearGradient id="hatGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8B8092"/>
+      <stop offset="100%" stop-color="#6B6073"/>
+    </linearGradient>
+    <linearGradient id="hatBand" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF909A"/>
+      <stop offset="100%" stop-color="#FF6D7F"/>
+    </linearGradient>
+    <linearGradient id="bow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF9AA5"/>
+      <stop offset="100%" stop-color="#F56A7B"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ghost body (shorter + wider) -->
+  <path d="M60 35 Q38 35 28 47 Q18 58 18 78 L18 98 Q18 111 23 120 Q28 127 36 126 Q42 125 47 120 Q52 128 59 128 Q66 128 71 122 Q76 129 84 129 Q93 129 99 121 Q93 115 93 103 L93 78 Q93 58 83 47 Q73 35 60 35 Z" fill="url(#ghostFill)" stroke="#9A4E68" stroke-width="1.9"/>
+  <path d="M72 43 Q99 54 96 95 Q95 117 84 126 Q76 133 60 133 Q51 132 45 129 Q60 127 71 119 Q85 108 86 91 Q88 72 81 59 Q77 49 72 43 Z" fill="#F7D7E7" opacity="0.62"/>
+  <path d="M36 126 Q42 125 47 120 Q52 128 59 128 Q66 128 71 122 Q76 129 84 129" fill="none" stroke="#9A4E68" stroke-width="1.9"/>
+
+  <!-- hat contact shadow -->
+  <ellipse cx="73" cy="37.8" rx="10.5" ry="3.1" fill="#C98AA6" opacity="0.28"/>
+
+  <!-- hat (tilted, seated on head) -->
+  <g transform="rotate(18 74 30)">
+    <ellipse cx="74" cy="38" rx="15" ry="5.2" fill="#6A5D72" stroke="#9A4E68" stroke-width="1.6"/>
+    <path d="M66 19 Q66 14 70 14 L80 14 Q84 14 84 19 L83 33 Q83 36 80 36 L70 36 Q67 36 67 33 Z" fill="url(#hatGrad)" stroke="#9A4E68" stroke-width="1.6"/>
+    <rect x="68" y="24" width="14" height="4.7" rx="2.3" fill="url(#hatBand)"/>
+    <ellipse cx="74" cy="19" rx="7" ry="2.3" fill="#A99EB1" opacity="0.38"/>
+  </g>
+
+  <!-- bow tie (moved lower + smaller) -->
+  <path d="M54 92 Q49 88 46 91 Q45 95 49 98 Q52 99 56 96 Z" fill="url(#bow)" stroke="#9A4E68" stroke-width="1.4"/>
+  <path d="M66 92 Q71 88 74 91 Q75 95 71 98 Q68 99 64 96 Z" fill="url(#bow)" stroke="#9A4E68" stroke-width="1.4"/>
+  <ellipse cx="60" cy="94" rx="2.9" ry="2.7" fill="#F16279" stroke="#9A4E68" stroke-width="1.2"/>
+
+  <ellipse cx="44" cy="73" rx="6" ry="3.8" fill="#FFB7C6" opacity="0.2"/>
+  <ellipse cx="76" cy="73" rx="6" ry="3.8" fill="#FFB7C6" opacity="0.2"/>
+</svg>

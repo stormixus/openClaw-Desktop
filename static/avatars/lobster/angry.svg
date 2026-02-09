@@ -1,0 +1,30 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF4040"/>
+      <stop offset="100%" stop-color="#AA2222"/>
+    </linearGradient>
+  </defs>
+  <!-- Body (intense red) -->
+  <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lg)"/>
+  <!-- Left Claw (raised aggressive) -->
+  <path d="M15 38 C0 28 -5 40 2 55 C8 68 20 60 23 48 C25 42 20 35 15 38Z" fill="url(#lg)"/>
+  <!-- Right Claw (raised aggressive) -->
+  <path d="M105 38 C120 28 125 40 118 55 C112 68 100 60 97 48 C95 42 100 35 105 38Z" fill="url(#lg)"/>
+  <!-- Antenna (stiff) -->
+  <path d="M45 13 Q33 0 28 3" stroke="#FF4040" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M75 13 Q87 0 92 3" stroke="#FF4040" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Angry Eyes (angled) -->
+  <circle cx="45" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="75" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="46" cy="34" r="2" fill="#FF3333"/>
+  <circle cx="76" cy="34" r="2" fill="#FF3333"/>
+  <!-- Angry Brows -->
+  <line x1="37" y1="25" x2="50" y2="28" stroke="#AA2222" stroke-width="3" stroke-linecap="round"/>
+  <line x1="83" y1="25" x2="70" y2="28" stroke="#AA2222" stroke-width="3" stroke-linecap="round"/>
+  <!-- Angry mouth -->
+  <path d="M47 52 L53 48 L60 52 L67 48 L73 52" stroke="#0a0a1a" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <!-- Steam -->
+  <path d="M30 18 Q28 12 32 8" stroke="#FF6666" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+  <path d="M90 18 Q92 12 88 8" stroke="#FF6666" stroke-width="1.5" stroke-linecap="round" fill="none" opacity="0.6"/>
+</svg>

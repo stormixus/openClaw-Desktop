@@ -40,9 +40,18 @@
   async function close() {
     await appWindow?.close();
   }
+
+  // Programmatic drag — more reliable than data-tauri-drag-region after resize
+  function handleMouseDown(e: MouseEvent) {
+    // Don't drag if clicking a button or interactive element
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("a")) return;
+    appWindow?.startDragging();
+  }
 </script>
 
-<div class="titlebar" data-tauri-drag-region class:mac={isMac}>
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="titlebar" data-tauri-drag-region class:mac={isMac} onmousedown={handleMouseDown}>
   {#if isMac}
     <!-- macOS style: Traffic lights on left -->
     <div class="traffic-lights">
@@ -93,7 +102,7 @@
     display: flex;
     align-items: center;
     height: 38px;
-    padding: 0 12px;
+    padding: 0 var(--space-md);
     background: transparent;
     user-select: none;
     -webkit-user-select: none;
@@ -104,17 +113,15 @@
 
   .titlebar.mac {
     height: 28px;
-    padding: 0 8px;
+    padding: 0 var(--space-sm);
   }
 
-  /* ============================================
-   * macOS Traffic Lights
-   * ============================================ */
+  /* macOS Traffic Lights */
   .traffic-lights {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 0 4px;
+    gap: var(--space-sm);
+    padding: 0 var(--space-xs);
   }
 
   .traffic-btn {
@@ -126,46 +133,26 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.15s ease;
+    transition: all var(--duration-fast) ease;
   }
 
   .traffic-btn svg {
     width: 8px;
     height: 8px;
     opacity: 0;
-    transition: opacity 0.15s ease;
+    transition: opacity var(--duration-fast) ease;
   }
 
   .traffic-lights:hover .traffic-btn svg {
     opacity: 1;
   }
 
-  .traffic-btn.close {
-    background: #ff5f57;
-    color: #4a0002;
-  }
-
-  .traffic-btn.close:hover {
-    background: #ff3b30;
-  }
-
-  .traffic-btn.minimize {
-    background: #febc2e;
-    color: #985700;
-  }
-
-  .traffic-btn.minimize:hover {
-    background: #ffcc00;
-  }
-
-  .traffic-btn.maximize {
-    background: #28c840;
-    color: #006500;
-  }
-
-  .traffic-btn.maximize:hover {
-    background: #00d42a;
-  }
+  .traffic-btn.close { background: #ff5f57; color: #4a0002; }
+  .traffic-btn.close:hover { background: #ff3b30; }
+  .traffic-btn.minimize { background: #febc2e; color: #985700; }
+  .traffic-btn.minimize:hover { background: #ffcc00; }
+  .traffic-btn.maximize { background: #28c840; color: #006500; }
+  .traffic-btn.maximize:hover { background: #00d42a; }
 
   .titlebar-center {
     flex: 1;
@@ -178,15 +165,14 @@
   }
 
   .titlebar.mac .app-title {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--color-text);
-    opacity: 0.6;
+    color: var(--color-text-muted);
+    opacity: 0.7;
+    letter-spacing: 0.2px;
   }
 
-  /* ============================================
-   * Windows Style
-   * ============================================ */
+  /* Windows Style */
   .titlebar-left {
     display: flex;
     align-items: center;
@@ -195,16 +181,16 @@
   }
 
   .app-icon {
-    width: 18px;
-    height: 18px;
-    border-radius: 4px;
+    width: 16px;
+    height: 16px;
+    border-radius: var(--radius-xs);
   }
 
   .app-title {
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
-    color: var(--color-text);
-    opacity: 0.8;
+    color: var(--color-text-muted);
+    letter-spacing: 0.2px;
   }
 
   .win-controls {
@@ -222,7 +208,7 @@
     border: none;
     cursor: pointer;
     color: var(--color-text-muted);
-    transition: all 0.1s ease;
+    transition: all var(--duration-fast) ease;
   }
 
   .win-btn svg {

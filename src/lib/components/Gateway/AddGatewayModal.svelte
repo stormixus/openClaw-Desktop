@@ -1,23 +1,30 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { addGateway, connectGateway, setActiveGateway, isGatewayDuplicate, getGatewayByUrl } from "$lib/gateway/store.svelte";
-  import type { AuthMethod } from "$lib/gateway/types";
+  import { addGateway, connectGateway, setActiveGateway, isGatewayDuplicate, getGatewayByUrl, updateGateway, disconnectGateway } from "$lib/gateway/store.svelte";
+  import type { AuthMethod, GatewayConfig } from "$lib/gateway/types";
 
   interface Props {
     onclose?: () => void;
     onadded?: (id: string) => void;
+    editGateway?: GatewayConfig | null;
   }
 
-  const { onclose, onadded }: Props = $props();
+  const { onclose, onadded, editGateway = null }: Props = $props();
 
-  let name = $state("");
-  let url = $state("");
-  let authMethod = $state<AuthMethod>("tailscale");
-  let token = $state("");
-  let password = $state("");
+  const isEditMode = $derived(!!editGateway);
+
+  let name = $state(editGateway?.name ?? "");
+  let url = $state(editGateway?.url ?? "");
+  let authMethod = $state<AuthMethod>(editGateway?.authMethod ?? "tailscale");
+  let token = $state(editGateway?.token ?? "");
+  let password = $state(editGateway?.password ?? "");
   let error = $state<string | null>(null);
 
-  const isDuplicate = $derived(() => isGatewayDuplicate(url));
+  const isDuplicate = $derived(() => {
+    if (isEditMode && url.trim() === editGateway!.url) return false;
+    return isGatewayDuplicate(url);
+  });
+
   const existingGateway = $derived(() => getGatewayByUrl(url));
 
   const isValid = $derived(() => {
@@ -48,25 +55,47 @@
     
     error = null;
 
-    const result = addGateway({
-      name: name.trim(),
-      url: url.trim(),
-      authMethod,
-      token: authMethod === "token" ? token : undefined,
-      password: authMethod === "password" ? password : undefined,
-    });
+    if (isEditMode && editGateway) {
+      // Edit existing gateway
+      const updates: Partial<GatewayConfig> = {
+        name: name.trim(),
+        url: url.trim(),
+        authMethod,
+        token: authMethod === "token" ? token : undefined,
+        password: authMethod === "password" ? password : undefined,
+      };
 
-    if (result.error) {
-      error = result.error;
-      return;
+      updateGateway(editGateway.id, updates);
+
+      // If URL or auth changed, reconnect
+      if (url.trim() !== editGateway.url || authMethod !== editGateway.authMethod || token !== (editGateway.token ?? "") || password !== (editGateway.password ?? "")) {
+        disconnectGateway(editGateway.id);
+        setTimeout(() => connectGateway(editGateway.id), 300);
+      }
+
+      onadded?.(editGateway.id);
+      onclose?.();
+    } else {
+      // Add new gateway
+      const result = addGateway({
+        name: name.trim(),
+        url: url.trim(),
+        authMethod,
+        token: authMethod === "token" ? token : undefined,
+        password: authMethod === "password" ? password : undefined,
+      });
+
+      if (result.error) {
+        error = result.error;
+        return;
+      }
+
+      setActiveGateway(result.id);
+      connectGateway(result.id);
+
+      onadded?.(result.id);
+      onclose?.();
     }
-
-    // Auto-connect and set as active
-    setActiveGateway(result.id);
-    connectGateway(result.id);
-
-    onadded?.(result.id);
-    onclose?.();
   }
 </script>
 
@@ -76,7 +105,7 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
     <div class="modal-header">
-      <h2>{$t("gateway.add")}</h2>
+      <h2>{isEditMode ? $t("gateway.edit") : $t("gateway.add")}</h2>
       <button class="close-btn" onclick={handleClose}>✕</button>
     </div>
 
@@ -163,6 +192,10 @@
           <p>Tailscale authentication uses your network identity. No credentials needed.</p>
         </div>
       {/if}
+
+      {#if error}
+        <div class="error-banner">{error}</div>
+      {/if}
     </div>
 
     <div class="modal-footer">
@@ -170,7 +203,7 @@
         {$t("common.cancel")}
       </button>
       <button class="submit-btn" disabled={!isValid()} onclick={handleSubmit}>
-        {$t("gateway.connect")}
+        {isEditMode ? $t("gateway.save") : $t("gateway.connect")}
       </button>
     </div>
   </div>
@@ -284,6 +317,16 @@
     font-size: 11px;
     color: var(--color-error);
     margin-top: 6px;
+  }
+
+  .error-banner {
+    padding: 10px 14px;
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    color: var(--color-error);
+    font-size: 13px;
+    margin-top: 8px;
   }
 
   input.error {
