@@ -2,24 +2,76 @@
   <defs>
     <linearGradient id="body" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#8B9DC3"/>
+      <stop offset="50%" stop-color="#6B7FA3"/>
       <stop offset="100%" stop-color="#5C6B8A"/>
     </linearGradient>
-    <linearGradient id="head" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#C8D6E5"/>
+    <linearGradient id="head" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#D2DCE8"/>
+      <stop offset="50%" stop-color="#B0C0D4"/>
       <stop offset="100%" stop-color="#8395A7"/>
     </linearGradient>
+    <linearGradient id="visor" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#1a1a3a"/>
+      <stop offset="50%" stop-color="#2a2a5a"/>
+      <stop offset="100%" stop-color="#1a1a3a"/>
+    </linearGradient>
+    <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="60%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4338ca" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="panel-shine" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.2)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
   </defs>
-  <!-- Body -->
-  <rect x="30" y="80" width="60" height="50" rx="12" fill="url(#body)"/>
-  <rect x="38" y="88" width="44" height="10" rx="5" fill="#6366f1" opacity="0.3"/>
+
+  <!-- Body main shape -->
+  <rect x="28" y="78" width="64" height="54" rx="14" fill="url(#body)"/>
+  <!-- Body panel lines -->
+  <rect x="28" y="78" width="64" height="54" rx="14" fill="url(#panel-shine)" opacity="0.4"/>
+  <line x1="38" y1="86" x2="82" y2="86" stroke="rgba(255,255,255,0.12)" stroke-width="0.8"/>
+  <line x1="38" y1="96" x2="82" y2="96" stroke="rgba(255,255,255,0.08)" stroke-width="0.6"/>
+  <line x1="38" y1="106" x2="82" y2="106" stroke="rgba(255,255,255,0.08)" stroke-width="0.6"/>
+  <!-- Core glow -->
+  <ellipse cx="60" cy="96" rx="10" ry="9" fill="url(#core-glow)" opacity="0.7"/>
+  <ellipse cx="60" cy="96" rx="5" ry="4.5" fill="#818cf8" opacity="0.9"/>
+  <!-- Status LEDs -->
+  <circle cx="42" cy="88" r="2" fill="#4ade80" opacity="0.8"/>
+  <circle cx="48" cy="88" r="2" fill="#fbbf24" opacity="0.6"/>
+  <circle cx="54" cy="88" r="2" fill="#818cf8" opacity="0.6"/>
+  <!-- Body rivets -->
+  <circle cx="34" cy="84" r="1.2" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="86" cy="84" r="1.2" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="34" cy="126" r="1.2" fill="rgba(255,255,255,0.15)"/>
+  <circle cx="86" cy="126" r="1.2" fill="rgba(255,255,255,0.15)"/>
+
   <!-- Neck -->
-  <rect x="50" y="72" width="20" height="12" rx="4" fill="#8395A7"/>
+  <rect x="48" y="70" width="24" height="14" rx="5" fill="#7A8EA6"/>
+  <rect x="52" y="72" width="16" height="3" rx="1.5" fill="rgba(255,255,255,0.1)"/>
+
   <!-- Head -->
-  <ellipse cx="60" cy="45" rx="32" ry="30" fill="url(#head)"/>
+  <ellipse cx="60" cy="42" rx="34" ry="32" fill="url(#head)"/>
+  <!-- Head highlight -->
+  <ellipse cx="52" cy="28" rx="16" ry="10" fill="rgba(255,255,255,0.12)" transform="rotate(-15 52 28)"/>
+  <!-- Visor -->
+  <rect x="34" y="34" width="52" height="18" rx="9" fill="url(#visor)"/>
+  <rect x="36" y="36" width="48" height="14" rx="7" fill="none" stroke="rgba(129,140,248,0.3)" stroke-width="0.8"/>
+
   <!-- Antenna -->
-  <line x1="60" y1="15" x2="60" y2="8" stroke="#8395A7" stroke-width="2.5" stroke-linecap="round"/>
-  <circle cx="60" cy="6" r="3" fill="#6366f1"/>
-  <!-- Ears -->
-  <rect x="24" y="38" width="6" height="14" rx="3" fill="#6366f1" opacity="0.5"/>
-  <rect x="90" y="38" width="6" height="14" rx="3" fill="#6366f1" opacity="0.5"/>
+  <line x1="60" y1="11" x2="60" y2="4" stroke="#8395A7" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="60" cy="2" r="3.5" fill="#6366f1"/>
+  <circle cx="60" cy="2" r="2" fill="#818cf8" opacity="0.8"/>
+  <circle cx="59" cy="1" r="1" fill="rgba(255,255,255,0.5)"/>
+
+  <!-- Ear panels -->
+  <rect x="22" y="36" width="8" height="16" rx="4" fill="#6B7FA3" stroke="rgba(129,140,248,0.2)" stroke-width="0.6"/>
+  <rect x="24" y="40" width="4" height="4" rx="2" fill="#6366f1" opacity="0.5"/>
+  <rect x="90" y="36" width="8" height="16" rx="4" fill="#6B7FA3" stroke="rgba(129,140,248,0.2)" stroke-width="0.6"/>
+  <rect x="92" y="40" width="4" height="4" rx="2" fill="#6366f1" opacity="0.5"/>
+
+  <!-- Chest vent -->
+  <line x1="50" y1="109" x2="70" y2="109" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <line x1="52" y1="112" x2="68" y2="112" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
+  <line x1="54" y1="115" x2="66" y2="115" stroke="rgba(255,255,255,0.06)" stroke-width="1"/>
 </svg>

@@ -1,9 +1,28 @@
 <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Eyes open overlay -->
-  <circle cx="45" cy="35" r="6" fill="#0a0a1a"/>
-  <circle cx="75" cy="35" r="6" fill="#0a0a1a"/>
-  <circle cx="46" cy="34" r="2" fill="#00FFFF"/>
-  <circle cx="76" cy="34" r="2" fill="#00FFFF"/>
-  <circle cx="44" cy="32" r="1" fill="white" opacity="0.6"/>
-  <circle cx="74" cy="32" r="1" fill="white" opacity="0.6"/>
+  <defs>
+    <radialGradient id="lobEyeL" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#40FFFF"/>
+      <stop offset="50%" stop-color="#00DDDD"/>
+      <stop offset="100%" stop-color="#008888"/>
+    </radialGradient>
+    <radialGradient id="lobEyeR" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#40FFFF"/>
+      <stop offset="50%" stop-color="#00DDDD"/>
+      <stop offset="100%" stop-color="#008888"/>
+    </radialGradient>
+  </defs>
+  <!-- Eye stalks / bases -->
+  <ellipse cx="45" cy="35" rx="7.5" ry="8" fill="#0a0a1a" stroke="#333" stroke-width="0.5"/>
+  <ellipse cx="75" cy="35" rx="7.5" ry="8" fill="#0a0a1a" stroke="#333" stroke-width="0.5"/>
+  <!-- Iris -->
+  <circle cx="45" cy="35" r="5" fill="url(#lobEyeL)"/>
+  <circle cx="75" cy="35" r="5" fill="url(#lobEyeR)"/>
+  <!-- Pupil -->
+  <circle cx="46" cy="34" r="2.5" fill="#001a1a"/>
+  <circle cx="76" cy="34" r="2.5" fill="#001a1a"/>
+  <!-- Highlights -->
+  <circle cx="44" cy="32" r="1.8" fill="white" opacity="0.85"/>
+  <circle cx="74" cy="32" r="1.8" fill="white" opacity="0.85"/>
+  <circle cx="47" cy="36" r="0.8" fill="rgba(255,255,255,0.35)"/>
+  <circle cx="77" cy="36" r="0.8" fill="rgba(255,255,255,0.35)"/>
 </svg>

@@ -1,13 +1,60 @@
 <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="lg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF6B6B"/>
+      <stop offset="0%" stop-color="#FF8080"/>
+      <stop offset="40%" stop-color="#FF6B6B"/>
       <stop offset="100%" stop-color="#CC4444"/>
     </linearGradient>
+    <linearGradient id="belly" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#FFAA90"/>
+      <stop offset="100%" stop-color="#FF8870"/>
+    </linearGradient>
+    <radialGradient id="shell-spot" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#FF9090"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
   </defs>
-  <!-- Body only (no eyes, no claws) -->
+
+  <!-- Main body shell -->
   <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lg)"/>
-  <!-- Antenna -->
-  <path d="M45 15 Q35 5 30 8" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round"/>
-  <path d="M75 15 Q85 5 90 8" stroke="#FF6B6B" stroke-width="2" stroke-linecap="round"/>
+  <!-- Shell highlight -->
+  <path d="M60 14 C38 14 24 34 22 52 C22 36 38 16 60 16 C82 16 96 36 96 52 C96 34 82 14 60 14Z" fill="rgba(255,255,255,0.15)"/>
+  <!-- Shell texture lines -->
+  <path d="M30 40 Q45 38 60 40 Q75 38 90 40" fill="none" stroke="rgba(180,50,50,0.2)" stroke-width="1"/>
+  <path d="M25 55 Q42 52 60 55 Q78 52 95 55" fill="none" stroke="rgba(180,50,50,0.2)" stroke-width="1"/>
+  <path d="M28 70 Q44 67 60 70 Q76 67 92 70" fill="none" stroke="rgba(180,50,50,0.2)" stroke-width="1"/>
+  <path d="M35 84 Q47 81 60 84 Q73 81 85 84" fill="none" stroke="rgba(180,50,50,0.15)" stroke-width="0.8"/>
+
+  <!-- Belly patch -->
+  <ellipse cx="60" cy="62" rx="22" ry="26" fill="url(#belly)" opacity="0.6"/>
+  <!-- Belly segment lines -->
+  <line x1="44" y1="48" x2="76" y2="48" stroke="rgba(200,80,60,0.15)" stroke-width="0.6"/>
+  <line x1="42" y1="56" x2="78" y2="56" stroke="rgba(200,80,60,0.15)" stroke-width="0.6"/>
+  <line x1="42" y1="64" x2="78" y2="64" stroke="rgba(200,80,60,0.15)" stroke-width="0.6"/>
+  <line x1="44" y1="72" x2="76" y2="72" stroke="rgba(200,80,60,0.15)" stroke-width="0.6"/>
+
+  <!-- Shell spots -->
+  <circle cx="38" cy="45" r="5" fill="url(#shell-spot)" opacity="0.3"/>
+  <circle cx="82" cy="45" r="5" fill="url(#shell-spot)" opacity="0.3"/>
+  <circle cx="35" cy="68" r="4" fill="url(#shell-spot)" opacity="0.25"/>
+  <circle cx="85" cy="68" r="4" fill="url(#shell-spot)" opacity="0.25"/>
+
+  <!-- Antennae (more detailed) -->
+  <path d="M45 15 Q38 8 32 6 Q28 5 26 8" stroke="#FF8080" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <circle cx="26" cy="8" r="2.5" fill="#FF9090"/>
+  <path d="M75 15 Q82 8 88 6 Q92 5 94 8" stroke="#FF8080" stroke-width="2.2" stroke-linecap="round" fill="none"/>
+  <circle cx="94" cy="8" r="2.5" fill="#FF9090"/>
+
+  <!-- Legs (segmented) -->
+  <path d="M32 85 L26 95 L22 100" stroke="#E05555" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M38 90 L33 100 L30 106" stroke="#E05555" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+  <path d="M88 85 L94 95 L98 100" stroke="#E05555" stroke-width="2" stroke-linecap="round" fill="none"/>
+  <path d="M82 90 L87 100 L90 106" stroke="#E05555" stroke-width="1.8" stroke-linecap="round" fill="none"/>
+
+  <!-- Tail fan -->
+  <path d="M45 105 Q50 112 48 118" stroke="#E05555" stroke-width="1.5" fill="none"/>
+  <path d="M55 107 Q57 114 55 118" stroke="#E05555" stroke-width="1.5" fill="none"/>
+  <path d="M65 107 Q63 114 65 118" stroke="#E05555" stroke-width="1.5" fill="none"/>
+  <path d="M75 105 Q70 112 72 118" stroke="#E05555" stroke-width="1.5" fill="none"/>
+  <path d="M44 116 Q60 120 76 116" fill="none" stroke="#D04040" stroke-width="1.2"/>
 </svg>

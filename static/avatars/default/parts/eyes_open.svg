@@ -1,9 +1,31 @@
 <svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Eyes open -->
-  <ellipse cx="47" cy="42" rx="6" ry="6.5" fill="#1a1a2e"/>
-  <ellipse cx="73" cy="42" rx="6" ry="6.5" fill="#1a1a2e"/>
-  <circle cx="48" cy="40" r="2.5" fill="#6366f1"/>
-  <circle cx="74" cy="40" r="2.5" fill="#6366f1"/>
-  <circle cx="49.5" cy="39" r="1" fill="white" opacity="0.7"/>
-  <circle cx="75.5" cy="39" r="1" fill="white" opacity="0.7"/>
+  <defs>
+    <radialGradient id="eyeGlowL" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="60%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </radialGradient>
+    <radialGradient id="eyeGlowR" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#818cf8"/>
+      <stop offset="60%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </radialGradient>
+  </defs>
+  <!-- Eye sockets -->
+  <ellipse cx="47" cy="42" rx="7.5" ry="8" fill="#0f0f2a"/>
+  <ellipse cx="73" cy="42" rx="7.5" ry="8" fill="#0f0f2a"/>
+  <!-- Iris glow -->
+  <ellipse cx="47" cy="42" rx="6" ry="6.5" fill="url(#eyeGlowL)" opacity="0.9"/>
+  <ellipse cx="73" cy="42" rx="6" ry="6.5" fill="url(#eyeGlowR)" opacity="0.9"/>
+  <!-- Pupil -->
+  <circle cx="47" cy="41" r="3" fill="#1e1b4b"/>
+  <circle cx="73" cy="41" r="3" fill="#1e1b4b"/>
+  <!-- Highlights -->
+  <circle cx="49" cy="39" r="2" fill="white" opacity="0.85"/>
+  <circle cx="75" cy="39" r="2" fill="white" opacity="0.85"/>
+  <circle cx="45" cy="44" r="1" fill="rgba(255,255,255,0.3)"/>
+  <circle cx="71" cy="44" r="1" fill="rgba(255,255,255,0.3)"/>
+  <!-- Scan line effect -->
+  <line x1="42" y1="42" x2="52" y2="42" stroke="rgba(129,140,248,0.15)" stroke-width="0.5"/>
+  <line x1="68" y1="42" x2="78" y2="42" stroke="rgba(129,140,248,0.15)" stroke-width="0.5"/>
 </svg>

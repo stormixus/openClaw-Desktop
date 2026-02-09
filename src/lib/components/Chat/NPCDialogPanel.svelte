@@ -28,6 +28,18 @@
   let showThemeSelector = $state(false);
   let messagesEl = $state<HTMLDivElement | null>(null);
 
+  // Emotion-specific particle configs
+  const EMOTION_PARTICLES: Record<string, { emoji: string; count: number; speed: string }> = {
+    happy: { emoji: '✨', count: 6, speed: '3s' },
+    excited: { emoji: '🎉', count: 8, speed: '2s' },
+    sad: { emoji: '💧', count: 5, speed: '4s' },
+    angry: { emoji: '💢', count: 4, speed: '1.5s' },
+    calm: { emoji: '🍃', count: 4, speed: '5s' },
+    surprised: { emoji: '⚡', count: 5, speed: '2.5s' },
+    thinking: { emoji: '💭', count: 3, speed: '4s' },
+  };
+
+
   // Eye blink state
   let isBlinking = $state(false);
 
@@ -106,6 +118,7 @@
   // Current states
   const emotion = $derived(store.npcEmotion);
   const action = $derived(store.npcAction);
+  const emotionParticles = $derived(EMOTION_PARTICLES[emotion] ?? null);
   const background = $derived(
     store.npcBackground !== "default" ? store.npcBackground : activeTheme.background
   );
@@ -166,12 +179,15 @@
       {#if isCustomBg}
         <div class="char-bg-image" style="background-image: url('{background}')"></div>
       {/if}
-      <!-- Particles -->
+      <!-- Ambient Particles -->
       <div class="char-particles">
         {#each Array(8) as _, i}
           <div class="particle" style="--delay: {i * 0.7}s; --x: {10 + Math.random() * 80}%; --y: {Math.random() * 100}%"></div>
         {/each}
       </div>
+
+      <!-- Emotion Overlay -->
+      <div class="emotion-overlay emotion-overlay-{emotion}"></div>
     </div>
 
     <!-- Character layers -->
@@ -229,6 +245,18 @@
       {#if gestureText[emotion]}
         <div class="gesture-float">
           <span>{gestureText[emotion]}</span>
+        </div>
+      {/if}
+
+      <!-- Emotion particles -->
+      {#if emotionParticles}
+        <div class="emotion-particles">
+          {#each Array(emotionParticles.count) as _, i}
+            <span 
+              class="emo-particle" 
+              style="--ep-delay: {i * 0.5}s; --ep-x: {15 + Math.random() * 70}%; --ep-dur: {emotionParticles.speed}; --ep-drift: {-20 + Math.random() * 40}px"
+            >{emotionParticles.emoji}</span>
+          {/each}
         </div>
       {/if}
     </div>
@@ -442,6 +470,61 @@
     50% { transform: translateY(-30px) scale(1.5); opacity: 0.4; }
   }
 
+  /* Emotion Overlay (color tint per emotion) */
+  .emotion-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    transition: opacity 0.8s ease, background 0.8s ease;
+    opacity: 0;
+    mix-blend-mode: overlay;
+  }
+  .emotion-overlay-happy {
+    opacity: 0.25;
+    background: radial-gradient(ellipse at 50% 70%, rgba(255, 220, 100, 0.6), transparent 70%);
+  }
+  .emotion-overlay-sad {
+    opacity: 0.35;
+    background: linear-gradient(180deg, rgba(30, 50, 100, 0.5) 0%, rgba(20, 30, 60, 0.3) 100%);
+  }
+  .emotion-overlay-angry {
+    opacity: 0.4;
+    background: radial-gradient(ellipse at 50% 50%, rgba(200, 30, 30, 0.4), transparent 60%);
+    animation: angryPulse 1.5s ease-in-out infinite;
+  }
+  .emotion-overlay-excited {
+    opacity: 0.3;
+    background: radial-gradient(ellipse at 50% 60%, rgba(255, 100, 200, 0.4), rgba(255, 200, 50, 0.2) 60%, transparent 80%);
+    animation: excitedShimmer 2s ease-in-out infinite;
+  }
+  .emotion-overlay-calm {
+    opacity: 0.2;
+    background: radial-gradient(ellipse at 50% 80%, rgba(100, 200, 150, 0.4), transparent 70%);
+  }
+  .emotion-overlay-thinking {
+    opacity: 0.2;
+    background: radial-gradient(ellipse at 30% 40%, rgba(100, 150, 255, 0.3), transparent 60%);
+  }
+  .emotion-overlay-surprised {
+    opacity: 0.3;
+    background: radial-gradient(ellipse at 50% 40%, rgba(255, 255, 100, 0.4), transparent 60%);
+    animation: surprisedFlash 0.6s ease-out forwards;
+  }
+
+  @keyframes angryPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 0.55; }
+  }
+  @keyframes excitedShimmer {
+    0%, 100% { opacity: 0.2; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.05); }
+  }
+  @keyframes surprisedFlash {
+    0% { opacity: 0.8; }
+    100% { opacity: 0.2; }
+  }
+
   /* ============================================ */
   /* Character Figure (layered) */
   /* ============================================ */
@@ -479,6 +562,12 @@
   .layer-body {
     z-index: 1;
     filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4));
+    animation: body-glow 4s ease-in-out infinite;
+  }
+
+  @keyframes body-glow {
+    0%, 100% { filter: drop-shadow(0 4px 20px rgba(0, 0, 0, 0.4)); }
+    50% { filter: drop-shadow(0 6px 28px rgba(100, 80, 200, 0.35)); }
   }
 
   .layer-arm-left {
@@ -510,6 +599,51 @@
 
   .char-figure.emotion-thinking .layer-arm-right {
     animation: arm-right-think 2.8s ease-in-out infinite;
+  }
+
+  /* Sad: arms droop down */
+  .char-figure.emotion-sad .layer-arm-left {
+    animation: arm-left-droop 4s ease-in-out infinite;
+  }
+  .char-figure.emotion-sad .layer-arm-right {
+    animation: arm-right-droop 4s ease-in-out infinite;
+  }
+
+  /* Angry: arms clench inward + tremble */
+  .char-figure.emotion-angry .layer-arm-left {
+    animation: arm-left-clench 0.8s ease-in-out infinite;
+  }
+  .char-figure.emotion-angry .layer-arm-right {
+    animation: arm-right-clench 0.8s ease-in-out infinite;
+  }
+
+  /* Surprised: arms jolt outward */
+  .char-figure.emotion-surprised .layer-arm-left {
+    animation: arm-left-jolt 0.5s ease-out forwards;
+  }
+  .char-figure.emotion-surprised .layer-arm-right {
+    animation: arm-right-jolt 0.5s ease-out forwards;
+  }
+
+  /* Calm: gentle slow sway */
+  .char-figure.emotion-calm .layer-arm-left {
+    animation: arm-left-idle 5s ease-in-out infinite;
+  }
+  .char-figure.emotion-calm .layer-arm-right {
+    animation: arm-right-idle 5s ease-in-out infinite;
+  }
+
+  /* Sad body filter */
+  .char-figure.emotion-sad .layer-body {
+    filter: drop-shadow(0 4px 20px rgba(30, 50, 100, 0.5)) brightness(0.9);
+  }
+  /* Angry body glow red */
+  .char-figure.emotion-angry .layer-body {
+    animation: body-glow-angry 0.8s ease-in-out infinite;
+  }
+  /* Excited body sparkle */
+  .char-figure.emotion-excited .layer-body {
+    animation: body-glow-excited 1.5s ease-in-out infinite;
   }
 
   .layer-face {
@@ -550,6 +684,44 @@
   @keyframes arm-right-think {
     0%, 100% { transform: translateX(-50%) rotate(-2deg); }
     50% { transform: translateX(-50%) rotate(6deg) translateY(1px); }
+  }
+
+  /* New arm keyframes for sad/angry/surprised */
+  @keyframes arm-left-droop {
+    0%, 100% { transform: translateX(-50%) rotate(6deg) translateY(2px); }
+    50% { transform: translateX(-50%) rotate(8deg) translateY(5px); }
+  }
+  @keyframes arm-right-droop {
+    0%, 100% { transform: translateX(-50%) rotate(-6deg) translateY(2px); }
+    50% { transform: translateX(-50%) rotate(-8deg) translateY(5px); }
+  }
+  @keyframes arm-left-clench {
+    0%, 100% { transform: translateX(-50%) rotate(8deg) translateX(3px); }
+    50% { transform: translateX(-50%) rotate(10deg) translateX(5px) translateY(-1px); }
+  }
+  @keyframes arm-right-clench {
+    0%, 100% { transform: translateX(-50%) rotate(-8deg) translateX(-3px); }
+    50% { transform: translateX(-50%) rotate(-10deg) translateX(-5px) translateY(-1px); }
+  }
+  @keyframes arm-left-jolt {
+    0% { transform: translateX(-50%) rotate(0deg); }
+    30% { transform: translateX(-50%) rotate(-18deg) translateY(-5px); }
+    100% { transform: translateX(-50%) rotate(-12deg) translateY(-3px); }
+  }
+  @keyframes arm-right-jolt {
+    0% { transform: translateX(-50%) rotate(0deg); }
+    30% { transform: translateX(-50%) rotate(18deg) translateY(-5px); }
+    100% { transform: translateX(-50%) rotate(12deg) translateY(-3px); }
+  }
+
+  /* Body glow variants per emotion */
+  @keyframes body-glow-angry {
+    0%, 100% { filter: drop-shadow(0 4px 20px rgba(200, 30, 30, 0.3)); }
+    50% { filter: drop-shadow(0 6px 28px rgba(255, 50, 50, 0.5)); }
+  }
+  @keyframes body-glow-excited {
+    0%, 100% { filter: drop-shadow(0 4px 20px rgba(255, 100, 200, 0.3)); }
+    50% { filter: drop-shadow(0 8px 32px rgba(255, 150, 50, 0.4)); }
   }
 
   .layer-eyes {
@@ -610,6 +782,76 @@
   @keyframes gesture-bob {
     0%, 100% { transform: translateY(0); opacity: 0.7; }
     50% { transform: translateY(-8px); opacity: 1; }
+  }
+
+  /* Emotion Particles (floating emoji per emotion) */
+  .emotion-particles {
+    position: absolute;
+    inset: 0;
+    z-index: 11;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  .emo-particle {
+    position: absolute;
+    bottom: 20%;
+    left: var(--ep-x, 50%);
+    font-size: 20px;
+    opacity: 0;
+    animation: emoParticleRise var(--ep-dur, 3s) ease-out var(--ep-delay, 0s) infinite;
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.4));
+  }
+
+  @keyframes emoParticleRise {
+    0% {
+      transform: translateY(0) translateX(0) scale(0.5) rotate(0deg);
+      opacity: 0;
+    }
+    15% {
+      opacity: 0.9;
+      transform: translateY(-20px) translateX(var(--ep-drift, 0px)) scale(1) rotate(10deg);
+    }
+    70% {
+      opacity: 0.6;
+      transform: translateY(-100px) translateX(calc(var(--ep-drift, 0px) * 2)) scale(0.9) rotate(-5deg);
+    }
+    100% {
+      transform: translateY(-160px) translateX(calc(var(--ep-drift, 0px) * 3)) scale(0.4) rotate(15deg);
+      opacity: 0;
+    }
+  }
+
+  /* Emotion-specific full-image variations */
+  .char-figure.emotion-sad .char-full-img {
+    filter: drop-shadow(0 4px 24px rgba(30, 50, 120, 0.5)) brightness(0.85) saturate(0.7);
+    animation: art-sad-sway 5s ease-in-out infinite;
+  }
+  .char-figure.emotion-angry .char-full-img {
+    filter: drop-shadow(0 4px 24px rgba(200, 30, 30, 0.5));
+    animation: art-angry-shake 0.5s ease-in-out infinite;
+  }
+  .char-figure.emotion-excited .char-full-img {
+    filter: drop-shadow(0 4px 30px rgba(255, 150, 50, 0.5));
+    animation: art-excited-bounce 1.2s ease-in-out infinite;
+  }
+  .char-figure.emotion-happy .char-full-img {
+    filter: drop-shadow(0 4px 30px rgba(255, 200, 100, 0.4));
+  }
+
+  @keyframes art-sad-sway {
+    0%, 100% { transform: translateY(2px) rotate(0deg); }
+    50% { transform: translateY(5px) rotate(-0.5deg); }
+  }
+  @keyframes art-angry-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-3px) rotate(-0.3deg); }
+    75% { transform: translateX(3px) rotate(0.3deg); }
+  }
+  @keyframes art-excited-bounce {
+    0%, 100% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-10px) scale(1.03); }
+    60% { transform: translateY(-3px) scale(0.99); }
   }
 
   /* Nameplate */

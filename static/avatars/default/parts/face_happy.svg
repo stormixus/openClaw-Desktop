@@ -1,10 +1,15 @@
 <svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Happy face: curved eyes, blush, smile -->
-  <path d="M41 42 Q47 36 53 42" stroke="#1a1a2e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M67 42 Q73 36 79 42" stroke="#1a1a2e" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Happy face: curved eyes, blush, wide smile -->
+  <path d="M41 42 Q47 35 53 42" stroke="#1a1a2e" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+  <path d="M67 42 Q73 35 79 42" stroke="#1a1a2e" stroke-width="2.8" fill="none" stroke-linecap="round"/>
+  <!-- Eye sparkle -->
+  <circle cx="47" cy="39" r="1.5" fill="#818cf8" opacity="0.6"/>
+  <circle cx="73" cy="39" r="1.5" fill="#818cf8" opacity="0.6"/>
   <!-- Blush -->
-  <ellipse cx="38" cy="50" rx="5" ry="3" fill="#f472b6" opacity="0.3"/>
-  <ellipse cx="82" cy="50" rx="5" ry="3" fill="#f472b6" opacity="0.3"/>
-  <!-- Smile -->
-  <path d="M48 54 Q60 64 72 54" stroke="#4a5568" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <ellipse cx="37" cy="50" rx="6" ry="3.5" fill="#f472b6" opacity="0.35"/>
+  <ellipse cx="83" cy="50" rx="6" ry="3.5" fill="#f472b6" opacity="0.35"/>
+  <!-- Wide smile -->
+  <path d="M46 54 Q60 66 74 54" stroke="#4a5568" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+  <!-- Smile teeth hint -->
+  <path d="M52 58 Q60 62 68 58" fill="rgba(255,255,255,0.15)" stroke="none"/>
 </svg>
