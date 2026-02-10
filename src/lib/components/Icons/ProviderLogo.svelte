@@ -7,7 +7,7 @@
   const { provider, size = 16 }: Props = $props();
 
   // Normalize provider name for matching
-  const normalizedProvider = provider.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalizedProvider = $derived(provider.toLowerCase().replace(/[^a-z0-9]/g, ''));
 </script>
 
 {#if normalizedProvider.includes('openai') || normalizedProvider.includes('gpt')}

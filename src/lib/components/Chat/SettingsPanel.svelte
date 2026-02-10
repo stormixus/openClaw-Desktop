@@ -42,7 +42,9 @@
 </script>
 
 {#if isOpen}
-  <div class="settings-panel" on:click|stopPropagation role="menu">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div class="settings-panel" onclick={(e) => e.stopPropagation()} role="menu" tabindex="-1">
     <div class="header">
       <h4>⚙️ {$t("settings.chat")}</h4>
     </div>
@@ -50,13 +52,14 @@
     <div class="settings-content">
       <!-- Thinking Level -->
       <div class="setting-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
         <label class="setting-label">{$t("settings.thinking")}</label>
         <div class="thinking-options">
           {#each thinkingLevels as level}
             <button
               class="thinking-btn"
               class:active={settings.thinkingLevel === level.value}
-              on:click={() => setThinkingLevel(level.value)}
+              onclick={() => setThinkingLevel(level.value)}
               title={level.label}
             >
               <span class="icon">{level.icon}</span>
@@ -74,10 +77,10 @@
             <span class="toggle-desc">Show detailed agent output</span>
           </div>
           <label class="toggle-switch">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={settings.verbose}
-              on:change={(e) => updateSetting("verbose", e.currentTarget.checked)}
+              onchange={(e) => updateSetting("verbose", e.currentTarget.checked)}
             />
             <span class="slider"></span>
           </label>
@@ -89,10 +92,10 @@
             <span class="toggle-desc">Display reasoning process</span>
           </div>
           <label class="toggle-switch">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={settings.reasoning}
-              on:change={(e) => updateSetting("reasoning", e.currentTarget.checked)}
+              onchange={(e) => updateSetting("reasoning", e.currentTarget.checked)}
             />
             <span class="slider"></span>
           </label>
@@ -104,10 +107,10 @@
             <span class="toggle-desc">Auto-deliver completed responses</span>
           </div>
           <label class="toggle-switch">
-            <input 
-              type="checkbox" 
+            <input
+              type="checkbox"
               checked={settings.deliver}
-              on:change={(e) => updateSetting("deliver", e.currentTarget.checked)}
+              onchange={(e) => updateSetting("deliver", e.currentTarget.checked)}
             />
             <span class="slider"></span>
           </label>

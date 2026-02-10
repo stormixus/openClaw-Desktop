@@ -237,9 +237,10 @@
   <div 
     class="message-bubble" 
     class:user={message.role === "user"} 
-    class:assistant={message.role === "assistant"} 
+    class:assistant={message.role === "assistant"}
     class:grouped={isGrouped && !isFirst}
     draggable="true"
+    role="article"
     ondragstart={(e) => {
       e.dataTransfer?.setData("text/plain", message.content);
       e.dataTransfer!.effectAllowed = "copy";
@@ -857,12 +858,6 @@
 
   .content {
     position: relative;
-  }
-
-  .content p {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
   }
 
   /* Message Actions */

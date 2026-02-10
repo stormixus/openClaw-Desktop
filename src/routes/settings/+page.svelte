@@ -25,6 +25,7 @@
     { key: "mistral", icon: "🌊", color: "#ff7000" },
     { key: "openrouter", icon: "🔗", color: "#6366f1" },
     { key: "custom", icon: "🛠️", color: "#8b5cf6" },
+    { key: "nanobanana", icon: "🍌", color: "#fcd34d" },
   ];
 
   function toggleKeyVisibility(provider: string) {
@@ -213,6 +214,7 @@
         <span class="pill">Personal</span>
         </div>
         <div class="control">
+          <!-- svelte-ignore a11y_label_has_associated_control -->
           <label id="theme-label">{$t("settings.theme")}</label>
           <div class="segmented" role="group" aria-labelledby="theme-label">
             {#each themes as entry}
@@ -426,7 +428,7 @@
                   type={visibleKeys[provider.key] ? "text" : "password"}
                   class="apikey-input"
                   placeholder={$t("settings.apikeys.placeholder")}
-                  value={$settings.apiKeys[provider.key]}
+                  value={$settings.apiKeys[provider.key as keyof typeof $settings.apiKeys]}
                   onchange={(e) => handleApiKeyChange(provider.key, (e.currentTarget as HTMLInputElement).value)}
                 />
                 <button class="apikey-toggle" onclick={() => toggleKeyVisibility(provider.key)} title="Toggle visibility">

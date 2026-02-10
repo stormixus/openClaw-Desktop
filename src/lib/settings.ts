@@ -9,6 +9,7 @@ export type ApiKeys = {
   mistral: string;
   openrouter: string;
   custom: string;
+  nanobanana: string;
 };
 
 export type SettingsState = {
@@ -32,6 +33,7 @@ const DEFAULTS: SettingsState = {
     mistral: "",
     openrouter: "",
     custom: "",
+    nanobanana: "",
   },
 };
 

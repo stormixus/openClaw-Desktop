@@ -97,10 +97,13 @@ export function getNpcEmotion(): string {
 // NPC Directing Tags Parser
 // ============================================================================
 
-/** Strip <npc_persona>...</npc_persona> prefix injected for NPC mode — keep display clean */
+/** Strip <npc_persona>...</npc_persona> and <npc_persona_end>...</npc_persona_end> prefix injected for NPC mode — keep display clean */
 function stripSystemPrefix(msg: ChatMessage): ChatMessage {
   if (msg.role !== "user" || !msg.content) return msg;
-  const stripped = msg.content.replace(/^<npc_persona>[\s\S]*?<\/npc_persona>\s*/s, "").trim();
+  const stripped = msg.content
+    .replace(/^<npc_persona>[\s\S]*?<\/npc_persona>\s*/s, "")
+    .replace(/^<npc_persona_end>[\s\S]*?<\/npc_persona_end>\s*/s, "")
+    .trim();
   if (stripped === msg.content) return msg;
   return { ...msg, content: stripped };
 }
@@ -349,6 +352,7 @@ export function removeGateway(id: string): void {
 export function setActiveGateway(id: string): void {
   store.activeGatewayId = id;
   saveGateways();
+  lastSentMode = null;
 
   // Restore per-gateway chat mode preference
   if (browser) {
@@ -898,11 +902,19 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
     let gatewayMessage = message || "Please analyze these files.";
     if (store.chatMode === "npc") {
       const theme = getActiveTheme();
-      // Inject if: first NPC message, or mode changed since last send
-      const needsPrompt = theme.systemPrompt && lastSentMode !== "npc";
+      // Inject if: first NPC message, or mode/session changed since last send
+      const needsPrompt = lastSentMode !== "npc";
       if (needsPrompt) {
-        gatewayMessage = `<npc_persona>${theme.systemPrompt}</npc_persona>\n\n${gatewayMessage}`;
+        const faceDirective = `You MUST include directing tags in EVERY response. Required tags:\n- [face:EMOTION] for facial expression (happy|sad|angry|thinking|surprised|excited|calm|neutral)\n- [act:ACTION] for gestures (bow|wave|nod|shrug|clap|point|laugh|cry)\n- [bg:SCENE] for scene mood (keep current or suggest change)\nPlace tags inline within your dialogue. Example: "[face:happy] Hello! [act:wave] Nice to meet you!"`;
+
+        const persona = theme.systemPrompt
+          ? `${theme.systemPrompt}\n\n${faceDirective}`
+          : faceDirective;
+        gatewayMessage = `<npc_persona>${persona}</npc_persona>\n\n${gatewayMessage}`;
       }
+    } else if (lastSentMode === "npc") {
+      // Exiting NPC mode — tell the LLM to stop using directing tags
+      gatewayMessage = `<npc_persona_end>You are no longer in character mode. Stop using [face:], [act:], and [bg:] tags. Respond normally as a standard AI assistant.</npc_persona_end>\n\n${gatewayMessage}`;
     }
     lastSentMode = store.chatMode;
 
@@ -1054,6 +1066,7 @@ export async function switchSession(sessionKey: string): Promise<void> {
   store.streamingContent = "";
   store.isStreaming = false;
   store.chatMessages = [];
+  lastSentMode = null;
   saveSessionKey(id, sessionKey);
 
   try {
@@ -1077,6 +1090,7 @@ export function createNewSession(): string {
   store.chatMessages = [];
   store.streamingContent = "";
   store.isStreaming = false;
+  lastSentMode = null;
   
   if (id) {
     saveSessionKey(id, newKey);

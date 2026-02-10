@@ -7,12 +7,16 @@
     removeCustomTheme,
     getCharacterImage,
     getThemeAvatar,
+    getCharacterFaceLayer,
+    getThemeBackground,
   } from "$lib/gateway/npcThemeStore.svelte";
-  import type { NpcTheme, NpcThemeAvatar } from "$lib/gateway/npcThemeTypes";
-  import { Plus, Trash2, Save, Image as ImageIcon, MessageSquare, Monitor, Smile, Eye } from "@lucide/svelte";
+  import type { NpcTheme, NpcThemeAvatar, NpcCharacterParts, NpcPartOffset, NpcPartOrigin } from "$lib/gateway/npcThemeTypes";
+  import { Plus, Trash2, Save, Image as ImageIcon, MessageSquare, Monitor, Smile, Eye, Upload, RotateCcw, X } from "@lucide/svelte";
 
   // State
   let editingTheme = $state<NpcTheme | null>(null);
+  let originalParts = $state<NpcCharacterParts | null>(null);
+  let originalBgs = $state<Record<string, string> | null>(null);
   let previewEmotion = $state("neutral");
   let savedToast = $state(false);
 
@@ -42,20 +46,26 @@
   const themes = $derived(getAllThemes());
 
   // Preview character image
-  const previewCharSrc = $derived(() => {
+  const previewCharSrc = $derived.by(() => {
     if (!editingTheme) return null;
     return getCharacterImage(editingTheme, previewEmotion);
   });
 
   // Preview avatar emoji
-  const previewAvatarEmoji = $derived(() => {
+  const previewAvatarEmoji = $derived.by(() => {
     if (!editingTheme) return "?";
     return getThemeAvatar(editingTheme, previewEmotion);
   });
 
-  // Computed bg style for preview
-  const previewBgStyle = $derived(() => {
+  // Preview background: prefer static manifest background, then gradient preset
+  const previewBgImage = $derived.by(() => {
+    if (!editingTheme) return null;
+    return getThemeBackground(editingTheme, previewEmotion === "neutral" ? "default" : previewEmotion);
+  });
+
+  const previewBgStyle = $derived.by(() => {
     if (!editingTheme) return "";
+    if (previewBgImage) return "";
     const bg = editingTheme.background;
     const preset = BG_PRESETS.find(p => p.id === bg);
     if (preset) return `background: ${preset.gradient}`;
@@ -81,6 +91,8 @@
 
   function selectForEdit(theme: NpcTheme) {
     editingTheme = JSON.parse(JSON.stringify(theme));
+    originalParts = theme.characterParts ? JSON.parse(JSON.stringify(theme.characterParts)) : null;
+    originalBgs = theme.backgrounds ? JSON.parse(JSON.stringify(theme.backgrounds)) : null;
     previewEmotion = "neutral";
   }
 
@@ -98,6 +110,120 @@
     editingTheme = null;
   }
 
+  // Character part keys
+  const PART_KEYS = [
+    { key: "body", label: "Body" },
+    { key: "face_neutral", label: "Face Neutral" },
+    { key: "face_happy", label: "Face Happy" },
+    { key: "face_angry", label: "Face Angry" },
+    { key: "face_thinking", label: "Face Thinking" },
+    { key: "eyes_open", label: "Eyes Open" },
+    { key: "eyes_closed", label: "Eyes Closed" },
+    { key: "arm_left", label: "Arm Left" },
+    { key: "arm_right", label: "Arm Right" },
+  ] as const;
+
+  function getPartSrc(key: string): string | null {
+    if (!editingTheme?.characterParts) return null;
+    return (editingTheme.characterParts as unknown as Record<string, string | undefined>)[key] ?? null;
+  }
+
+  function handlePartUpload(key: string, event: Event) {
+    if (!editingTheme) return;
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!editingTheme) return;
+      if (!editingTheme.characterParts) {
+        editingTheme.characterParts = { body: "", face_neutral: "" };
+      }
+      (editingTheme.characterParts as unknown as Record<string, string>)[key] = reader.result as string;
+      // Trigger reactivity
+      editingTheme = { ...editingTheme };
+    };
+    reader.readAsDataURL(file);
+    input.value = "";
+  }
+
+  function handlePartDelete(key: string) {
+    if (!editingTheme?.characterParts || !originalParts) return;
+    const orig = (originalParts as unknown as Record<string, string | undefined>)[key];
+    if (orig) {
+      // Revert to original
+      (editingTheme.characterParts as unknown as Record<string, string>)[key] = orig;
+    } else {
+      // No original — remove
+      delete (editingTheme.characterParts as unknown as Record<string, string | undefined>)[key];
+    }
+    editingTheme = { ...editingTheme };
+  }
+
+  function handleRollbackAll() {
+    if (!editingTheme || !originalParts) return;
+    editingTheme.characterParts = JSON.parse(JSON.stringify(originalParts));
+    editingTheme = { ...editingTheme };
+  }
+
+  function isPartModified(key: string): boolean {
+    if (!editingTheme?.characterParts || !originalParts) return false;
+    const current = (editingTheme.characterParts as unknown as Record<string, string | undefined>)[key];
+    const orig = (originalParts as unknown as Record<string, string | undefined>)[key];
+    return current !== orig;
+  }
+
+  // Part offset editing
+  let selectedPart = $state<string | null>(null);
+
+  function getPartOffset(key: string): NpcPartOffset {
+    return editingTheme?.partOffsets?.[key] ?? { x: 0, y: 0 };
+  }
+
+  function setPartOffset(key: string, axis: "x" | "y", value: number) {
+    if (!editingTheme) return;
+    if (!editingTheme.partOffsets) editingTheme.partOffsets = {};
+    if (!editingTheme.partOffsets[key]) editingTheme.partOffsets[key] = { x: 0, y: 0 };
+    editingTheme.partOffsets[key][axis] = value;
+    editingTheme = { ...editingTheme };
+  }
+
+  function resetPartOffset(key: string) {
+    if (!editingTheme?.partOffsets) return;
+    delete editingTheme.partOffsets[key];
+    editingTheme = { ...editingTheme };
+  }
+
+  function partTransform(key: string): string {
+    const offset = getPartOffset(key);
+    if (offset.x === 0 && offset.y === 0) return "";
+    return `translate(${offset.x}px, ${offset.y}px)`;
+  }
+
+  function getPartOrigin(key: string): NpcPartOrigin {
+    return editingTheme?.partOrigins?.[key] ?? { x: 50, y: 50 };
+  }
+
+  function setPartOrigin(key: string, axis: "x" | "y", value: number) {
+    if (!editingTheme) return;
+    if (!editingTheme.partOrigins) editingTheme.partOrigins = {};
+    if (!editingTheme.partOrigins[key]) editingTheme.partOrigins[key] = { x: 50, y: 50 };
+    editingTheme.partOrigins[key][axis] = value;
+    editingTheme = { ...editingTheme };
+  }
+
+  function resetPartOrigin(key: string) {
+    if (!editingTheme?.partOrigins) return;
+    delete editingTheme.partOrigins[key];
+    editingTheme = { ...editingTheme };
+  }
+
+  function partOriginStyle(key: string): string {
+    const origin = getPartOrigin(key);
+    return `${origin.x}% ${origin.y}%`;
+  }
+
   function setAvatarExpression(expression: string, value: string) {
     if (!editingTheme) return;
     (editingTheme.avatar as any)[expression] = value || undefined;
@@ -106,6 +232,77 @@
   function getAvatarExpression(expression: string): string {
     if (!editingTheme) return "";
     return (editingTheme.avatar as any)[expression] ?? "";
+  }
+
+  // Background management
+  const BG_EMOTIONS = ["default", "happy", "sad", "angry", "thinking", "surprised", "excited"] as const;
+  const BG_EMOTION_LABELS: Record<string, string> = {
+    default: "Default",
+    happy: "Happy",
+    sad: "Sad",
+    angry: "Angry",
+    thinking: "Thinking",
+    surprised: "Surprised",
+    excited: "Excited",
+  };
+
+  function getBgSrc(bgKey: string): string | null {
+    if (!editingTheme?.backgrounds) return null;
+    return editingTheme.backgrounds[bgKey] ?? null;
+  }
+
+  function handleBgUpload(bgKey: string, event: Event) {
+    if (!editingTheme) return;
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (!editingTheme) return;
+      if (!editingTheme.backgrounds) editingTheme.backgrounds = {};
+      editingTheme.backgrounds[bgKey] = reader.result as string;
+      // Also set backgroundImage if it's the default key
+      if (bgKey === "default") {
+        editingTheme.backgroundImage = reader.result as string;
+      }
+      editingTheme = { ...editingTheme };
+    };
+    reader.readAsDataURL(file);
+    input.value = "";
+  }
+
+  function handleBgDelete(bgKey: string) {
+    if (!editingTheme?.backgrounds) return;
+    // Revert to original if available
+    const orig = originalBgs?.[bgKey];
+    if (orig) {
+      editingTheme.backgrounds[bgKey] = orig;
+      if (bgKey === "default") editingTheme.backgroundImage = orig;
+    } else {
+      delete editingTheme.backgrounds[bgKey];
+      if (bgKey === "default") editingTheme.backgroundImage = undefined;
+    }
+    editingTheme = { ...editingTheme };
+  }
+
+  function handleBgRollbackAll() {
+    if (!editingTheme) return;
+    if (originalBgs) {
+      editingTheme.backgrounds = JSON.parse(JSON.stringify(originalBgs));
+      editingTheme.backgroundImage = originalBgs["default"] ?? undefined;
+    } else {
+      editingTheme.backgrounds = undefined;
+      editingTheme.backgroundImage = undefined;
+    }
+    editingTheme = { ...editingTheme };
+  }
+
+  function isBgModified(bgKey: string): boolean {
+    if (!editingTheme?.backgrounds) return false;
+    const current = editingTheme.backgrounds[bgKey];
+    const orig = originalBgs?.[bgKey];
+    return current !== orig;
   }
 </script>
 
@@ -195,6 +392,7 @@
 
             <!-- Background selection -->
             <div class="input-group">
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>Background</label>
               <div class="preset-grid">
                 {#each BG_PRESETS as preset}
@@ -225,6 +423,7 @@
 
             <!-- Character Folder -->
             <div class="input-group">
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>Character Images Folder</label>
               <div class="url-input">
                 <Smile size={16} />
@@ -239,6 +438,165 @@
             </div>
           </section>
 
+          <!-- Backgrounds Section -->
+          {#if editingTheme.backgrounds || editingTheme.backgroundImage}
+            <section class="config-section">
+              <div class="section-header-row">
+                <h3><ImageIcon size={16} /> Backgrounds</h3>
+                {#if originalBgs}
+                  <button class="rollback-btn" onclick={handleBgRollbackAll} title="Rollback all backgrounds to original">
+                    <RotateCcw size={14} />
+                    Rollback
+                  </button>
+                {/if}
+              </div>
+              <p class="hint" style="margin-bottom: 12px">Per-emotion background images. Click an emotion tab above to preview.</p>
+              <div class="bg-grid">
+                {#each BG_EMOTIONS as bgKey}
+                  {@const src = getBgSrc(bgKey)}
+                  {@const modified = isBgModified(bgKey)}
+                  <div class="bg-card" class:modified class:active={
+                    (previewEmotion === "neutral" && bgKey === "default") ||
+                    (previewEmotion !== "neutral" && bgKey === previewEmotion)
+                  }>
+                    <button class="bg-thumb" onclick={() => {
+                      previewEmotion = bgKey === "default" ? "neutral" : bgKey;
+                    }}>
+                      {#if src}
+                        <img src={src} alt={BG_EMOTION_LABELS[bgKey]} />
+                      {:else}
+                        <span class="bg-empty">--</span>
+                      {/if}
+                    </button>
+                    <span class="bg-label">{BG_EMOTION_LABELS[bgKey]}</span>
+                    <div class="part-actions">
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <label class="part-upload-btn" title="Upload {BG_EMOTION_LABELS[bgKey]} background" onclick={(e) => e.stopPropagation()}>
+                        <Upload size={12} />
+                        <input
+                          type="file"
+                          accept=".svg,.png,.jpg,.jpeg,.webp,image/*"
+                          onchange={(e) => handleBgUpload(bgKey, e)}
+                          hidden
+                        />
+                      </label>
+                      {#if modified}
+                        <button class="part-delete-btn" onclick={() => handleBgDelete(bgKey)} title="Revert {BG_EMOTION_LABELS[bgKey]}">
+                          <X size={12} />
+                        </button>
+                      {/if}
+                    </div>
+                  </div>
+                {/each}
+              </div>
+            </section>
+          {/if}
+
+          <!-- Character Parts Section -->
+          {#if editingTheme.characterParts}
+            <section class="config-section">
+              <div class="section-header-row">
+                <h3><ImageIcon size={16} /> Character Parts</h3>
+                {#if originalParts}
+                  <button class="rollback-btn" onclick={handleRollbackAll} title="Rollback all parts to original">
+                    <RotateCcw size={14} />
+                    Rollback
+                  </button>
+                {/if}
+              </div>
+              <div class="parts-grid">
+                {#each PART_KEYS as { key, label }}
+                  {@const src = getPartSrc(key)}
+                  {@const modified = isPartModified(key)}
+                  {@const selected = selectedPart === key}
+                  <button class="part-card" class:modified class:selected onclick={() => {
+                    selectedPart = selected ? null : key;
+                    // Auto-switch preview emotion when selecting a face part
+                    if (!selected && key.startsWith("face_")) {
+                      const emotion = key.replace("face_", "");
+                      previewEmotion = emotion;
+                    }
+                  }}>
+                    <div class="part-thumb">
+                      {#if src}
+                        <img src={src} alt={label} />
+                      {:else}
+                        <span class="part-empty">--</span>
+                      {/if}
+                    </div>
+                    <span class="part-label">{label}</span>
+                    <div class="part-actions">
+                      <!-- svelte-ignore a11y_click_events_have_key_events -->
+                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <label class="part-upload-btn" title="Upload {label}" onclick={(e) => e.stopPropagation()}>
+                        <Upload size={12} />
+                        <input
+                          type="file"
+                          accept=".svg,.png,.webp,image/svg+xml,image/png,image/webp"
+                          onchange={(e) => handlePartUpload(key, e)}
+                          hidden
+                        />
+                      </label>
+                      {#if modified}
+                        <button class="part-delete-btn" onclick={(e) => { e.stopPropagation(); handlePartDelete(key); }} title="Revert {label}">
+                          <X size={12} />
+                        </button>
+                      {/if}
+                    </div>
+                  </button>
+                {/each}
+              </div>
+
+              <!-- Controls for selected part -->
+              {#if selectedPart}
+                {@const offset = getPartOffset(selectedPart)}
+                {@const origin = getPartOrigin(selectedPart)}
+                <div class="offset-controls">
+                  <div class="offset-header">
+                    <span class="offset-title">{PART_KEYS.find(p => p.key === selectedPart)?.label} — Position</span>
+                    <button class="offset-reset" onclick={() => resetPartOffset(selectedPart!)}>Reset</button>
+                  </div>
+                  <div class="offset-row">
+                    <!-- svelte-ignore a11y_label_has_associated_control -->
+                    <label>X</label>
+                    <input type="range" min="-50" max="50" step="1" value={offset.x}
+                      oninput={(e) => setPartOffset(selectedPart!, "x", Number((e.target as HTMLInputElement).value))} />
+                    <span class="offset-value">{offset.x}px</span>
+                  </div>
+                  <div class="offset-row">
+                    <!-- svelte-ignore a11y_label_has_associated_control -->
+                    <label>Y</label>
+                    <input type="range" min="-50" max="50" step="1" value={offset.y}
+                      oninput={(e) => setPartOffset(selectedPart!, "y", Number((e.target as HTMLInputElement).value))} />
+                    <span class="offset-value">{offset.y}px</span>
+                  </div>
+                </div>
+
+                <div class="offset-controls">
+                  <div class="offset-header">
+                    <span class="offset-title">{PART_KEYS.find(p => p.key === selectedPart)?.label} — Pivot</span>
+                    <button class="offset-reset" onclick={() => resetPartOrigin(selectedPart!)}>Reset</button>
+                  </div>
+                  <div class="offset-row">
+                    <!-- svelte-ignore a11y_label_has_associated_control -->
+                    <label>X</label>
+                    <input type="range" min="0" max="100" step="1" value={origin.x}
+                      oninput={(e) => setPartOrigin(selectedPart!, "x", Number((e.target as HTMLInputElement).value))} />
+                    <span class="offset-value">{origin.x}%</span>
+                  </div>
+                  <div class="offset-row">
+                    <!-- svelte-ignore a11y_label_has_associated_control -->
+                    <label>Y</label>
+                    <input type="range" min="0" max="100" step="1" value={origin.y}
+                      oninput={(e) => setPartOrigin(selectedPart!, "y", Number((e.target as HTMLInputElement).value))} />
+                    <span class="offset-value">{origin.y}%</span>
+                  </div>
+                </div>
+              {/if}
+            </section>
+          {/if}
+
           <!-- Expression Avatars Section -->
           <section class="config-section">
             <h3><Smile size={16} /> Expression Avatars</h3>
@@ -246,6 +604,7 @@
             <div class="expression-grid">
               {#each EXPRESSIONS as expr}
                 <div class="expression-item">
+                  <!-- svelte-ignore a11y_label_has_associated_control -->
                   <label>{EXPRESSION_LABELS[expr]}</label>
                   <input
                     type="text"
@@ -264,6 +623,7 @@
             <h3><MessageSquare size={16} /> Personality</h3>
 
             <div class="input-group">
+              <!-- svelte-ignore a11y_label_has_associated_control -->
               <label>System Prompt</label>
               <textarea
                 bind:value={editingTheme.systemPrompt}
@@ -295,18 +655,51 @@
           </div>
 
           <div class="stage-wrapper">
-            <div class="preview-stage" style={previewBgStyle()}>
+            <div class="preview-stage" style={previewBgStyle}>
+              {#if previewBgImage}
+                <img src={previewBgImage} alt="" class="preview-bg-img" />
+              {/if}
               <div class="preview-overlay"></div>
 
               <!-- Character -->
               <div class="preview-character">
-                {#if previewCharSrc()}
-                  <img src={previewCharSrc()} alt="Character" class="char-art" />
+                {#if editingTheme.characterParts}
+                  <div class="preview-parts">
+                    <img src={editingTheme.characterParts.body} alt="" class="preview-part"
+                      class:part-highlight={selectedPart === "body"}
+                      style:transform={partTransform("body")}
+                      style:transform-origin={partOriginStyle("body")} />
+                    <img src={editingTheme.characterParts.eyes_open} alt="" class="preview-part"
+                      class:part-highlight={selectedPart === "eyes_open"}
+                      style:transform={partTransform("eyes_open")}
+                      style:transform-origin={partOriginStyle("eyes_open")} />
+                    {#if getCharacterFaceLayer(editingTheme, previewEmotion)}
+                      {@const faceKey = `face_${previewEmotion === "neutral" ? "neutral" : previewEmotion}`}
+                      <img src={getCharacterFaceLayer(editingTheme, previewEmotion)} alt="" class="preview-part"
+                        class:part-highlight={selectedPart?.startsWith("face_")}
+                        style:transform={partTransform(faceKey)}
+                        style:transform-origin={partOriginStyle(faceKey)} />
+                    {/if}
+                    {#if editingTheme.characterParts.arm_left}
+                      <img src={editingTheme.characterParts.arm_left} alt="" class="preview-part"
+                        class:part-highlight={selectedPart === "arm_left"}
+                        style:transform={partTransform("arm_left")}
+                        style:transform-origin={partOriginStyle("arm_left")} />
+                    {/if}
+                    {#if editingTheme.characterParts.arm_right}
+                      <img src={editingTheme.characterParts.arm_right} alt="" class="preview-part"
+                        class:part-highlight={selectedPart === "arm_right"}
+                        style:transform={partTransform("arm_right")}
+                        style:transform-origin={partOriginStyle("arm_right")} />
+                    {/if}
+                  </div>
+                {:else if previewCharSrc}
+                  <img src={previewCharSrc} alt="Character" class="char-art" />
                 {:else if editingTheme.avatar.default && editingTheme.avatar.default.startsWith("http")}
                   <img src={editingTheme.avatar.default} alt="Avatar" class="char-art" />
                 {:else}
                   <div class="placeholder-char">
-                    <span>{previewAvatarEmoji()}</span>
+                    <span>{previewAvatarEmoji}</span>
                   </div>
                 {/if}
               </div>
@@ -708,6 +1101,282 @@
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
   }
 
+  /* Character parts editor */
+  .section-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+
+  .section-header-row h3 {
+    margin: 0;
+  }
+
+  .rollback-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    font-size: 11px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .rollback-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+  }
+
+  .parts-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .part-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 4px;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    transition: all 0.2s;
+    cursor: pointer;
+    color: inherit;
+    font: inherit;
+  }
+
+  .part-card:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .part-card.selected {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 12px rgba(129, 140, 248, 0.25);
+    background: rgba(129, 140, 248, 0.08);
+  }
+
+  .part-card.modified {
+    border-color: rgba(129, 140, 248, 0.5);
+    box-shadow: 0 0 8px rgba(129, 140, 248, 0.15);
+  }
+
+  .part-thumb {
+    width: 52px;
+    height: 52px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+
+  .part-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .part-empty {
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+
+  .part-label {
+    font-size: 9px;
+    color: var(--color-text-muted);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  .part-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .part-upload-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(129, 140, 248, 0.15);
+    color: var(--color-primary);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .part-upload-btn:hover {
+    background: rgba(129, 140, 248, 0.3);
+  }
+
+  .part-delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .part-delete-btn:hover {
+    background: rgba(239, 68, 68, 0.25);
+  }
+
+  /* Background grid */
+  .bg-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+
+  .bg-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 4px;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    transition: all 0.2s;
+  }
+
+  .bg-card.active {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 12px rgba(129, 140, 248, 0.25);
+    background: rgba(129, 140, 248, 0.08);
+  }
+
+  .bg-card.modified {
+    border-color: rgba(129, 140, 248, 0.5);
+    box-shadow: 0 0 8px rgba(129, 140, 248, 0.15);
+  }
+
+  .bg-thumb {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .bg-thumb:hover {
+    opacity: 0.8;
+  }
+
+  .bg-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .bg-empty {
+    font-size: 11px;
+    color: var(--color-text-muted);
+  }
+
+  .bg-label {
+    font-size: 9px;
+    color: var(--color-text-muted);
+    text-align: center;
+    line-height: 1.2;
+  }
+
+  /* Offset controls */
+  .offset-controls {
+    margin-top: 10px;
+    padding: 12px;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .offset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .offset-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  .offset-reset {
+    font-size: 10px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .offset-reset:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text);
+  }
+
+  .offset-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .offset-row label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--color-text-muted);
+    width: 14px;
+    flex-shrink: 0;
+  }
+
+  .offset-row input[type="range"] {
+    flex: 1;
+    height: 4px;
+    accent-color: var(--color-primary);
+    cursor: pointer;
+  }
+
+  .offset-value {
+    font-size: 10px;
+    color: var(--color-text-muted);
+    width: 36px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Preview part highlight */
+  .preview-part.part-highlight {
+    filter: drop-shadow(0 0 4px rgba(129, 140, 248, 0.8));
+  }
+
   /* Expression avatar grid */
   .expression-grid {
     display: grid;
@@ -817,11 +1486,35 @@
     justify-content: flex-end;
   }
 
+  .preview-bg-img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 0;
+  }
+
   .preview-overlay {
     position: absolute;
     inset: 0;
     background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, transparent 60%);
     z-index: 1;
+  }
+
+  .preview-parts {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  .preview-part {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    object-position: center bottom;
   }
 
   .preview-character {
@@ -830,6 +1523,7 @@
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
+    width: 60%;
     height: 55%;
     display: flex;
     align-items: flex-end;

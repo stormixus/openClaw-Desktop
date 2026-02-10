@@ -1,7 +1,9 @@
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use tauri::Manager;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LocalOpenClawConfig {
@@ -201,11 +203,72 @@ fn extract_window_var(html: &str, var_name: &str) -> Option<String> {
     None
 }
 
+/// Get the backgrounds directory path (app_data_dir/backgrounds)
+fn get_bg_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let bg_dir = data_dir.join("backgrounds");
+    if !bg_dir.exists() {
+        fs::create_dir_all(&bg_dir)
+            .map_err(|e| format!("Failed to create backgrounds dir: {}", e))?;
+    }
+    Ok(bg_dir)
+}
+
+/// Save a base64-encoded PNG image as a file. Returns the absolute file path.
+#[tauri::command]
+fn save_npc_background(app: tauri::AppHandle, theme_id: String, base64_data: String) -> Result<String, String> {
+    let bg_dir = get_bg_dir(&app)?;
+    let file_path = bg_dir.join(format!("{}.png", theme_id));
+
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(&base64_data)
+        .map_err(|e| format!("Base64 decode error: {}", e))?;
+
+    fs::write(&file_path, &bytes)
+        .map_err(|e| format!("File write error: {}", e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
+}
+
+/// Check if a background file exists for a theme. Returns the path if it exists.
+#[tauri::command]
+fn get_npc_bg_path(app: tauri::AppHandle, theme_id: String) -> Result<Option<String>, String> {
+    let bg_dir = get_bg_dir(&app)?;
+    let file_path = bg_dir.join(format!("{}.png", theme_id));
+    if file_path.exists() {
+        Ok(Some(file_path.to_string_lossy().to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// Delete a background file for a theme.
+#[tauri::command]
+fn delete_npc_background(app: tauri::AppHandle, theme_id: String) -> Result<(), String> {
+    let bg_dir = get_bg_dir(&app)?;
+    let file_path = bg_dir.join(format!("{}.png", theme_id));
+    if file_path.exists() {
+        fs::remove_file(&file_path)
+            .map_err(|e| format!("File delete error: {}", e))?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, detect_local_openclaw, fetch_assistant_meta])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            detect_local_openclaw,
+            fetch_assistant_meta,
+            save_npc_background,
+            get_npc_bg_path,
+            delete_npc_background
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

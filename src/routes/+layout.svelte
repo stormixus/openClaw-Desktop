@@ -4,9 +4,13 @@
   import { initLocale } from "$lib/i18n";
   import { applyThemeToDocument, initTheme, theme } from "$lib/theme";
   import { initGatewayStore } from "$lib/gateway/store.svelte";
+  import { initBackgroundService } from "$lib/gateway/npcBackgroundService";
+  import { loadThemeManifests } from "$lib/gateway/npcThemeStore.svelte";
 
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SetupWizard from "$lib/components/Wizard/SetupWizard.svelte";
+
+  let { children } = $props();
 
   let showWizard = $state(false);
   let initialized = $state(false);
@@ -15,6 +19,8 @@
     initLocale();
     initTheme();
     initGatewayStore();
+    initBackgroundService();
+    loadThemeManifests();
 
     // Check if first run
     if (browser) {
@@ -60,7 +66,7 @@
   <div class="app-shell">
     <Sidebar />
     <main class="main-content">
-      <slot />
+      {@render children()}
     </main>
   </div>
 </div>

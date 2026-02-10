@@ -38,6 +38,9 @@
 {#if isOpen}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="session-backdrop" onclick={() => onclose?.()}></div>
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div class="session-manager" onclick={(e) => e.stopPropagation()}>
     <div class="header">
       <h4>{$t("session.title")}</h4>
@@ -91,6 +94,12 @@
 {/if}
 
 <style>
+  .session-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 49;
+  }
+
   .session-manager {
     position: absolute;
     bottom: 100%;
@@ -244,15 +253,6 @@
   .session-date {
     font-size: 11px;
     color: var(--color-text-muted);
-  }
-
-  .session-preview {
-    font-size: 11px;
-    color: var(--color-text-muted);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    opacity: 0.7;
   }
 
   .active-dot {

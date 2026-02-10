@@ -18,7 +18,9 @@
 </script>
 
 {#if isOpen}
-  <div class="agent-picker" on:click|stopPropagation role="menu">
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+  <div class="agent-picker" onclick={(e) => e.stopPropagation()} role="menu" tabindex="-1">
     <div class="header">
       <h4>{$t("agent.select")}</h4>
     </div>
@@ -31,7 +33,7 @@
           <button
             class="agent-option"
             class:active={agent.id === currentAgent}
-            on:click={() => selectAgent(agent.id)}
+            onclick={() => selectAgent(agent.id)}
           >
             <span class="agent-icon">🤖</span>
             <div class="agent-info">

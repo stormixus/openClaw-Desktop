@@ -39,7 +39,7 @@
         title={$t(item.labelKey)}
       >
         <span class="nav-icon">
-          <svelte:component this={item.icon} size={22} strokeWidth={1.5} />
+          <item.icon size={22} strokeWidth={1.5} />
         </span>
         <span class="nav-label">{$t(item.labelKey)}</span>
       </a>

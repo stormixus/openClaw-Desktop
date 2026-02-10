@@ -13,10 +13,15 @@
 
   const isEditMode = $derived(!!editGateway);
 
+  // svelte-ignore state_referenced_locally
   let name = $state(editGateway?.name ?? "");
+  // svelte-ignore state_referenced_locally
   let url = $state(editGateway?.url ?? "");
+  // svelte-ignore state_referenced_locally
   let authMethod = $state<AuthMethod>(editGateway?.authMethod ?? "tailscale");
+  // svelte-ignore state_referenced_locally
   let token = $state(editGateway?.token ?? "");
+  // svelte-ignore state_referenced_locally
   let password = $state(editGateway?.password ?? "");
   let error = $state<string | null>(null);
 
@@ -101,7 +106,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<div class="modal-overlay" onclick={handleClose} role="dialog" aria-modal="true">
+<div class="modal-overlay" onclick={handleClose} role="dialog" aria-modal="true" tabindex="-1">
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div class="modal" onclick={(e) => e.stopPropagation()} role="document">
     <div class="modal-header">
@@ -137,6 +142,7 @@
       </div>
 
       <div class="form-group">
+        <!-- svelte-ignore a11y_label_has_associated_control -->
         <label>Authentication</label>
         <div class="auth-options">
           <button

@@ -11,17 +11,17 @@
   import ImageLightbox from "./ImageLightbox.svelte";
   import CodeSnippets from "./CodeSnippets.svelte";
   import ForwardModal from "./ForwardModal.svelte";
-  import { Upload } from "@lucide/svelte";
   import {
     getActiveTheme,
     getCharacterImage,
     getCharacterFaceLayer,
     getThemeAvatar,
+    getThemeBackground,
   } from "$lib/gateway/npcThemeStore.svelte";
-  import { getCachedBackground } from "$lib/gateway/npcBackgroundService";
+  import { generateNpcBackground, loadCachedBackground, getCachedBackground } from "$lib/gateway/npcBackgroundService";
+  import { fade } from "svelte/transition";
 
   let messagesContainer: HTMLDivElement | undefined = $state(undefined);
-  let isDragOver = $state(false);
   let droppedFiles = $state<File[]>([]);
   
   // Lightbox state
@@ -37,7 +37,10 @@
   const isNpcMode = $derived(store.chatMode === "npc");
   const npcTheme = $derived(getActiveTheme());
   let npcEmotion = $state("neutral");
+  let npcAction = $state<string | null>(null);
+  let npcBgOverride = $state<string | null>(null);
   let eyesOpen = $state(true);
+  let actionTimeout: ReturnType<typeof setTimeout> | null = null;
 
   // Eye blink timer for NPC
   $effect(() => {
@@ -115,6 +118,41 @@
     npcEmotion = "neutral";
   });
 
+  // Derive action from latest assistant message [act:XXX]
+  $effect(() => {
+    if (!isNpcMode) return;
+    const lastAssistant = [...store.chatMessages].reverse().find(m => m.role === "assistant");
+    if (!lastAssistant) { npcAction = null; return; }
+    const textLower = (lastAssistant.content || "").toLowerCase();
+
+    const actTags = [...textLower.matchAll(/\[act:(\w+)\]/g)];
+    if (actTags.length > 0) {
+      const action = actTags[actTags.length - 1][1];
+      const validActions = ["bow", "wave", "nod", "shrug", "clap", "point", "laugh", "cry"];
+      if (validActions.includes(action)) {
+        npcAction = action;
+        // Actions are transient — clear after animation plays
+        if (actionTimeout) clearTimeout(actionTimeout);
+        actionTimeout = setTimeout(() => { npcAction = null; }, 2000);
+        return;
+      }
+    }
+    npcAction = null;
+  });
+
+  // Derive background override from latest assistant message [bg:XXX]
+  $effect(() => {
+    if (!isNpcMode) { npcBgOverride = null; return; }
+    const lastAssistant = [...store.chatMessages].reverse().find(m => m.role === "assistant");
+    if (!lastAssistant) { npcBgOverride = null; return; }
+    const textLower = (lastAssistant.content || "").toLowerCase();
+
+    const bgTags = [...textLower.matchAll(/\[bg:(\w+)\]/g)];
+    if (bgTags.length > 0) {
+      npcBgOverride = bgTags[bgTags.length - 1][1];
+    }
+  });
+
   // Override emotion to 'thinking' while streaming
   const npcDisplayEmotion = $derived(
     isNpcMode && store.isStreaming ? "thinking" : npcEmotion
@@ -130,9 +168,52 @@
     ocean:   "linear-gradient(180deg, #0a1628 0%, #0d2137 40%, #164060 70%, #0a1628 100%)",
     sunset:  "linear-gradient(180deg, #1a0a1e 0%, #4a1942 30%, #8b3a4a 60%, #d4724a 100%)",
   };
-  const npcBg = $derived(isNpcMode ? (NPC_BACKGROUNDS[npcTheme.background] ?? NPC_BACKGROUNDS.default) : "");
-  // AI-generated background takes priority over gradient
-  const npcBgImage = $derived(isNpcMode ? getCachedBackground(npcTheme.id) : null);
+  const npcBg = $derived(isNpcMode ? (NPC_BACKGROUNDS[npcBgOverride ?? npcTheme.background] ?? NPC_BACKGROUNDS.default) : "");
+  // Background image: static from theme's bg/ folder, or generated via Nanobanana
+  let npcBgImage = $state<string | null>(null);
+  let bgGenAttempted = new Set<string>();
+
+  $effect(() => {
+    if (!isNpcMode) {
+      npcBgImage = null;
+      return;
+    }
+    const bgKey = npcBgOverride ?? "default";
+    const theme = npcTheme;
+
+    // 1. Check static backgrounds from manifest
+    const staticBg = getThemeBackground(theme, bgKey);
+    if (staticBg) {
+      npcBgImage = staticBg;
+      return;
+    }
+
+    // 2. Check Tauri-generated cache (in memory or localStorage)
+    const cacheKey = `${theme.id}_${bgKey}`;
+    const cached = getCachedBackground(cacheKey);
+    if (cached) {
+      npcBgImage = cached;
+      return;
+    }
+
+    // 3. Try loading from disk, then generate via Nanobanana if missing
+    if (bgGenAttempted.has(cacheKey)) return;
+    bgGenAttempted.add(cacheKey);
+
+    loadCachedBackground(cacheKey).then((existing) => {
+      if (existing) {
+        npcBgImage = existing;
+        return;
+      }
+      // Generate via Nanobanana
+      const prompt = `${bgKey} themed scene for ${theme.name}, atmospheric background, no characters, no text, cinematic wide shot`;
+      generateNpcBackground(cacheKey, bgKey, prompt).then((result) => {
+        if (result.success && result.dataUrl) {
+          npcBgImage = result.dataUrl;
+        }
+      });
+    });
+  });
 
   // Thinking indicator phrases
   const THINKING_PHRASES = [
@@ -204,39 +285,6 @@
     await abortMessage();
   }
 
-  // Drag and drop handlers
-  function handleDragEnter(e: DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    isDragOver = true;
-  }
-
-  function handleDragLeave(e: DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    // Only set to false if we're leaving the container entirely
-    const relatedTarget = e.relatedTarget as HTMLElement | null;
-    if (!relatedTarget || !e.currentTarget || !(e.currentTarget as HTMLElement).contains(relatedTarget)) {
-      isDragOver = false;
-    }
-  }
-
-  function handleDragOver(e: DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-
-  function handleDrop(e: DragEvent) {
-    e.preventDefault();
-    e.stopPropagation();
-    isDragOver = false;
-
-    const files = e.dataTransfer?.files;
-    if (files && files.length > 0) {
-      droppedFiles = [...droppedFiles, ...Array.from(files)];
-    }
-  }
-
   function removeFile(index: number) {
     // Revoke object URL to free memory
     const file = droppedFiles[index];
@@ -279,54 +327,53 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div 
-  class="chat-container" 
-  class:drag-over={isDragOver}
+<div
+  class="chat-container"
   class:npc-mode={isNpcMode}
-  style:background={npcBgImage ? undefined : (npcBg || undefined)}
-  style:background-image={npcBgImage ? `url(${npcBgImage})` : undefined}
-  style:background-size={npcBgImage ? 'cover' : undefined}
-  style:background-position={npcBgImage ? 'center' : undefined}
-  ondragenter={handleDragEnter}
-  ondragleave={handleDragLeave}
-  ondragover={handleDragOver}
-  ondrop={handleDrop}
 >
-  <!-- Drop overlay -->
-  {#if isDragOver}
-    <div class="drop-overlay">
-      <div class="drop-content">
-        <div class="drop-icon">
-          <Upload size={48} strokeWidth={1.5} />
-        </div>
-        <h3>Drop files here</h3>
-        <p>Images, documents, and more</p>
-      </div>
-    </div>
+  <!-- NPC Background Layer with crossfade transition -->
+  {#if isNpcMode}
+    {#key npcBgImage ?? npcBg}
+      <div
+        class="npc-bg-layer"
+        style:background={npcBgImage ? undefined : (npcBg || undefined)}
+        style:background-image={npcBgImage ? `url(${npcBgImage})` : undefined}
+        style:background-size={npcBgImage ? 'cover' : undefined}
+        style:background-position={npcBgImage ? 'center' : undefined}
+        in:fade={{ duration: 600 }}
+        out:fade={{ duration: 600 }}
+      ></div>
+    {/key}
   {/if}
-
   <!-- NPC Character Layer (behind messages) -->
   {#if isNpcMode}
     <div class="npc-character-layer">
+      {#if store.isStreaming}
+        <div class="npc-thinking-bubbles">
+          <span class="thinking-bubble b1"></span>
+          <span class="thinking-bubble b2"></span>
+          <span class="thinking-bubble b3"></span>
+        </div>
+      {/if}
       {#if npcTheme.characterParts}
         <!-- Parts-based layered rendering with animation -->
-        <div class="npc-parts-container">
-          <img src={npcTheme.characterParts.arm_left} alt="" class="npc-part npc-arm npc-arm-left" />
-          <img src={npcTheme.characterParts.arm_right} alt="" class="npc-part npc-arm npc-arm-right" />
-          <img src={npcTheme.characterParts.body} alt="" class="npc-part npc-body" />
+        <div class="npc-parts-container" class:npc-is-thinking={store.isStreaming} class:act-bow={npcAction === "bow"} class:act-nod={npcAction === "nod"} class:act-laugh={npcAction === "laugh"} class:act-cry={npcAction === "cry"}>
+          <img src={npcTheme.characterParts.arm_left} alt="" class="npc-part npc-arm npc-arm-left" class:act-shrug={npcAction === "shrug"} class:act-clap={npcAction === "clap"} style:transform={npcTheme.partOffsets?.arm_left ? `translate(${npcTheme.partOffsets.arm_left.x}px, ${npcTheme.partOffsets.arm_left.y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.arm_left ? `${npcTheme.partOrigins.arm_left.x}% ${npcTheme.partOrigins.arm_left.y}%` : undefined} />
+          <img src={npcTheme.characterParts.arm_right} alt="" class="npc-part npc-arm npc-arm-right" class:act-wave={npcAction === "wave"} class:act-shrug={npcAction === "shrug"} class:act-clap={npcAction === "clap"} class:act-point={npcAction === "point"} style:transform={npcTheme.partOffsets?.arm_right ? `translate(${npcTheme.partOffsets.arm_right.x}px, ${npcTheme.partOffsets.arm_right.y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.arm_right ? `${npcTheme.partOrigins.arm_right.x}% ${npcTheme.partOrigins.arm_right.y}%` : undefined} />
+          <img src={npcTheme.characterParts.body} alt="" class="npc-part npc-body" style:transform={npcTheme.partOffsets?.body ? `translate(${npcTheme.partOffsets.body.x}px, ${npcTheme.partOffsets.body.y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.body ? `${npcTheme.partOrigins.body.x}% ${npcTheme.partOrigins.body.y}%` : undefined} />
           {#if eyesOpen}
-            <img src={npcTheme.characterParts.eyes_open} alt="" class="npc-part npc-eyes" />
+            <img src={npcTheme.characterParts.eyes_open} alt="" class="npc-part npc-eyes" style:transform={npcTheme.partOffsets?.eyes_open ? `translate(${npcTheme.partOffsets.eyes_open.x}px, ${npcTheme.partOffsets.eyes_open.y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.eyes_open ? `${npcTheme.partOrigins.eyes_open.x}% ${npcTheme.partOrigins.eyes_open.y}%` : undefined} />
           {:else}
-            <img src={npcTheme.characterParts.eyes_closed} alt="" class="npc-part npc-eyes" />
+            <img src={npcTheme.characterParts.eyes_closed} alt="" class="npc-part npc-eyes" style:transform={npcTheme.partOffsets?.eyes_closed ? `translate(${npcTheme.partOffsets.eyes_closed.x}px, ${npcTheme.partOffsets.eyes_closed.y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.eyes_closed ? `${npcTheme.partOrigins.eyes_closed.x}% ${npcTheme.partOrigins.eyes_closed.y}%` : undefined} />
           {/if}
           {#if getCharacterFaceLayer(npcTheme, npcDisplayEmotion)}
-            <img src={getCharacterFaceLayer(npcTheme, npcDisplayEmotion)} alt="" class="npc-part npc-face" />
+            <img src={getCharacterFaceLayer(npcTheme, npcDisplayEmotion)} alt="" class="npc-part npc-face" style:transform={npcTheme.partOffsets?.[`face_${npcDisplayEmotion}`] ? `translate(${npcTheme.partOffsets[`face_${npcDisplayEmotion}`].x}px, ${npcTheme.partOffsets[`face_${npcDisplayEmotion}`].y}px)` : undefined} style:transform-origin={npcTheme.partOrigins?.[`face_${npcDisplayEmotion}`] ? `${npcTheme.partOrigins[`face_${npcDisplayEmotion}`].x}% ${npcTheme.partOrigins[`face_${npcDisplayEmotion}`].y}%` : undefined} />
           {/if}
         </div>
       {:else if npcCharSrc}
-        <img src={npcCharSrc} alt={npcTheme.name} class="npc-character-img" />
+        <img src={npcCharSrc} alt={npcTheme.name} class="npc-character-img" class:npc-is-thinking={store.isStreaming} class:act-bow={npcAction === "bow"} class:act-nod={npcAction === "nod"} class:act-laugh={npcAction === "laugh"} class:act-cry={npcAction === "cry"} class:act-wave={npcAction === "wave"} />
       {:else}
-        <div class="npc-character-emoji">{getThemeAvatar(npcTheme, npcEmotion)}</div>
+        <div class="npc-character-emoji" class:npc-is-thinking={store.isStreaming}>{getThemeAvatar(npcTheme, npcEmotion)}</div>
       {/if}
     </div>
   {/if}
@@ -406,10 +453,12 @@
     </div>
   {/if}
 
-  <ChatInput 
+  <ChatInput
     onsend={(content) => handleSend(content, droppedFiles)}
     onabort={handleAbort}
+    onfiles={(files) => { droppedFiles = [...droppedFiles, ...files]; }}
   />
+
 </div>
 
 <!-- Lightbox -->
@@ -439,65 +488,6 @@
     min-height: 0;
     background: var(--color-bg);
     position: relative;
-  }
-
-  .chat-container.drag-over {
-    background: var(--color-surface-hover);
-  }
-
-  /* Drop overlay */
-  .drop-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(99, 102, 241, 0.08);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 100;
-    border: 2px dashed var(--color-primary);
-    border-radius: var(--radius-lg);
-    margin: var(--space-sm);
-    animation: pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { border-color: var(--color-primary); }
-    50% { border-color: var(--color-accent); }
-  }
-
-  .drop-content {
-    text-align: center;
-    color: var(--color-primary);
-  }
-
-  .drop-icon {
-    width: 72px;
-    height: 72px;
-    margin: 0 auto var(--space-lg);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(168, 85, 247, 0.1));
-    border-radius: var(--radius-xl);
-    animation: bounce 0.6s ease infinite alternate;
-  }
-
-  @keyframes bounce {
-    from { transform: translateY(0); }
-    to { transform: translateY(-8px); }
-  }
-
-  .drop-content h3 {
-    margin: 0 0 4px;
-    font-size: 20px;
-    font-weight: 600;
-  }
-
-  .drop-content p {
-    margin: 0;
-    font-size: 14px;
-    opacity: 0.8;
   }
 
   /* Files preview */
@@ -667,6 +657,13 @@
     position: relative;
   }
 
+  .npc-bg-layer {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
   .npc-character-layer {
     position: absolute;
     left: 0;
@@ -748,8 +745,162 @@
     padding-left: 38%;
   }
 
+  /* ====== NPC Action Animations ====== */
+
+  /* Wave: right arm swings up */
+  .npc-arm-right.act-wave {
+    animation: actWave 0.6s ease-in-out 3 !important;
+  }
+  @keyframes actWave {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-35deg); }
+  }
+
+  /* Bow: whole container tilts forward */
+  .npc-parts-container.act-bow,
+  .npc-character-img.act-bow {
+    animation: actBow 1.2s ease-in-out 1 !important;
+  }
+  @keyframes actBow {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    40%, 60% { transform: translateY(10px) rotate(12deg); }
+  }
+
+  /* Nod: vertical head bob */
+  .npc-parts-container.act-nod,
+  .npc-character-img.act-nod {
+    animation: actNod 0.4s ease-in-out 3 !important;
+  }
+  @keyframes actNod {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(8px); }
+  }
+
+  /* Shrug: both arms raise up */
+  .npc-arm.act-shrug {
+    animation: actShrug 1s ease-in-out 1 !important;
+  }
+  @keyframes actShrug {
+    0%, 100% { transform: rotate(0deg) translateY(0); }
+    30%, 70% { transform: rotate(-15deg) translateY(-8px); }
+  }
+
+  /* Clap: arms move inward */
+  .npc-arm-left.act-clap {
+    animation: actClapLeft 0.3s ease-in-out 4 !important;
+  }
+  .npc-arm-right.act-clap {
+    animation: actClapRight 0.3s ease-in-out 4 !important;
+  }
+  @keyframes actClapLeft {
+    0%, 100% { transform: rotate(0deg) translateX(0); }
+    50% { transform: rotate(10deg) translateX(6px); }
+  }
+  @keyframes actClapRight {
+    0%, 100% { transform: rotate(0deg) translateX(0); }
+    50% { transform: rotate(-10deg) translateX(-6px); }
+  }
+
+  /* Point: right arm extends out */
+  .npc-arm-right.act-point {
+    animation: actPoint 1.2s ease-in-out 1 !important;
+  }
+  @keyframes actPoint {
+    0%, 100% { transform: rotate(0deg); }
+    20%, 80% { transform: rotate(-45deg); }
+  }
+
+  /* Laugh: body shakes */
+  .npc-parts-container.act-laugh,
+  .npc-character-img.act-laugh {
+    animation: actLaugh 0.15s ease-in-out 8 !important;
+  }
+  @keyframes actLaugh {
+    0%, 100% { transform: translateX(0) translateY(0); }
+    25% { transform: translateX(-3px) translateY(-2px); }
+    75% { transform: translateX(3px) translateY(-2px); }
+  }
+
+  /* Cry: body trembles subtly */
+  .npc-parts-container.act-cry,
+  .npc-character-img.act-cry {
+    animation: actCry 0.2s ease-in-out 8 !important;
+  }
+  @keyframes actCry {
+    0%, 100% { transform: translateX(0); }
+    50% { transform: translateX(-2px); }
+  }
+
+  /* Wave for non-parts characters */
+  .npc-character-img.act-wave {
+    animation: actImgWave 0.5s ease-in-out 3 !important;
+  }
+  @keyframes actImgWave {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(-8deg); }
+  }
+
   .chat-container.npc-mode .files-preview {
     padding-left: 38%;
+  }
+
+  /* ====== NPC Thinking Indicator ====== */
+
+  .npc-thinking-bubbles {
+    position: absolute;
+    top: 0;
+    left: 55%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    z-index: 10;
+    animation: fadeInUp 0.3s ease-out;
+  }
+
+  .thinking-bubble {
+    display: block;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(6px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 50%;
+    animation: thinkingFloat 1.6s ease-in-out infinite;
+  }
+
+  .thinking-bubble.b1 {
+    width: 28px;
+    height: 28px;
+    animation-delay: 0s;
+  }
+
+  .thinking-bubble.b2 {
+    width: 18px;
+    height: 18px;
+    animation-delay: 0.2s;
+  }
+
+  .thinking-bubble.b3 {
+    width: 10px;
+    height: 10px;
+    animation-delay: 0.4s;
+  }
+
+  @keyframes thinkingFloat {
+    0%, 100% { transform: translateY(0) scale(1); opacity: 0.7; }
+    50% { transform: translateY(-6px) scale(1.1); opacity: 1; }
+  }
+
+  /* Pulsing glow on character while thinking */
+  .npc-parts-container.npc-is-thinking,
+  .npc-character-img.npc-is-thinking,
+  .npc-character-emoji.npc-is-thinking {
+    filter: drop-shadow(0 0 12px rgba(99, 102, 241, 0.4));
+    animation: npcThinkingPulse 2s ease-in-out infinite !important;
+  }
+
+  @keyframes npcThinkingPulse {
+    0%, 100% { filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.2)); transform: translateY(0); }
+    50% { filter: drop-shadow(0 0 18px rgba(99, 102, 241, 0.5)); transform: translateY(-4px); }
   }
 
   .thinking-standalone {
