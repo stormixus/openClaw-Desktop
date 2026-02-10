@@ -339,15 +339,15 @@
   - [x] 연결 상태 표시 (🟢/🔴/🟡)
   - [x] Gateway 설정 저장 (로컬 스토리지)
   - [ ] 탭 재정렬 (드래그앤드롭)
-- [~] 채팅 UI ⚠️ **부분 완료 - UI 렌더링 버그**
+- [x] 채팅 UI ✅
   - [x] 메시지 송수신 (`chat.send`, `chat.history`) - 프로토콜 완료
   - [x] 스트리밍 응답 수신 (agent/chat events) - Store 업데이트 완료
-  - [~] **🔴 버그: UI가 Store 변경을 감지하지 못함** (chatMessages 74개인데 UI 미표시)
-  - [~] **🔴 버그: 입력창 전송 후 초기화 안됨**
+  - [x] ~~**🔴 버그: UI가 Store 변경을 감지하지 못함**~~ → Svelte 5 runes로 수정 완료
+  - [x] ~~**🔴 버그: 입력창 전송 후 초기화 안됨**~~ → 수정 완료
   - [x] 메시지 히스토리
-  - [~] 메시지 중단 (`chat.abort`) - sessionKey 파라미터 누락 버그
+  - [x] 메시지 중단 (`chat.abort`) → sessionKey 파라미터 수정 완료
   - [x] 타이핑 인디케이터 (●●●)
-  - [ ] 어시스턴트 노트 삽입 (`chat.inject`)
+  - [x] 어시스턴트 노트 삽입 (`chat.inject`)
 - [x] **Model Selector (모델 선택기)** ⭐ ✅
   - [x] `models.list` 메서드로 모델 목록 조회
   - [x] 셀렉트 박스 UI (provider별 그룹화)
@@ -366,15 +366,15 @@
   - [x] 세션 목록 UI
   - [x] 세션 전환/새 세션 버튼
   - [x] 세션별 thinking/verbose 배지
-  - [ ] Gateway 연동 (실제 API 통합)
+  - [x] Gateway 연동 (실제 API 통합) ✅
 - [ ] **Status Bar (상태 바)**
   - [ ] 연결 상태
   - [ ] 현재 agent + session + model
   - [ ] 토큰 카운트 (input/output/total)
-- [ ] **Tool Output Cards (툴 출력)**
-  - [ ] 툴 호출 카드 (args + results)
-  - [ ] 확장/축소 토글
-  - [ ] 실시간 스트리밍
+- [x] **Tool Output Cards (툴 출력)** ✅
+  - [x] 툴 호출 카드 (args + results)
+  - [x] 확장/축소 토글
+  - [x] 실시간 스트리밍
 - [x] **Settings Panel (설정 패널)** ✅
   - [x] Thinking level 선택 (None/Low/Medium/High)
   - [x] Verbose 토글
@@ -392,8 +392,8 @@
   - [x] 기타 파일
   - [x] 이미지 미리보기 생성
   - [x] 파일 타입별 아이콘
-  - [ ] Gateway 연동 (파일 전송 API)
-- [ ] 클립보드 이미지 붙여넣기 (Ctrl/Cmd+V)
+  - [x] Gateway 연동 (Base64 → chat.send) ✅
+- [x] 클립보드 이미지 붙여넣기 (Ctrl/Cmd+V) ✅
 - [x] 파일 프리뷰
   - [x] 이미지 인라인 표시
   - [ ] PDF 썸네일
