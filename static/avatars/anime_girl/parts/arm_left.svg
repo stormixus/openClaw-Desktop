@@ -1,11 +1,16 @@
 <svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="sleeveL" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6A58B5"/>
-      <stop offset="100%" stop-color="#352C72"/>
+      <stop offset="0%" stop-color="#7260C8"/>
+      <stop offset="100%" stop-color="#3D3080"/>
     </linearGradient>
   </defs>
-  <path d="M30 92 Q24 101 22 116 Q22 122 27 121 Q29 119 31 109 L35 94 Z" fill="url(#sleeveL)"/>
-  <path d="M22 116 Q24 117 27 116" stroke="#A79DE4" stroke-width="0.6" fill="none"/>
-  <path d="M22 119 Q20 123 22 127 Q24 129 27 127 Q29 123 27 119 Z" fill="#F1CEBE"/>
+  <!-- Sleeve -->
+  <path d="M31 92 Q24 102 21 118 Q21 124 26 123 Q28 121 31 110 L35 95 Z" fill="url(#sleeveL)"/>
+  <!-- Sleeve cuff -->
+  <path d="M21 118 Q23 119 26 118" stroke="#B5A8EE" stroke-width="0.7" fill="none"/>
+  <!-- Hand -->
+  <path d="M21 121 Q19 125 21 129 Q23 131 26 129 Q28 125 26 121 Z" fill="#F5D5C4"/>
+  <!-- Fingers hint -->
+  <path d="M22 127 Q23 129 24.5 128" stroke="#EDCAB8" stroke-width="0.4" fill="none"/>
 </svg>

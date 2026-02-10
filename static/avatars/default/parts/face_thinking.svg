@@ -1,0 +1,12 @@
+<svg viewBox="0 0 120 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Thinking face: eyes looking up-right -->
+  <ellipse cx="47" cy="42" rx="6" ry="6.5" fill="#1a1a2e"/>
+  <ellipse cx="73" cy="42" rx="6" ry="6.5" fill="#1a1a2e"/>
+  <!-- Pupils shifted up-right -->
+  <circle cx="49" cy="39" r="2.5" fill="#6366f1"/>
+  <circle cx="75" cy="39" r="2.5" fill="#6366f1"/>
+  <circle cx="50" cy="38" r="1" fill="white" opacity="0.7"/>
+  <circle cx="76" cy="38" r="1" fill="white" opacity="0.7"/>
+  <!-- Mouth: wavy thinking -->
+  <path d="M52 56 Q56 54 60 56 Q64 58 68 56" fill="none" stroke="#4a5568" stroke-width="2" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,11 @@
+<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Thinking mouth (wavy) -->
+  <path d="M55 80 Q57.5 82 60 80 Q62.5 78 65 80" fill="none" stroke="#8A4762" stroke-width="1.6" stroke-linecap="round"/>
+  <!-- Cheek lines (blush marks) -->
+  <path d="M42 74.5 L40.2 77" stroke="#EB8EA5" stroke-width="1.25" stroke-linecap="round"/>
+  <path d="M45.2 74 L43.4 76.5" stroke="#EB8EA5" stroke-width="1.25" stroke-linecap="round"/>
+  <path d="M78 74.5 L79.8 77" stroke="#EB8EA5" stroke-width="1.25" stroke-linecap="round"/>
+  <path d="M74.8 74 L76.6 76.5" stroke="#EB8EA5" stroke-width="1.25" stroke-linecap="round"/>
+  <!-- Sweat drop -->
+  <path d="M80 55 Q81 59 80 63 Q79 59 80 55 Z" fill="#A0D8F0" opacity="0.45"/>
+</svg>

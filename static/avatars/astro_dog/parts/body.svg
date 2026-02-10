@@ -1,0 +1,32 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="suit" x1="26" y1="58" x2="98" y2="110" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60CCFF"/>
+      <stop offset="1" stop-color="#2C5AFF"/>
+    </linearGradient>
+    <linearGradient id="fur" x1="44" y1="16" x2="86" y2="62" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFDDB2"/>
+      <stop offset="1" stop-color="#EFA768"/>
+    </linearGradient>
+    <radialGradient id="glass" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(50 22) rotate(34) scale(45 33)">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#BEE8FF" stop-opacity="0.1"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="40" cy="38" rx="7" ry="14" fill="#CC8A56" transform="rotate(-26 40 38)"/>
+  <ellipse cx="82" cy="37" rx="9" ry="16" fill="#D39663" transform="rotate(11 82 37)"/>
+
+  <path d="M36 70C36 58 45 51 57 51H71C82 51 90 58 90 69V95C90 102 84 108 77 108H49C42 108 36 102 36 95V70Z" fill="url(#suit)"/>
+  <path d="M52 73H78C79.5 73 81 74.5 81 76V88.5C81 90.5 79.5 92 77.5 92H50.5C48.5 92 47 90.5 47 88.5V78C47 75.2 49.2 73 52 73Z" fill="#14305C" opacity="0.72"/>
+  <ellipse cx="64" cy="81" rx="4" ry="4.3" fill="#7CEBFF"/>
+
+  <ellipse cx="64" cy="43" rx="24" ry="21" fill="url(#fur)"/>
+  <ellipse cx="65" cy="53" rx="12" ry="8" fill="#FFE8CC"/>
+  <ellipse cx="54" cy="42" rx="2.1" ry="2" fill="#BE7541"/>
+  <ellipse cx="73" cy="43" rx="1.8" ry="1.8" fill="#BE7541"/>
+
+  <ellipse cx="64" cy="41" rx="31" ry="28" fill="url(#glass)"/>
+  <ellipse cx="64" cy="41" rx="31" ry="28" stroke="#B0E7FF" stroke-opacity="0.72" stroke-width="2"/>
+  <ellipse cx="50" cy="24" rx="5" ry="9" fill="#FFFFFF" fill-opacity="0.3"/>
+</svg>

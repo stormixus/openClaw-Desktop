@@ -1,6 +1,9 @@
 <svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <path d="M59 56 Q60 58.8 61 56" fill="none" stroke="#D2A58D" stroke-width="1" stroke-linecap="round"/>
-  <path d="M55 65 Q58 66.2 60 66.2 Q62 66.2 65 65" fill="none" stroke="#C07369" stroke-width="1.3" stroke-linecap="round"/>
-  <ellipse cx="40" cy="58" rx="6.2" ry="3.1" fill="#E49AA0" opacity="0.16"/>
-  <ellipse cx="80" cy="58" rx="6.2" ry="3.1" fill="#E49AA0" opacity="0.16"/>
+  <!-- Nose -->
+  <path d="M59.5 57 Q60 59.5 60.5 57" fill="none" stroke="#DDAB95" stroke-width="0.9" stroke-linecap="round"/>
+  <!-- Mouth (small, neutral) -->
+  <path d="M56 66 Q58 67 60 67 Q62 67 64 66" fill="none" stroke="#CC8070" stroke-width="1.2" stroke-linecap="round"/>
+  <!-- Subtle blush -->
+  <ellipse cx="39" cy="58" rx="6" ry="3" fill="#E8A0A8" opacity="0.14"/>
+  <ellipse cx="81" cy="58" rx="6" ry="3" fill="#E8A0A8" opacity="0.14"/>
 </svg>

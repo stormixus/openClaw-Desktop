@@ -1,0 +1,40 @@
+<svg viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#0a0a1a"/>
+      <stop offset="50%" stop-color="#0f1428"/>
+      <stop offset="100%" stop-color="#1a1a3e"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="30%" cy="40%" r="40%">
+      <stop offset="0%" stop-color="rgba(99,102,241,0.15)"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="75%" cy="60%" r="35%">
+      <stop offset="0%" stop-color="rgba(139,92,246,0.1)"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glow1)"/>
+  <rect width="1920" height="1080" fill="url(#glow2)"/>
+  <!-- Grid lines -->
+  <g stroke="rgba(99,102,241,0.06)" stroke-width="1">
+    <line x1="0" y1="200" x2="1920" y2="200"/>
+    <line x1="0" y1="400" x2="1920" y2="400"/>
+    <line x1="0" y1="600" x2="1920" y2="600"/>
+    <line x1="0" y1="800" x2="1920" y2="800"/>
+    <line x1="400" y1="0" x2="400" y2="1080"/>
+    <line x1="800" y1="0" x2="800" y2="1080"/>
+    <line x1="1200" y1="0" x2="1200" y2="1080"/>
+    <line x1="1600" y1="0" x2="1600" y2="1080"/>
+  </g>
+  <!-- Floating panels -->
+  <rect x="100" y="150" width="300" height="180" rx="8" fill="rgba(99,102,241,0.05)" stroke="rgba(99,102,241,0.12)" stroke-width="1"/>
+  <rect x="1500" y="250" width="280" height="160" rx="8" fill="rgba(139,92,246,0.05)" stroke="rgba(139,92,246,0.1)" stroke-width="1"/>
+  <rect x="200" y="700" width="250" height="140" rx="8" fill="rgba(59,130,246,0.04)" stroke="rgba(59,130,246,0.08)" stroke-width="1"/>
+  <!-- Small dots -->
+  <circle cx="960" cy="100" r="2" fill="rgba(99,102,241,0.3)"/>
+  <circle cx="500" cy="500" r="1.5" fill="rgba(139,92,246,0.25)"/>
+  <circle cx="1400" cy="700" r="2" fill="rgba(99,102,241,0.2)"/>
+  <circle cx="800" cy="900" r="1.5" fill="rgba(139,92,246,0.2)"/>
+</svg>

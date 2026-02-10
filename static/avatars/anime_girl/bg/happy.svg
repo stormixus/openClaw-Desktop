@@ -1,0 +1,21 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="sunburst" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#fff7cc" />
+      <stop offset="100%" stop-color="#ffd700" />
+    </radialGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="10" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sunburst)" />
+  <circle cx="200" cy="200" r="50" fill="#ffffff" opacity="0.4" filter="url(#glow)" />
+  <circle cx="1700" cy="300" r="80" fill="#ffffff" opacity="0.3" filter="url(#glow)" />
+  <circle cx="960" cy="540" r="300" fill="#ffeb3b" opacity="0.2" filter="url(#glow)" />
+  <circle cx="100" cy="900" r="60" fill="#ffffff" opacity="0.4" filter="url(#glow)" />
+  <circle cx="1800" cy="800" r="40" fill="#ffffff" opacity="0.5" filter="url(#glow)" />
+</svg>

@@ -1,0 +1,18 @@
+<svg viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#090F2A"/>
+      <stop offset="100%" stop-color="#132252"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#g)"/>
+  <circle cx="1500" cy="180" r="120" fill="#8BCBFF" fill-opacity="0.16"/>
+  <circle cx="360" cy="820" r="180" fill="#5A74FF" fill-opacity="0.12"/>
+  <g fill="#FFFFFF" fill-opacity="0.45">
+    <circle cx="210" cy="120" r="2"/><circle cx="480" cy="200" r="1.5"/><circle cx="760" cy="90" r="2"/><circle cx="980" cy="230" r="1.5"/>
+    <circle cx="1240" cy="120" r="2"/><circle cx="1520" cy="260" r="1.5"/><circle cx="1740" cy="140" r="2"/><circle cx="350" cy="460" r="1.5"/>
+    <circle cx="640" cy="390" r="2"/><circle cx="890" cy="520" r="1.5"/><circle cx="1120" cy="430" r="2"/><circle cx="1450" cy="510" r="1.5"/>
+    <circle cx="1700" cy="390" r="2"/><circle cx="250" cy="760" r="1.5"/><circle cx="520" cy="680" r="2"/><circle cx="980" cy="760" r="1.5"/>
+    <circle cx="1260" cy="830" r="2"/><circle cx="1580" cy="700" r="1.5"/><circle cx="1760" cy="860" r="2"/>
+  </g>
+</svg>

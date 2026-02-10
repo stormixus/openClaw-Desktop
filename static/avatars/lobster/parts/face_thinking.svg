@@ -1,0 +1,12 @@
+<svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Thinking face: eyes looking up -->
+  <circle cx="45" cy="35" r="6" fill="#0a0a1a"/>
+  <circle cx="75" cy="35" r="6" fill="#0a0a1a"/>
+  <!-- Pupils shifted up -->
+  <circle cx="46" cy="32" r="2" fill="#00FFFF"/>
+  <circle cx="76" cy="32" r="2" fill="#00FFFF"/>
+  <!-- Thinking dots -->
+  <circle cx="55" cy="52" r="1.2" fill="#0a0a1a" opacity="0.5"/>
+  <circle cx="60" cy="52" r="1.2" fill="#0a0a1a" opacity="0.5"/>
+  <circle cx="65" cy="52" r="1.2" fill="#0a0a1a" opacity="0.5"/>
+</svg>

@@ -1,89 +1,130 @@
 <svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="hairBack" x1="18%" y1="0%" x2="74%" y2="100%">
-      <stop offset="0%" stop-color="#FFB2DA"/>
-      <stop offset="45%" stop-color="#EC86BF"/>
-      <stop offset="100%" stop-color="#C85D9E"/>
+      <stop offset="0%" stop-color="#FFB8E0"/>
+      <stop offset="40%" stop-color="#F08CC2"/>
+      <stop offset="100%" stop-color="#D465A8"/>
     </linearGradient>
     <linearGradient id="hairFront" x1="26%" y1="0%" x2="74%" y2="100%">
-      <stop offset="0%" stop-color="#FFC1E3"/>
-      <stop offset="52%" stop-color="#F090C7"/>
-      <stop offset="100%" stop-color="#CC67A8"/>
+      <stop offset="0%" stop-color="#FFCCE8"/>
+      <stop offset="48%" stop-color="#F59FCC"/>
+      <stop offset="100%" stop-color="#DA6DB0"/>
+    </linearGradient>
+    <linearGradient id="hairShine" x1="40%" y1="0%" x2="60%" y2="100%">
+      <stop offset="0%" stop-color="#FFE8F5" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#FFE8F5" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="skin" x1="40%" y1="0%" x2="60%" y2="100%">
-      <stop offset="0%" stop-color="#FAE8DC"/>
-      <stop offset="100%" stop-color="#F1CEBE"/>
+      <stop offset="0%" stop-color="#FFF0E6"/>
+      <stop offset="100%" stop-color="#F5D5C4"/>
+    </linearGradient>
+    <linearGradient id="skinShadow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#EDCAB8"/>
+      <stop offset="100%" stop-color="#E4B8A4"/>
     </linearGradient>
     <linearGradient id="uniform" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#6A58B5"/>
-      <stop offset="50%" stop-color="#4F4196"/>
-      <stop offset="100%" stop-color="#352C72"/>
+      <stop offset="0%" stop-color="#7260C8"/>
+      <stop offset="50%" stop-color="#5547A5"/>
+      <stop offset="100%" stop-color="#3D3080"/>
     </linearGradient>
-    <linearGradient id="uniformShadow" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#413682"/>
-      <stop offset="100%" stop-color="#2C245F"/>
+    <linearGradient id="uniformShadow" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#453894"/>
+      <stop offset="100%" stop-color="#2E2568"/>
     </linearGradient>
     <linearGradient id="trim" x1="0%" y1="0%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#A99DE8"/>
-      <stop offset="50%" stop-color="#E8E1FF"/>
-      <stop offset="100%" stop-color="#A99DE8"/>
+      <stop offset="0%" stop-color="#B5A8EE"/>
+      <stop offset="50%" stop-color="#EDE6FF"/>
+      <stop offset="100%" stop-color="#B5A8EE"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F06AAE"/>
+      <stop offset="100%" stop-color="#C24488"/>
     </linearGradient>
   </defs>
 
-  <!-- Hair back -->
-  <path d="M20 42 Q14 72 12 112 Q12 143 24 154 Q28 157 34 153 L39 50 Z" fill="url(#hairBack)"/>
-  <path d="M100 42 Q106 72 108 112 Q108 143 96 154 Q92 157 86 153 L81 50 Z" fill="url(#hairBack)"/>
-  <path d="M28 54 Q24 82 22 132" stroke="#B7639C" stroke-width="0.8" opacity="0.45" fill="none"/>
-  <path d="M92 54 Q96 82 98 132" stroke="#B7639C" stroke-width="0.8" opacity="0.45" fill="none"/>
+  <!-- Hair back (long flowing) -->
+  <path d="M18 42 Q12 75 10 118 Q10 146 22 156 Q27 159 32 155 L38 52 Z" fill="url(#hairBack)"/>
+  <path d="M102 42 Q108 75 110 118 Q110 146 98 156 Q93 159 88 155 L82 52 Z" fill="url(#hairBack)"/>
+  <!-- Hair back strand lines -->
+  <path d="M26 58 Q22 90 19 138" stroke="#C85DA3" stroke-width="0.6" opacity="0.35" fill="none"/>
+  <path d="M30 62 Q26 94 24 134" stroke="#C85DA3" stroke-width="0.5" opacity="0.25" fill="none"/>
+  <path d="M94 58 Q98 90 101 138" stroke="#C85DA3" stroke-width="0.6" opacity="0.35" fill="none"/>
+  <path d="M90 62 Q94 94 96 134" stroke="#C85DA3" stroke-width="0.5" opacity="0.25" fill="none"/>
+  <!-- Hair back highlights -->
+  <path d="M22 60 Q18 85 16 125" stroke="#FFD6EF" stroke-width="1.2" opacity="0.2" fill="none"/>
+  <path d="M98 60 Q102 85 104 125" stroke="#FFD6EF" stroke-width="1.2" opacity="0.2" fill="none"/>
 
-  <!-- Uniform -->
-  <path d="M33 88 Q28 99 26 138 Q26 151 40 155 L80 155 Q94 151 94 138 Q92 99 87 88 Z" fill="url(#uniform)"/>
-  <path d="M33 88 Q28 99 27 130" stroke="#2A235D" stroke-width="1" opacity="0.45" fill="none"/>
-  <path d="M87 88 Q92 99 93 130" stroke="#2A235D" stroke-width="1" opacity="0.45" fill="none"/>
-  <path d="M48 112 L72 112 L70 154 L50 154 Z" fill="url(#uniformShadow)" opacity="0.28"/>
+  <!-- Uniform body -->
+  <path d="M34 88 Q28 100 26 140 Q26 153 40 156 L80 156 Q94 153 94 140 Q92 100 86 88 Z" fill="url(#uniform)"/>
+  <!-- Uniform shadow/fold lines -->
+  <path d="M34 90 Q29 102 28 135" stroke="#2E2470" stroke-width="0.8" opacity="0.4" fill="none"/>
+  <path d="M86 90 Q91 102 92 135" stroke="#2E2470" stroke-width="0.8" opacity="0.4" fill="none"/>
+  <path d="M50 114 L70 114 L68 155 L52 155 Z" fill="url(#uniformShadow)" opacity="0.2"/>
+  <!-- Uniform pleat details -->
+  <path d="M42 130 L44 156" stroke="#2E2470" stroke-width="0.5" opacity="0.3" fill="none"/>
+  <path d="M56 128 L56 156" stroke="#2E2470" stroke-width="0.4" opacity="0.25" fill="none"/>
+  <path d="M64 128 L64 156" stroke="#2E2470" stroke-width="0.4" opacity="0.25" fill="none"/>
+  <path d="M78 130 L76 156" stroke="#2E2470" stroke-width="0.5" opacity="0.3" fill="none"/>
 
   <!-- Lapels -->
-  <path d="M44 88 L53 109 L60 88" fill="none" stroke="url(#trim)" stroke-width="1.5"/>
-  <path d="M76 88 L67 109 L60 88" fill="none" stroke="url(#trim)" stroke-width="1.5"/>
-  <path d="M43 88 Q50 85 60 84 Q70 85 77 88" fill="none" stroke="url(#trim)" stroke-width="1"/>
-  <line x1="38" y1="118" x2="50" y2="118" stroke="#8E80D7" stroke-width="0.8" opacity="0.55"/>
-  <line x1="70" y1="118" x2="82" y2="118" stroke="#8E80D7" stroke-width="0.8" opacity="0.55"/>
+  <path d="M44 88 L54 110 L60 88" fill="none" stroke="url(#trim)" stroke-width="1.6"/>
+  <path d="M76 88 L66 110 L60 88" fill="none" stroke="url(#trim)" stroke-width="1.6"/>
+  <path d="M43 88 Q50 84 60 83 Q70 84 77 88" fill="none" stroke="url(#trim)" stroke-width="1.1"/>
 
-  <!-- Shirt + ribbon -->
-  <path d="M48 86 L55 100 L60 87" fill="#FFFFFF" stroke="#E2E5F2" stroke-width="0.6"/>
-  <path d="M72 86 L65 100 L60 87" fill="#FFFFFF" stroke="#E2E5F2" stroke-width="0.6"/>
-  <path d="M55 100 L60 87 L65 100 L62.4 112 L57.6 112 Z" fill="#F7F9FD"/>
-  <path d="M54 94 Q50 88 47 92 Q49 97 55 97 Z" fill="#D85A9A"/>
-  <path d="M66 94 Q70 88 73 92 Q71 97 65 97 Z" fill="#D85A9A"/>
-  <ellipse cx="60" cy="95" rx="2.6" ry="2.2" fill="#BF4585"/>
-  <path d="M58.9 97.2 L58.1 110" stroke="#BF4585" stroke-width="1.3" stroke-linecap="round"/>
-  <path d="M61.1 97.2 L61.9 110" stroke="#BF4585" stroke-width="1.3" stroke-linecap="round"/>
+  <!-- Shirt collar visible -->
+  <path d="M48 86 L55 101 L60 87" fill="#FFFFFF" stroke="#E5E8F0" stroke-width="0.5"/>
+  <path d="M72 86 L65 101 L60 87" fill="#FFFFFF" stroke="#E5E8F0" stroke-width="0.5"/>
+  <path d="M55 101 L60 87 L65 101 L62.5 113 L57.5 113 Z" fill="#F9FBFF"/>
 
-  <!-- Neck + face -->
+  <!-- Ribbon bow -->
+  <path d="M53 94 Q49 87 45.5 91 Q47 97 54 97.5 Z" fill="url(#ribbon)"/>
+  <path d="M67 94 Q71 87 74.5 91 Q73 97 66 97.5 Z" fill="url(#ribbon)"/>
+  <path d="M53 94 Q49.5 88 46.5 91.5" stroke="#FFB8D9" stroke-width="0.4" opacity="0.5" fill="none"/>
+  <path d="M67 94 Q70.5 88 73.5 91.5" stroke="#FFB8D9" stroke-width="0.4" opacity="0.5" fill="none"/>
+  <ellipse cx="60" cy="95.5" rx="3" ry="2.5" fill="#D14A8C"/>
+  <ellipse cx="59.2" cy="94.8" rx="1" ry="0.7" fill="#E87BB5" opacity="0.5"/>
+  <path d="M58.8 97.8 L58 111" stroke="#C24488" stroke-width="1.4" stroke-linecap="round"/>
+  <path d="M61.2 97.8 L62 111" stroke="#C24488" stroke-width="1.4" stroke-linecap="round"/>
+
+  <!-- Neck -->
   <rect x="52" y="76" width="16" height="14" rx="6" fill="url(#skin)"/>
-  <ellipse cx="60" cy="45" rx="28" ry="33" fill="url(#skin)"/>
-  <path d="M36 51 Q40 72 60 78 Q80 72 84 51" fill="url(#skin)"/>
-  <ellipse cx="60" cy="86" rx="8" ry="2" fill="#E8C1AD" opacity="0.4"/>
+  <ellipse cx="60" cy="86" rx="8" ry="2" fill="#EDCAB8" opacity="0.35"/>
 
-  <!-- Front hair -->
-  <path d="M32 44 Q29 20 44 10 Q52 4 60 6 Q68 4 76 10 Q91 20 88 44 Q86 30 78 24 Q70 18 60 21 Q50 18 42 24 Q34 30 32 44 Z" fill="url(#hairFront)"/>
-  <path d="M35 42 Q40 26 47 27 Q45 36 41 45 Z" fill="url(#hairFront)"/>
-  <path d="M43 37 Q48 21 54 24 Q51 32 47 41 Z" fill="url(#hairFront)"/>
-  <path d="M52 33 Q56 20 62 23 Q59 31 55 39 Z" fill="url(#hairFront)"/>
-  <path d="M60 33 Q64 20 70 25 Q67 33 63 41 Z" fill="url(#hairFront)"/>
-  <path d="M68 36 Q72 24 78 28 Q75 36 71 43 Z" fill="url(#hairFront)"/>
-  <path d="M75 40 Q79 30 84 35 Q82 40 78 46 Z" fill="url(#hairFront)"/>
+  <!-- Face/head -->
+  <ellipse cx="60" cy="44" rx="27" ry="32" fill="url(#skin)"/>
+  <!-- Jaw line (soft anime shape) -->
+  <path d="M36 50 Q40 72 60 78 Q80 72 84 50" fill="url(#skin)"/>
+  <!-- Face shadow under hair -->
+  <path d="M38 38 Q44 36 60 36 Q76 36 82 38 L82 42 Q76 40 60 40 Q44 40 38 42 Z" fill="url(#skinShadow)" opacity="0.3"/>
 
-  <path d="M33 45 Q25 56 22 72 Q25 71 35 57 Z" fill="url(#hairFront)"/>
-  <path d="M87 45 Q95 56 98 72 Q95 71 85 57 Z" fill="url(#hairFront)"/>
+  <!-- Front hair - main volume -->
+  <path d="M33 44 Q30 18 45 8 Q53 2 60 4 Q67 2 75 8 Q90 18 87 44 Q85 28 77 22 Q69 16 60 19 Q51 16 43 22 Q35 28 33 44 Z" fill="url(#hairFront)"/>
+  <!-- Front bangs strands (separated for anime look) -->
+  <path d="M36 42 Q40 24 47 25 Q45 35 41 46 Z" fill="url(#hairFront)"/>
+  <path d="M43 37 Q48 19 55 22 Q52 31 47 42 Z" fill="url(#hairFront)"/>
+  <path d="M52 33 Q57 17 63 21 Q60 30 56 40 Z" fill="url(#hairFront)"/>
+  <path d="M61 33 Q65 18 71 23 Q68 32 64 41 Z" fill="url(#hairFront)"/>
+  <path d="M69 36 Q73 22 79 27 Q76 35 72 44 Z" fill="url(#hairFront)"/>
+  <path d="M76 40 Q80 28 85 34 Q83 40 79 47 Z" fill="url(#hairFront)"/>
 
-  <!-- Hair detail -->
-  <path d="M40 30 Q44 38 42 48" stroke="#BC75A7" stroke-width="0.6" opacity="0.3" fill="none"/>
-  <path d="M54 24 Q56 34 54 42" stroke="#BC75A7" stroke-width="0.6" opacity="0.3" fill="none"/>
-  <path d="M66 24 Q64 34 66 42" stroke="#BC75A7" stroke-width="0.6" opacity="0.3" fill="none"/>
-  <path d="M44 14 Q48 10 53 14" stroke="#FFE2F1" stroke-width="1.5" opacity="0.34" fill="none" stroke-linecap="round"/>
-  <path d="M62 12 Q66 8 71 12" stroke="#FFE2F1" stroke-width="1.5" opacity="0.34" fill="none" stroke-linecap="round"/>
+  <!-- Side hair locks -->
+  <path d="M34 46 Q26 58 22 74 Q25 73 35 58 Z" fill="url(#hairFront)"/>
+  <path d="M86 46 Q94 58 98 74 Q95 73 85 58 Z" fill="url(#hairFront)"/>
 
-  <ellipse cx="33" cy="50" rx="3" ry="5" fill="url(#skin)"/>
-  <ellipse cx="87" cy="50" rx="3" ry="5" fill="url(#skin)"/>
+  <!-- Hair shine highlights -->
+  <path d="M44 12 Q49 7 54 12" stroke="#FFE8F5" stroke-width="2" opacity="0.4" fill="none" stroke-linecap="round"/>
+  <path d="M62 10 Q67 5 72 10" stroke="#FFE8F5" stroke-width="2" opacity="0.4" fill="none" stroke-linecap="round"/>
+  <path d="M40 28 Q44 36 42 48" stroke="#FFD6EF" stroke-width="0.7" opacity="0.35" fill="none"/>
+  <path d="M54 22 Q56 32 54 42" stroke="#FFD6EF" stroke-width="0.7" opacity="0.35" fill="none"/>
+  <path d="M66 22 Q64 32 66 42" stroke="#FFD6EF" stroke-width="0.7" opacity="0.35" fill="none"/>
+  <path d="M78 30 Q76 38 78 46" stroke="#FFD6EF" stroke-width="0.6" opacity="0.3" fill="none"/>
+
+  <!-- Ahoge (antenna hair) -->
+  <path d="M58 4 Q55 -4 62 -2 Q65 0 60 4" fill="url(#hairFront)" stroke="#F59FCC" stroke-width="0.4"/>
+
+  <!-- Ears (behind hair) -->
+  <ellipse cx="34" cy="50" rx="3" ry="5" fill="url(#skin)"/>
+  <ellipse cx="86" cy="50" rx="3" ry="5" fill="url(#skin)"/>
+  <ellipse cx="34" cy="50" rx="1.5" ry="3" fill="#F5D5C4" opacity="0.5"/>
+  <ellipse cx="86" cy="50" rx="1.5" ry="3" fill="#F5D5C4" opacity="0.5"/>
 </svg>

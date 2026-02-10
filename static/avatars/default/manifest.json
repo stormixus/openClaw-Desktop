@@ -5,7 +5,20 @@
   "author": "openClaw",
   "version": "1.0.0",
   "avatar": "🤖",
+  "avatarEmojis": {
+    "default": "🤖"
+  },
   "background": "default",
+  "backgroundImage": "bg.svg",
+  "backgrounds": {
+    "default": "bg/default.svg",
+    "happy": "bg/happy.svg",
+    "angry": "bg/angry.svg",
+    "sad": "bg/sad.svg",
+    "excited": "bg/excited.svg",
+    "thinking": "bg/thinking.svg",
+    "surprised": "bg/surprised.svg"
+  },
   "viewBox": "0 0 120 140",
   "parts": {
     "body": {

@@ -1,0 +1,16 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="volcano" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4a0404" />
+      <stop offset="100%" stop-color="#ff4500" />
+    </linearGradient>
+    <filter id="heat">
+      <feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="2" result="turbulence"/>
+      <feDisplacementMap in2="turbulence" in="SourceGraphic" scale="20" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#volcano)" />
+  <path d="M0 1080 L400 900 L800 1080 L1200 850 L1600 1080 L1920 950 V1080 H0 Z" fill="#220000" opacity="0.7" />
+  <circle cx="960" cy="1200" r="800" fill="#ff6347" opacity="0.3" filter="url(#heat)" />
+  <rect width="1920" height="1080" fill="#ff0000" opacity="0.1" style="mix-blend-mode: overlay;" />
+</svg>
