@@ -140,7 +140,7 @@
         ondragover={(e) => handleDragOver(e, gateway.id)}
         ondragleave={handleDragLeave}
         ondrop={(e) => handleDrop(e, gateway.id)}
-        title={`${gateway.name}\nDouble-click to ${state?.status === "connected" ? "disconnect" : "connect"}\nDrag message here to forward`}
+        title={`${gateway.name}\n${$t(state?.status === "connected" ? "gateway.disconnect" : "gateway.connect")}\n${$t("gateway.tab.drag_hint")}`}
       >
         <span class="status-dot" style="background: {getStatusColor(state?.status)}"></span>
         <span class="name">{gateway.name}</span>
@@ -148,7 +148,7 @@
     {/each}
     
     <div class="add-wrapper">
-      <button class="add-tab" onclick={handleAddClick} title="Add Gateway">
+      <button class="add-tab" onclick={handleAddClick} title={$t("gateway.add")}>
         <Plus size={14} strokeWidth={2} />
       </button>
 
@@ -176,7 +176,7 @@
       {/if}
     </div>
 
-    <button class="refresh-btn" onclick={handleRefresh} title="Refresh connection">
+    <button class="refresh-btn" onclick={handleRefresh} title={$t("gateway.refresh")}>
       <RefreshCw size={13} strokeWidth={2} />
     </button>
 
@@ -184,7 +184,7 @@
       class="mode-toggle-btn" 
       class:npc-active={store.chatMode === 'npc'}
       onclick={toggleChatMode} 
-      title={store.chatMode === 'npc' ? 'Switch to Chat' : 'Switch to NPC Mode'}
+      title={$t(store.chatMode === 'npc' ? "gateway.switch_chat" : "gateway.switch_npc")}
     >
       {#if store.chatMode === 'npc'}
         <MessageSquare size={13} strokeWidth={2} />

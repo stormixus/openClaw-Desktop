@@ -216,18 +216,16 @@
   });
 
   // Thinking indicator phrases
-  const THINKING_PHRASES = [
-    "Thinking...", "Pondering...", "Hmm...", "Let me think...",
-    "Processing...", "Considering...", "Working on it...",
-    "생각 중...", "고민 중...", "분석 중...", "음...",
-    "잠시만요...", "생각하는 중...",
+  const THINKING_KEYS = [
+    "chat.thinking", "chat.pondering", "chat.hmm", "chat.let_me_think",
+    "chat.processing", "chat.considering", "chat.working_on_it"
   ];
   let thinkingPhraseIdx = $state(0);
   $effect(() => {
     if (!store.isStreaming || store.streamingContent) return;
-    thinkingPhraseIdx = Math.floor(Math.random() * THINKING_PHRASES.length);
+    thinkingPhraseIdx = Math.floor(Math.random() * THINKING_KEYS.length);
     const interval = setInterval(() => {
-      thinkingPhraseIdx = (thinkingPhraseIdx + 1) % THINKING_PHRASES.length;
+      thinkingPhraseIdx = (thinkingPhraseIdx + 1) % THINKING_KEYS.length;
     }, 2500);
     return () => clearInterval(interval);
   });
@@ -420,7 +418,7 @@
         <div class="message-group assistant">
           <div class="thinking-standalone">
             <span class="thinking-dot"></span>
-            <span class="thinking-text">{THINKING_PHRASES[thinkingPhraseIdx]}</span>
+            <span class="thinking-text">{$t(THINKING_KEYS[thinkingPhraseIdx])}</span>
           </div>
         </div>
       {/if}

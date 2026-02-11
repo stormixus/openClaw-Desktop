@@ -1,5 +1,7 @@
 import { browser } from "$app/environment";
 import { writable } from "svelte/store";
+import { db } from "$lib/db";
+import type { SettingsRow } from "$lib/db";
 
 export type ApiKeys = {
   openai: string;
@@ -19,8 +21,6 @@ export type SettingsState = {
   apiKeys: ApiKeys;
 };
 
-const STORAGE_KEY = "openclaw.settings";
-
 const DEFAULTS: SettingsState = {
   autoUpdate: true,
   launchOnStartup: false,
@@ -39,27 +39,44 @@ const DEFAULTS: SettingsState = {
 
 export const settings = writable<SettingsState>({ ...DEFAULTS });
 
-export function initSettings() {
+export async function initSettings() {
   if (!browser) return;
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return;
   try {
-    const parsed = JSON.parse(raw) as Partial<SettingsState>;
+    const row = await db.settings.get();
+    let apiKeys: ApiKeys = { ...DEFAULTS.apiKeys };
+    try {
+      const parsed = JSON.parse(row.apiKeys);
+      apiKeys = { ...DEFAULTS.apiKeys, ...parsed };
+    } catch {
+      // keep defaults
+    }
     settings.set({
-      ...DEFAULTS,
-      ...parsed,
+      autoUpdate: row.autoUpdate,
+      launchOnStartup: row.launchOnStartup,
+      minimizeToTray: row.minimizeToTray,
+      apiKeys,
     });
   } catch {
     settings.set({ ...DEFAULTS });
   }
 }
 
-export function updateSettings(patch: Partial<SettingsState>) {
+export async function updateSettings(patch: Partial<SettingsState>) {
   settings.update((current) => {
     const next = { ...current, ...patch };
     if (browser) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const row: SettingsRow = {
+        autoUpdate: next.autoUpdate,
+        launchOnStartup: next.launchOnStartup,
+        minimizeToTray: next.minimizeToTray,
+        apiKeys: JSON.stringify(next.apiKeys),
+      };
+      db.settings.save(row).catch((e) => {
+        console.error("Failed to save settings to DB:", e);
+      });
     }
     return next;
   });
 }
+
+export const saveSettings = updateSettings;

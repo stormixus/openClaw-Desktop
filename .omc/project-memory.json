@@ -1,0 +1,460 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1770783543970,
+  "projectRoot": "/Volumes/MacExt/Projects/openClaw-Desktop",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "@sveltejs/kit",
+        "version": "2.9.0",
+        "category": "fullstack"
+      },
+      {
+        "name": "svelte",
+        "version": "5.0.0",
+        "category": "frontend"
+      },
+      {
+        "name": "vite",
+        "version": "6.0.3",
+        "category": "build"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": null,
+    "lintCommand": null,
+    "devCommand": "npm run dev",
+    "scripts": {
+      "dev": "vite dev",
+      "build": "vite build",
+      "preview": "vite preview",
+      "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+      "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
+      "tauri": "tauri"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "src",
+      "static"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "build": {
+      "path": "build",
+      "purpose": "Build output",
+      "fileCount": 6,
+      "lastAccessed": 1770783543960,
+      "keyFiles": [
+        "favicon.png",
+        "index.html",
+        "svelte.svg",
+        "tauri.svg",
+        "vite.svg"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1770783543960,
+      "keyFiles": [
+        "app.html"
+      ]
+    },
+    "src-tauri": {
+      "path": "src-tauri",
+      "purpose": null,
+      "fileCount": 6,
+      "lastAccessed": 1770783543960,
+      "keyFiles": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "build.rs",
+        "tauri.conf.json"
+      ]
+    },
+    "static": {
+      "path": "static",
+      "purpose": "Static files",
+      "fileCount": 5,
+      "lastAccessed": 1770783543960,
+      "keyFiles": [
+        "favicon.png",
+        "svelte.svg",
+        "tauri.svg",
+        "vite.svg"
+      ]
+    },
+    "src/lib": {
+      "path": "src/lib",
+      "purpose": "Library code",
+      "fileCount": 6,
+      "lastAccessed": 1770783543961,
+      "keyFiles": [
+        "db.ts",
+        "i18n.ts",
+        "migration.ts"
+      ]
+    },
+    "src/routes": {
+      "path": "src/routes",
+      "purpose": "Route handlers",
+      "fileCount": 3,
+      "lastAccessed": 1770783543961,
+      "keyFiles": [
+        "+layout.svelte",
+        "+layout.ts",
+        "+page.svelte"
+      ]
+    },
+    "src-tauri/src": {
+      "path": "src-tauri/src",
+      "purpose": "Source code",
+      "fileCount": 2,
+      "lastAccessed": 1770783543961,
+      "keyFiles": [
+        "lib.rs",
+        "main.rs"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src-tauri/src/document/commands.rs",
+      "accessCount": 57,
+      "lastAccessed": 1770803946841,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/gateway/store.svelte.ts",
+      "accessCount": 27,
+      "lastAccessed": 1770803664389,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/excel.rs",
+      "accessCount": 25,
+      "lastAccessed": 1770802794130,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/stores/document.svelte.ts",
+      "accessCount": 23,
+      "lastAccessed": 1770803702393,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "accessCount": 22,
+      "lastAccessed": 1770803701800,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/manager.rs",
+      "accessCount": 19,
+      "lastAccessed": 1770802771450,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/types.rs",
+      "accessCount": 19,
+      "lastAccessed": 1770803740731,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/patch.rs",
+      "accessCount": 16,
+      "lastAccessed": 1770802814696,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "accessCount": 15,
+      "lastAccessed": 1770803798581,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/DocPreview.svelte",
+      "accessCount": 14,
+      "lastAccessed": 1770803781520,
+      "type": "file"
+    },
+    {
+      "path": "task.md",
+      "accessCount": 13,
+      "lastAccessed": 1770791400192,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/ExcelGrid.svelte",
+      "accessCount": 13,
+      "lastAccessed": 1770803797710,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/ChatInput.svelte",
+      "accessCount": 12,
+      "lastAccessed": 1770791314664,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/ApiKeysPanel.svelte",
+      "accessCount": 11,
+      "lastAccessed": 1770791282816,
+      "type": "file"
+    },
+    {
+      "path": "src/routes/+layout.svelte",
+      "accessCount": 11,
+      "lastAccessed": 1770802031855,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Forge/WordEditor.svelte",
+      "accessCount": 10,
+      "lastAccessed": 1770800530728,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/ApprovalModal.svelte",
+      "accessCount": 10,
+      "lastAccessed": 1770800531294,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/mod.rs",
+      "accessCount": 10,
+      "lastAccessed": 1770803272217,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/gateway/client.ts",
+      "accessCount": 10,
+      "lastAccessed": 1770803733805,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/DiffViewer.svelte",
+      "accessCount": 9,
+      "lastAccessed": 1770787139192,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/FileDownload.svelte",
+      "accessCount": 9,
+      "lastAccessed": 1770791061204,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/FileUpload/PdfThumbnail.svelte",
+      "accessCount": 9,
+      "lastAccessed": 1770791283961,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/StatusBar/StatusBar.svelte",
+      "accessCount": 9,
+      "lastAccessed": 1770791286935,
+      "type": "file"
+    },
+    {
+      "path": "package.json",
+      "accessCount": 9,
+      "lastAccessed": 1770803653531,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/pdf.rs",
+      "accessCount": 9,
+      "lastAccessed": 1770803938192,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Gateway/GatewayTabs.svelte",
+      "accessCount": 8,
+      "lastAccessed": 1770790776856,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/SettingsPanel.svelte",
+      "accessCount": 8,
+      "lastAccessed": 1770791067237,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/MessageBubble.svelte",
+      "accessCount": 8,
+      "lastAccessed": 1770803692596,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Forge/HistoryTimeline.svelte",
+      "accessCount": 7,
+      "lastAccessed": 1770800531111,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Forge/PptxViewer.svelte",
+      "accessCount": 6,
+      "lastAccessed": 1770790783817,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/db.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770791168426,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/error.rs",
+      "accessCount": 6,
+      "lastAccessed": 1770803919026,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/lang/en/index.ts",
+      "accessCount": 5,
+      "lastAccessed": 1770790659034,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/settings.ts",
+      "accessCount": 5,
+      "lastAccessed": 1770791152275,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/ChatPanel.svelte",
+      "accessCount": 5,
+      "lastAccessed": 1770802794343,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/gateways.rs",
+      "accessCount": 4,
+      "lastAccessed": 1770787391932,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/schema.rs",
+      "accessCount": 4,
+      "lastAccessed": 1770790937237,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/index.ts",
+      "accessCount": 4,
+      "lastAccessed": 1770800557131,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/gateway/types.ts",
+      "accessCount": 3,
+      "lastAccessed": 1770787419160,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/mod.rs",
+      "accessCount": 3,
+      "lastAccessed": 1770790917742,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document",
+      "accessCount": 3,
+      "lastAccessed": 1770801788676,
+      "type": "directory"
+    },
+    {
+      "path": "src-tauri/src/document/mod.rs",
+      "accessCount": 3,
+      "lastAccessed": 1770802794258,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "accessCount": 3,
+      "lastAccessed": 1770803692399,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/models.rs",
+      "accessCount": 2,
+      "lastAccessed": 1770787379782,
+      "type": "file"
+    },
+    {
+      "path": "src",
+      "accessCount": 2,
+      "lastAccessed": 1770790536454,
+      "type": "directory"
+    },
+    {
+      "path": "src/routes/chat/+page.svelte",
+      "accessCount": 2,
+      "lastAccessed": 1770802031823,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat/SessionManager.svelte",
+      "accessCount": 1,
+      "lastAccessed": 1770784303716,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/stores",
+      "accessCount": 1,
+      "lastAccessed": 1770786005024,
+      "type": "directory"
+    },
+    {
+      "path": "spec-remaining.md",
+      "accessCount": 1,
+      "lastAccessed": 1770787259429,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/migration.rs",
+      "accessCount": 1,
+      "lastAccessed": 1770787345352,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

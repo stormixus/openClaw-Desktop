@@ -22,10 +22,14 @@
     Bell,
     BellOff,
     Palette,
+    X,
+    FileText,
+    Image as ImageIcon
   } from "@lucide/svelte";
+  import PdfThumbnail from "$lib/components/FileUpload/PdfThumbnail.svelte";
 
   interface Props {
-    onsend?: (content: string) => void;
+    onsend?: (content: string, files?: File[]) => void;
     onabort?: () => void;
     onfiles?: (files: File[]) => void;
   }
@@ -39,6 +43,7 @@
   let showModelSelector = $state(false);
   let showSessionManager = $state(false);
   let showThemeSelector = $state(false);
+  let attachedFiles = $state<File[]>([]);
 
   // Input history (like shell command history)
   const HISTORY_KEY = "openclaw.inputHistory";
@@ -128,13 +133,19 @@
     }
 
     const message = inputValue.trim();
-    if (!message) return;
+    if (!message && attachedFiles.length === 0) return;
 
-    addToHistory(message);
+    if (message) {
+      addToHistory(message);
+    }
 
     inputValue = "";
+    const filesToSend = [...attachedFiles];
+    attachedFiles = []; // Clear attachments
     adjustHeight();
-    onsend?.(message);
+
+    onsend?.(message, filesToSend);
+
     // Re-focus textarea after sending
     requestAnimationFrame(() => textareaEl?.focus());
   }
@@ -226,7 +237,9 @@
   function handleFileSelect(e: Event) {
     const target = e.target as HTMLInputElement;
     if (target.files && target.files.length > 0) {
-      onfiles?.(Array.from(target.files));
+      const newFiles = Array.from(target.files);
+      attachedFiles = [...attachedFiles, ...newFiles];
+      onfiles?.(newFiles); // Optional: notify parent if needed, but we handle sending here
       target.value = "";
     }
   }
@@ -245,8 +258,18 @@
 
     if (imageFiles.length > 0) {
       e.preventDefault();
+      attachedFiles = [...attachedFiles, ...imageFiles];
       onfiles?.(imageFiles);
     }
+  }
+
+  function removeFile(index: number) {
+    attachedFiles = attachedFiles.filter((_, i) => i !== index);
+  }
+
+  function getFileIcon(file: File) {
+    if (file.type.startsWith('image/')) return ImageIcon;
+    return FileText;
   }
 </script>
 
@@ -271,6 +294,30 @@
   {/if}
 
   <div class="input-container">
+    {#if attachedFiles.length > 0}
+      <div class="file-previews">
+        {#each attachedFiles as file, i}
+          <div class="file-preview">
+            <div class="file-thumbnail">
+              {#if file.type.startsWith('image/')}
+                <img src={URL.createObjectURL(file)} alt={file.name} onload={(e) => URL.revokeObjectURL((e.currentTarget as HTMLImageElement).src)} />
+              {:else if file.type === 'application/pdf'}
+                <PdfThumbnail {file} size={48} />
+              {:else}
+                <FileText size={24} class="file-icon" />
+              {/if}
+            </div>
+            <div class="file-info">
+              <span class="file-name">{file.name}</span>
+              <span class="file-size">{(file.size / 1024).toFixed(1)} KB</span>
+            </div>
+            <button class="remove-file" onclick={() => removeFile(i)}>
+              <X size={12} />
+            </button>
+          </div>
+        {/each}
+      </div>
+    {/if}
     <textarea
       bind:this={textareaEl}
       bind:value={inputValue}
@@ -321,14 +368,14 @@
 
       <!-- Model Selector -->
       <div class="model-selector-wrapper">
-        <button 
+        <button
           class="toolbar-btn model-btn"
           onclick={(e) => { e.stopPropagation(); showModelSelector = !showModelSelector; }}
           title={$t("toolbar.model")}
         >
           <Bot size={14} strokeWidth={2} />
           <span class="model-name">
-            {store.modelsSnapshot?.current?.displayName ?? store.modelsSnapshot?.current?.name ?? "Model"}
+            {store.modelsSnapshot?.current?.displayName ?? store.modelsSnapshot?.current?.name ?? $t("model.title")}
           </span>
           <ChevronDown size={12} strokeWidth={2} />
         </button>
@@ -345,10 +392,10 @@
       <!-- NPC Theme Selector (only in NPC mode) -->
       {#if isNpcMode}
         <div class="model-selector-wrapper">
-          <button 
+          <button
             class="toolbar-btn model-btn npc-theme-btn"
             onclick={() => showThemeSelector = !showThemeSelector}
-            title="NPC Theme"
+            title={$t("chat.npc_theme")}
           >
             <Palette size={14} strokeWidth={2} />
             <span class="model-name">{npcTheme.name}</span>
@@ -363,11 +410,11 @@
     </div>
 
     <div class="toolbar-right">
-      <button 
-        class="toolbar-btn" 
+      <button
+        class="toolbar-btn"
         class:active={store.notificationsEnabled}
         onclick={() => toggleNotifications()}
-        title={store.notificationsEnabled ? "Notifications on" : "Notifications off"}
+        title={$t(store.notificationsEnabled ? "chat.notifications_on" : "chat.notifications_off")}
       >
         {#if store.notificationsEnabled}
           <Bell size={16} strokeWidth={2} />
@@ -464,14 +511,107 @@
 
   .input-container {
     margin-bottom: var(--space-md);
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+    padding: 0;
+    transition: all var(--duration-normal) var(--ease-out);
+    box-shadow: var(--shadow-xs);
+    overflow: hidden;
+  }
+
+  .input-container:focus-within {
+    border-color: var(--color-primary);
+    box-shadow:
+      0 0 0 3px rgba(99, 102, 241, 0.08),
+      var(--shadow-sm);
+  }
+
+  .file-previews {
+    display: flex;
+    gap: 8px;
+    padding: 12px 12px 0;
+    overflow-x: auto;
+  }
+
+  .file-preview {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 80px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .file-thumbnail {
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-hover);
+    overflow: hidden;
+  }
+
+  .file-thumbnail img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .file-icon {
+    color: var(--color-text-muted);
+  }
+
+  .file-info {
+    padding: 4px;
+    background: var(--color-surface);
+  }
+
+  .file-name {
+    display: block;
+    font-size: 9px;
+    color: var(--color-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .file-size {
+    display: block;
+    font-size: 8px;
+    color: var(--color-text-muted);
+  }
+
+  .remove-file {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .file-preview:hover .remove-file {
+    opacity: 1;
   }
 
   textarea {
     width: 100%;
     padding: var(--space-md) 18px;
-    background: var(--color-surface-elevated);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
+    background: transparent;
+    border: none;
     color: var(--color-text);
     font-size: 14px;
     font-family: var(--font-sans);
@@ -485,10 +625,7 @@
   }
 
   textarea:focus {
-    border-color: var(--color-primary);
-    box-shadow: 
-      0 0 0 3px rgba(99, 102, 241, 0.08),
-      var(--shadow-sm);
+    outline: none;
   }
 
   textarea::placeholder {

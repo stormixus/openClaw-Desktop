@@ -39,6 +39,9 @@ export default {
   "settings.section.gateway": "게이트웨이",
   "settings.section.apikeys": "API 키",
   "settings.apikeys": "API 키",
+  "settings.api_keys": "API 키",
+  "settings.add_key": "키 추가",
+  "settings.no_keys": "설정된 API 키가 없습니다",
   "settings.apikeys.desc": "AI 제공업체 API 키를 관리합니다. 키는 기기에 로컬로 저장됩니다.",
   "settings.apikeys.openai": "OpenAI",
   "settings.apikeys.openai.desc": "GPT-4o, GPT-4, o1, o3 모델",
@@ -103,6 +106,7 @@ export default {
   "gateway.save": "변경 저장",
 
   // Chat
+  "message.download": "다운로드",
   "chat.placeholder": "메시지를 입력하세요...",
   "chat.send": "전송",
   "chat.stop": "중단",
@@ -156,6 +160,9 @@ export default {
   "status.tokens": "토큰",
   "status.input": "입력",
   "status.output": "출력",
+  "status.connected": "연결됨",
+  "status.connecting": "연결 중",
+  "status.disconnected": "연결 끊김",
 
   // Onboarding
   "onboarding.title": "openClaw Desktop에 오신 걸 환영합니다",

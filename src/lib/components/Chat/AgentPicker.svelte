@@ -27,7 +27,7 @@
 
     <div class="agent-list">
       {#if agents.length === 0}
-        <div class="empty">No agents available</div>
+        <div class="empty">{$t("agent.empty")}</div>
       {:else}
         {#each agents as agent}
           <button

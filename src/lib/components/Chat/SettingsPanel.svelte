@@ -1,39 +1,38 @@
-<script context="module" lang="ts">
-  export interface ChatSettings {
+<script lang="ts">
+  import { t } from "$lib/i18n";
+  import ApiKeysPanel from "./ApiKeysPanel.svelte";
+
+  interface ChatSettings {
     thinkingLevel: "none" | "low" | "medium" | "high";
     verbose: boolean;
     reasoning: boolean;
     deliver: boolean;
   }
-</script>
 
-<script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { t } from "$lib/i18n";
+  interface Props {
+    settings?: ChatSettings;
+    isOpen?: boolean;
+    onchange?: (settings: ChatSettings) => void;
+    onclose?: () => void;
+  }
 
-  export let settings: ChatSettings = {
+  let { settings = $bindable({
     thinkingLevel: "medium",
     verbose: false,
     reasoning: true,
     deliver: true,
-  };
-  export let isOpen = false;
+  }), isOpen = false, onchange, onclose }: Props = $props();
 
-  const dispatch = createEventDispatcher<{
-    change: ChatSettings;
-    close: void;
-  }>();
-
-  const thinkingLevels = [
-    { value: "none", label: "None", icon: "🚫" },
-    { value: "low", label: "Low", icon: "💭" },
-    { value: "medium", label: "Medium", icon: "🤔" },
-    { value: "high", label: "High", icon: "🧠" },
-  ] as const;
+  const thinkingLevels = $derived([
+    { value: "none", label: $t("settings.thinking.none"), icon: "🚫" },
+    { value: "low", label: $t("settings.thinking.low"), icon: "💭" },
+    { value: "medium", label: $t("settings.thinking.medium"), icon: "🤔" },
+    { value: "high", label: $t("settings.thinking.high"), icon: "🧠" },
+  ] as const);
 
   function updateSetting<K extends keyof ChatSettings>(key: K, value: ChatSettings[K]) {
     settings = { ...settings, [key]: value };
-    dispatch("change", settings);
+    onchange?.(settings);
   }
 
   function setThinkingLevel(level: ChatSettings["thinkingLevel"]) {
@@ -74,7 +73,7 @@
         <div class="toggle-item">
           <div class="toggle-info">
             <span class="toggle-label">{$t("settings.verbose")}</span>
-            <span class="toggle-desc">Show detailed agent output</span>
+            <span class="toggle-desc">{$t("settings.verbose.desc")}</span>
           </div>
           <label class="toggle-switch">
             <input
@@ -89,7 +88,7 @@
         <div class="toggle-item">
           <div class="toggle-info">
             <span class="toggle-label">{$t("settings.reasoning")}</span>
-            <span class="toggle-desc">Display reasoning process</span>
+            <span class="toggle-desc">{$t("settings.reasoning.desc")}</span>
           </div>
           <label class="toggle-switch">
             <input
@@ -104,7 +103,7 @@
         <div class="toggle-item">
           <div class="toggle-info">
             <span class="toggle-label">{$t("settings.deliver")}</span>
-            <span class="toggle-desc">Auto-deliver completed responses</span>
+            <span class="toggle-desc">{$t("settings.deliver.desc")}</span>
           </div>
           <label class="toggle-switch">
             <input
@@ -115,6 +114,11 @@
             <span class="slider"></span>
           </label>
         </div>
+      </div>
+
+      <!-- API Keys Section -->
+      <div class="setting-group" style="margin-top: 20px; border-top: 1px solid var(--color-border); padding-top: 16px;">
+        <ApiKeysPanel />
       </div>
     </div>
   </div>

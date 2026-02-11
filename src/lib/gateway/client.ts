@@ -34,6 +34,7 @@ import {
   storeDeviceAuthToken,
   clearDeviceAuthToken,
 } from "./device-auth";
+import { db } from "$lib/db";
 
 const PROTOCOL_VERSION = 3;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
@@ -100,7 +101,15 @@ export class GatewayClient {
       case "chat": this.onChatEvent = callback as EventCallback<AgentEvent>; break;
       case "message": this.onChatMessage = callback as EventCallback<ChatMessage>; break;
       case "error": this.onError = callback as EventCallback<string>; break;
+      case "tool": this.onToolCall = callback as EventCallback<ToolCall>; break;
     }
+    return this;
+  }
+
+  private onToolCall?: EventCallback<ToolCall>;
+
+  onTool(callback: EventCallback<ToolCall>): this {
+    this.onToolCall = callback;
     return this;
   }
 
@@ -199,7 +208,11 @@ export class GatewayClient {
           ? entry.input
           : {}) as Record<string, unknown>;
 
-        tools.push({ id, name, args, status: "complete" });
+        const toolCall: ToolCall = { id, name, args, status: "complete" };
+        tools.push(toolCall);
+
+        // Notify listener about new tool call (for Forge integration)
+        this.onToolCall?.(toolCall);
       }
     }
 
@@ -450,10 +463,11 @@ export class GatewayClient {
         console.log("[Gateway] Device identity loaded:", deviceIdentity.deviceId.substring(0, 16) + "...");
         
         // Try to load stored device auth token
-        const storedToken = loadDeviceAuthToken({
+        const storedEntry = await loadDeviceAuthToken({
           deviceId: deviceIdentity.deviceId,
           role,
-        })?.token;
+        });
+        const storedToken = storedEntry?.token;
         
         authToken = storedToken ?? this.config.token;
         canFallbackToShared = Boolean(storedToken && this.config.token);
@@ -547,8 +561,8 @@ export class GatewayClient {
               role: res.auth.role ?? role,
               token: res.auth.deviceToken,
               scopes: res.auth.scopes ?? [],
-            });
-            console.log("[Gateway] Stored device auth token");
+            }).then(() => console.log("[Gateway] Stored device auth token"))
+              .catch(e => console.warn("[Gateway] Failed to store device auth token:", e));
           } else if (res?.deviceToken && !this.config.deviceToken) {
             this.config.deviceToken = res.deviceToken;
           }
@@ -565,7 +579,8 @@ export class GatewayClient {
           
           // Clear device auth token on failure if we can fall back
           if (canFallbackToShared && deviceIdentity) {
-            clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role });
+            clearDeviceAuthToken({ deviceId: deviceIdentity.deviceId, role })
+              .catch(e => console.warn("[Gateway] Failed to clear device auth token:", e));
           }
           
           this.setStatus("error");
@@ -593,13 +608,18 @@ export class GatewayClient {
     });
   }
 
-  private getDeviceId(): string {
-    const key = `openclaw.deviceId.${this.config.id}`;
-    let id = localStorage.getItem(key);
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem(key, id);
+  private async getDeviceId(): Promise<string> {
+    try {
+      // Try to get from the gateway's stored state in SQLite
+      const rows = await db.gateways.list();
+      const gw = rows.find(r => r.id === this.config.id);
+      if (gw?.deviceId) return gw.deviceId;
+    } catch {
+      // fall through
     }
+    // Generate and store a new one
+    const id = crypto.randomUUID();
+    db.gateways.updateState(this.config.id, "device_id", id).catch(() => {});
     return id;
   }
 

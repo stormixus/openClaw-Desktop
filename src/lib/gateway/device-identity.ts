@@ -1,27 +1,18 @@
 /**
  * Device Identity Management for openClaw Gateway Protocol
- * 
+ *
  * This module handles Ed25519 key pair generation and management for device authentication.
  * Based on the official openClaw control-ui implementation.
+ * Identity is persisted in SQLite via the Tauri backend.
  */
 
 import { getPublicKeyAsync, signAsync, utils } from "@noble/ed25519";
-
-// Storage key for device identity
-const STORAGE_KEY = "openclaw-device-identity-v1";
+import { db } from "$lib/db";
 
 export type DeviceIdentity = {
   deviceId: string;
   publicKey: string;
   privateKey: string;
-};
-
-type StoredIdentity = {
-  version: 1;
-  deviceId: string;
-  publicKey: string;
-  privateKey: string;
-  createdAtMs: number;
 };
 
 /**
@@ -81,39 +72,28 @@ async function generateIdentity(): Promise<DeviceIdentity> {
 }
 
 /**
- * Load existing device identity from localStorage or create a new one
+ * Load existing device identity from SQLite or create a new one
  */
 export async function loadOrCreateDeviceIdentity(): Promise<DeviceIdentity> {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as StoredIdentity;
-      if (
-        parsed?.version === 1 &&
-        typeof parsed.deviceId === "string" &&
-        typeof parsed.publicKey === "string" &&
-        typeof parsed.privateKey === "string"
-      ) {
-        // Verify and potentially update deviceId
-        const derivedId = await fingerprintPublicKey(base64UrlDecode(parsed.publicKey));
-        if (derivedId !== parsed.deviceId) {
-          const updated: StoredIdentity = {
-            ...parsed,
-            deviceId: derivedId,
-          };
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
-          return {
-            deviceId: derivedId,
-            publicKey: parsed.publicKey,
-            privateKey: parsed.privateKey,
-          };
-        }
+    const row = await db.identity.get();
+    if (row && row.deviceId && row.publicKey && row.privateKey) {
+      // Verify and potentially update deviceId
+      const derivedId = await fingerprintPublicKey(base64UrlDecode(row.publicKey));
+      if (derivedId !== row.deviceId) {
+        const updated = { ...row, deviceId: derivedId };
+        await db.identity.save(updated);
         return {
-          deviceId: parsed.deviceId,
-          publicKey: parsed.publicKey,
-          privateKey: parsed.privateKey,
+          deviceId: derivedId,
+          publicKey: row.publicKey,
+          privateKey: row.privateKey,
         };
       }
+      return {
+        deviceId: row.deviceId,
+        publicKey: row.publicKey,
+        privateKey: row.privateKey,
+      };
     }
   } catch {
     // fall through to regenerate
@@ -121,14 +101,15 @@ export async function loadOrCreateDeviceIdentity(): Promise<DeviceIdentity> {
 
   // Generate new identity
   const identity = await generateIdentity();
-  const stored: StoredIdentity = {
-    version: 1,
-    deviceId: identity.deviceId,
-    publicKey: identity.publicKey,
-    privateKey: identity.privateKey,
-    createdAtMs: Date.now(),
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+  try {
+    await db.identity.save({
+      deviceId: identity.deviceId,
+      publicKey: identity.publicKey,
+      privateKey: identity.privateKey,
+    });
+  } catch (e) {
+    console.error("Failed to save device identity to DB:", e);
+  }
   return identity;
 }
 

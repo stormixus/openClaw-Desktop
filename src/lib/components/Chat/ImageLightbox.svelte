@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X } from "@lucide/svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     src: string;
@@ -35,8 +36,8 @@
   <button class="close-btn" onclick={() => onclose?.()}>
     <X size={24} strokeWidth={2} />
   </button>
-  
-  <div class="hint">Press Space or ESC to close</div>
+
+  <div class="hint">{$t("lightbox.hint")}</div>
 </div>
 
 <style>

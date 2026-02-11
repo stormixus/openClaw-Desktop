@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { ChatMessage, AgentInfo, ToolCall } from "$lib/gateway/types";
   import { store, getCurrentAgent, selectButton, confirmMultiSelect } from "$lib/gateway/store.svelte";
-  import { locale } from "$lib/i18n";
+  import { locale, t } from "$lib/i18n";
+  import { get } from "svelte/store";
   import { marked } from "marked";
   import hljs from "highlight.js";
-  import { 
+  import DOMPurify from "dompurify";
+  import {
     Bot, User, Terminal, ChevronDown, Check, ExternalLink, Send, Copy,
     Wrench, Loader2, CheckCircle, XCircle, ChevronRight, Forward, MoreHorizontal
   } from "@lucide/svelte";
@@ -68,13 +70,13 @@
     const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
     const highlighted = hljs.highlight(text, { language }).value;
     const langLabel = lang || 'code';
-    const encodedCode = encodeURIComponent(text);
-    const encodedLang = encodeURIComponent(langLabel);
+    const encodedCode = encodeURIComponent(text).replace(/'/g, '%27');
+    const encodedLang = encodeURIComponent(langLabel).replace(/'/g, '%27');
     return `<div class="code-block">
       <div class="code-header">
         <span class="code-lang">${langLabel}</span>
         <div class="code-actions">
-          <button class="note-btn" onclick="window.__addCodeSnippet && window.__addCodeSnippet(decodeURIComponent('${encodedCode}'), decodeURIComponent('${encodedLang}'))" title="Pin to sticky note">
+          <button class="note-btn" onclick="window.__addCodeSnippet && window.__addCodeSnippet(decodeURIComponent('${encodedCode}'), decodeURIComponent('${encodedLang}'))" title="${get(t)("code.pin")}">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8l-5-5z"></path>
               <polyline points="16 3 16 8 21 8"></polyline>
@@ -85,7 +87,7 @@
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
             </svg>
-            Copy
+            ${get(t)("code.copy")}
           </button>
         </div>
       </div>
@@ -131,7 +133,7 @@
     content = stripDirectives(content);
     // Auto-detect JSON for all message roles
     content = formatJsonContent(content);
-    return marked.parse(content) as string;
+    return DOMPurify.sanitize(marked.parse(content) as string);
   });
 
   // Truncated content for system messages
@@ -239,12 +241,7 @@
     class:user={message.role === "user"} 
     class:assistant={message.role === "assistant"}
     class:grouped={isGrouped && !isFirst}
-    draggable="true"
     role="article"
-    ondragstart={(e) => {
-      e.dataTransfer?.setData("text/plain", message.content);
-      e.dataTransfer!.effectAllowed = "copy";
-    }}
   >
     {#if message.role === "assistant" && isFirst}
       <div class="avatar-column">
@@ -301,12 +298,12 @@
               {#if expandedTools.has(tool.id)}
                 <div class="tool-details">
                   <div class="tool-section">
-                    <span class="tool-label">Arguments</span>
+                    <span class="tool-label">{$t("tool.arguments")}</span>
                     <pre class="tool-code">{JSON.stringify(tool.args, null, 2)}</pre>
                   </div>
                   {#if tool.result !== undefined}
                     <div class="tool-section">
-                      <span class="tool-label">Result</span>
+                      <span class="tool-label">{$t("tool.result")}</span>
                       <pre class="tool-code">{typeof tool.result === "string" ? tool.result : JSON.stringify(tool.result, null, 2)}</pre>
                     </div>
                   {/if}
@@ -345,7 +342,7 @@
         
         <!-- Message Actions -->
         <div class="message-actions" class:visible={showActions}>
-          <button class="action-btn" onclick={copyMessage} title="Copy">
+          <button class="action-btn" onclick={copyMessage} title={$t("message.copy")}>
             {#if copied}
               <Check size={14} />
             {:else}
@@ -353,7 +350,7 @@
             {/if}
           </button>
           {#if store.gateways.length > 1}
-            <button class="action-btn" onclick={forwardMessage} title="Forward to another gateway">
+            <button class="action-btn" onclick={forwardMessage} title={$t("message.forward")}>
               <Forward size={14} />
             </button>
           {/if}
@@ -501,11 +498,6 @@
     display: flex;
     gap: var(--space-sm);
     max-width: 85%;
-    cursor: grab;
-  }
-
-  .message-bubble:active {
-    cursor: grabbing;
   }
 
   .message-bubble.grouped {

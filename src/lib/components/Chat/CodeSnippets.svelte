@@ -1,5 +1,6 @@
 <script lang="ts">
   import { X, Minimize2 } from "@lucide/svelte";
+  import { t } from "$lib/i18n";
 
   interface Snippet {
     id: string;
@@ -44,21 +45,21 @@
       <div class="postit-header">
         <span class="postit-lang">{snippet.lang || 'code'}</span>
         <div class="postit-actions">
-          <button onclick={() => toggleMinimize(snippet.id)} title="Minimize">
+          <button onclick={() => toggleMinimize(snippet.id)} title={$t("code.minimize")}>
             <Minimize2 size={12} />
           </button>
-          <button onclick={() => removeSnippet(snippet.id)} title="Close">
+          <button onclick={() => removeSnippet(snippet.id)} title={$t("code.close")}>
             <X size={12} />
           </button>
         </div>
       </div>
-      
+
       {#if !minimized.has(snippet.id)}
         <div class="postit-content">
           <pre><code>{snippet.code}</code></pre>
         </div>
         <button class="postit-copy" onclick={() => copyCode(snippet.code)}>
-          Copy
+          {$t("code.copy")}
         </button>
       {/if}
     </div>

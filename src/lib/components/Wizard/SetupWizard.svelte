@@ -74,18 +74,18 @@
     setTheme(t);
   }
 
-  function addGatewayAndContinue() {
+  async function addGatewayAndContinue() {
     if (gatewayName && gatewayUrl) {
-      const result = addGateway({
+      const result = await addGateway({
         name: gatewayName,
         url: gatewayUrl,
         authMethod: gatewayToken ? "token" : "tailscale",
         token: gatewayToken || undefined,
       });
-      
+
       // Auto-connect if local gateway was detected
       if (!result.error && localConfig?.found) {
-        setActiveGateway(result.id);
+        await setActiveGateway(result.id);
         connectGateway(result.id);
       }
     }

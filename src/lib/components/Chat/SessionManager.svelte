@@ -45,17 +45,17 @@
     <div class="header">
       <h4>{$t("session.title")}</h4>
       <div class="header-actions">
-        <button class="icon-btn" onclick={refreshSessions} title="Refresh">
+        <button class="icon-btn" onclick={refreshSessions} title={$t("session.refresh")}>
           <span>🔄</span>
         </button>
-        <button class="icon-btn" onclick={newSession} title="New Session">
+        <button class="icon-btn" onclick={newSession} title={$t("session.new")}>
           <span>+</span>
         </button>
       </div>
     </div>
 
     <div class="current-session">
-      <span class="label">Current:</span>
+      <span class="label">{$t("session.current_label")}</span>
       <span class="value">{store.sessionKey}</span>
     </div>
 
@@ -63,9 +63,9 @@
       {#if store.sessions.length === 0}
         <div class="empty">
           <span class="icon">📝</span>
-          <p>No sessions found</p>
+          <p>{$t("session.empty")}</p>
           <button class="create-btn" onclick={newSession}>
-            Create New Session
+            {$t("session.create")}
           </button>
         </div>
       {:else}

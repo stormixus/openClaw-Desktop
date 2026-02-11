@@ -1,12 +1,12 @@
 /**
  * NPC Theme Store — manages character themes (Svelte 5 Runes)
+ * Custom themes and per-gateway active theme IDs are persisted in SQLite.
  */
 
 import { browser } from "$app/environment";
+import { db } from "$lib/db";
+import type { NpcThemeRow } from "$lib/db";
 import type { NpcTheme, NpcThemeAvatar, NpcCharacterParts } from "./npcThemeTypes";
-
-const THEMES_STORAGE_KEY = "openclaw.npcThemes";
-const ACTIVE_THEME_KEY_PREFIX = "openclaw.npcActiveTheme";
 
 // ============================================================================
 // Built-in Default Themes (emoji-only, no character folder)
@@ -81,37 +81,36 @@ const BUILTIN_THEMES: NpcTheme[] = [
 // Reactive Store
 // ============================================================================
 
-function loadCustomThemes(): NpcTheme[] {
-  if (!browser) return [];
+function deserializeTheme(row: NpcThemeRow): NpcTheme | null {
   try {
-    const raw = localStorage.getItem(THEMES_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    const data = JSON.parse(row.data) as NpcTheme;
+    return { ...data, id: row.id, name: row.name, description: row.description ?? data.description, builtIn: false };
   } catch {
-    return [];
+    return null;
   }
-}
-
-function saveCustomThemes(themes: NpcTheme[]): void {
-  if (!browser) return;
-  const custom = themes.filter(t => !t.builtIn);
-  localStorage.setItem(THEMES_STORAGE_KEY, JSON.stringify(custom));
-}
-
-function loadActiveThemeId(gatewayId: string | null): string {
-  if (!browser || !gatewayId) return "default";
-  return localStorage.getItem(`${ACTIVE_THEME_KEY_PREFIX}.${gatewayId}`) ?? "default";
-}
-
-function saveActiveThemeId(gatewayId: string | null, themeId: string): void {
-  if (!browser || !gatewayId) return;
-  localStorage.setItem(`${ACTIVE_THEME_KEY_PREFIX}.${gatewayId}`, themeId);
 }
 
 // The store
 export const npcThemeState = $state({
-  themes: [...BUILTIN_THEMES, ...loadCustomThemes()] as NpcTheme[],
+  themes: [...BUILTIN_THEMES] as NpcTheme[],
   activeThemeId: "default" as string,
 });
+
+/**
+ * Load custom themes from SQLite (called during init).
+ */
+export async function loadCustomThemesFromDb(): Promise<void> {
+  if (!browser) return;
+  try {
+    const rows = await db.themes.listCustom();
+    const custom = rows.map(deserializeTheme).filter((t): t is NpcTheme => t !== null);
+    // Merge: keep existing built-in themes, replace custom
+    const builtIns = npcThemeState.themes.filter(t => t.builtIn);
+    npcThemeState.themes = [...builtIns, ...custom];
+  } catch (e) {
+    console.error("Failed to load custom themes from DB:", e);
+  }
+}
 
 // ============================================================================
 // Exported Functions
@@ -128,16 +127,32 @@ export function getAllThemes(): NpcTheme[] {
   return npcThemeState.themes;
 }
 
-/** Select a theme by ID, persist per gateway */
+/** Select a theme by ID, persist per gateway (in SQLite via gateway state) */
 export function selectTheme(themeId: string, gatewayId: string | null): void {
   if (!npcThemeState.themes.find(t => t.id === themeId)) return;
   npcThemeState.activeThemeId = themeId;
-  saveActiveThemeId(gatewayId, themeId);
+  if (gatewayId) {
+    db.gateways.updateState(gatewayId, "active_npc_theme_id", themeId).catch((e) => {
+      console.error("Failed to save active theme ID:", e);
+    });
+  }
 }
 
-/** Load the active theme for a specific gateway */
+/** Load the active theme for a specific gateway (from the gatewayRowCache in store) */
 export function loadThemeForGateway(gatewayId: string | null): void {
-  npcThemeState.activeThemeId = loadActiveThemeId(gatewayId);
+  if (!gatewayId) {
+    npcThemeState.activeThemeId = "default";
+    return;
+  }
+  // The active theme ID is stored on the gateway row and loaded into the gatewayRowCache.
+  // We read it from there via the store's internal cache.
+  // For now, use a fallback: try to read from the DB asynchronously.
+  db.gateways.list().then(rows => {
+    const gw = rows.find(r => r.id === gatewayId);
+    npcThemeState.activeThemeId = gw?.activeNpcThemeId ?? "default";
+  }).catch(() => {
+    npcThemeState.activeThemeId = "default";
+  });
 }
 
 /** Add a custom theme */
@@ -146,7 +161,15 @@ export function addCustomTheme(theme: NpcTheme): void {
   if (npcThemeState.themes.find(t => t.id === theme.id && t.builtIn)) return;
   theme.builtIn = false;
   npcThemeState.themes = [...npcThemeState.themes.filter(t => t.id !== theme.id), theme];
-  saveCustomThemes(npcThemeState.themes);
+  // Persist to SQLite
+  db.themes.save({
+    id: theme.id,
+    name: theme.name,
+    description: theme.description ?? null,
+    data: JSON.stringify(theme),
+  }).catch((e) => {
+    console.error("Failed to save custom theme:", e);
+  });
 }
 
 /** Remove a custom theme */
@@ -154,7 +177,10 @@ export function removeCustomTheme(themeId: string): void {
   const theme = npcThemeState.themes.find(t => t.id === themeId);
   if (!theme || theme.builtIn) return;
   npcThemeState.themes = npcThemeState.themes.filter(t => t.id !== themeId);
-  saveCustomThemes(npcThemeState.themes);
+  // Remove from SQLite
+  db.themes.delete(themeId).catch((e) => {
+    console.error("Failed to delete custom theme:", e);
+  });
   // Reset to default if active theme was removed
   if (npcThemeState.activeThemeId === themeId) {
     npcThemeState.activeThemeId = "default";

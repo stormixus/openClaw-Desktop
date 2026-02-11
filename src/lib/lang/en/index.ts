@@ -39,6 +39,9 @@ export default {
   "settings.section.gateway": "Gateways",
   "settings.section.apikeys": "API Keys",
   "settings.apikeys": "API Keys",
+  "settings.api_keys": "API Keys",
+  "settings.add_key": "Add Key",
+  "settings.no_keys": "No API keys configured",
   "settings.apikeys.desc": "Manage your AI provider API keys. Keys are stored locally on your device.",
   "settings.apikeys.openai": "OpenAI",
   "settings.apikeys.openai.desc": "GPT-4o, GPT-4, o1, o3 models",
@@ -103,6 +106,7 @@ export default {
   "gateway.save": "Save Changes",
 
   // Chat
+  "message.download": "Download",
   "chat.placeholder": "Enter your message...",
   "chat.send": "Send",
   "chat.stop": "Stop",
@@ -156,6 +160,9 @@ export default {
   "status.tokens": "tokens",
   "status.input": "input",
   "status.output": "output",
+  "status.connected": "Connected",
+  "status.connecting": "Connecting",
+  "status.disconnected": "Disconnected",
 
   // Onboarding
   "onboarding.title": "Welcome to openClaw Desktop",

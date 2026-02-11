@@ -3,7 +3,10 @@
  */
 
 import { browser } from "$app/environment";
+import { invoke } from '@tauri-apps/api/core';
 import { notifications } from "$lib/services/notifications";
+import { db } from "$lib/db";
+import type { GatewayRow } from "$lib/db";
 import { GatewayClient } from "./client";
 import type {
   GatewayConfig,
@@ -17,8 +20,6 @@ import type {
 } from "./types";
 import { getActiveTheme, loadThemeForGateway } from "./npcThemeStore.svelte";
 
-const STORAGE_KEY = "openclaw.gateways";
-const SESSION_KEY_PREFIX = "openclaw.session";
 const CHATMODE_KEY_PREFIX = "openclaw.chatmode";
 
 
@@ -43,6 +44,13 @@ export const store = $state({
   npcAction: null as string | null,     // Current NPC action (wave, nod, shake, bounce, bow)
   npcBackground: "default" as string,   // Current NPC background theme or image path
   assistantMeta: null as { name: string; emoji: string } | null,  // Agent identity from gateway
+  // Forge State
+  forgeState: {
+    activeDocId: null as string | null,
+    activeDocContext: null as { name: string; type: string; excerpt: string } | null,
+    pendingPatch: null as any | null,
+    history: [] as any[],
+  }
 });
 
 // Active gateway clients (id -> client) - not reactive, just a cache
@@ -173,7 +181,7 @@ export function parseNpcEmotion(content: string): { cleanContent: string; emotio
 
 export function toggleChatMode(): void {
   store.chatMode = store.chatMode === "chat" ? "npc" : "chat";
-  // Persist per-gateway
+  // Persist per-gateway in localStorage (lightweight UI pref)
   if (browser && store.activeGatewayId) {
     localStorage.setItem(
       `${CHATMODE_KEY_PREFIX}.${store.activeGatewayId}`,
@@ -194,6 +202,11 @@ export function setNpcBackground(bg: string): void {
   store.npcBackground = bg;
 }
 
+export function setForgeDocument(id: string | null, context?: { name: string; type: string; excerpt: string }): void {
+  store.forgeState.activeDocId = id;
+  store.forgeState.activeDocContext = context ?? null;
+}
+
 export function getAssistantMeta(): { name: string; emoji: string } | null {
   return store.assistantMeta;
 }
@@ -211,8 +224,8 @@ export function getCurrentAgent(): import("./types").AgentInfo | null {
   const state = getActiveGatewayState();
   if (!state?.snapshot?.agents) return null;
   // For now, return the first agent or "main" agent
-  const agentId = store.sessionKey.includes("/") 
-    ? store.sessionKey.split("/")[0] 
+  const agentId = store.sessionKey.includes("/")
+    ? store.sessionKey.split("/")[0]
     : "main";
   return state.snapshot.agents.find(a => a.id === agentId) ?? state.snapshot.agents[0] ?? null;
 }
@@ -234,133 +247,212 @@ function generateSessionKey(): string {
 
 /**
  * Get or create a session key for a gateway.
- * Returns the last-used session from localStorage, or creates a new one.
+ * Reads from the gateway's activeSessionKey (stored in SQLite).
  */
 function resolveSessionKey(gatewayId: string): string {
-  if (!browser) return "main";
-  const storageKey = `${SESSION_KEY_PREFIX}.${gatewayId}`;
-  const saved = localStorage.getItem(storageKey);
-  
-  // Default to "main" session for synchronization with other clients/CLI
-  // If user has a legacy "desktop-" key, migrate them to "main"
-  if (saved && !saved.startsWith("desktop-")) {
-    return saved;
+  // The session key is loaded from the DB as part of the GatewayRow
+  const gw = store.gateways.find(g => g.id === gatewayId);
+  if (gw) {
+    // Check if there's a per-gateway row with activeSessionKey
+    const row = gatewayRowCache.get(gatewayId);
+    if (row?.activeSessionKey && !row.activeSessionKey.startsWith("desktop-")) {
+      return row.activeSessionKey;
+    }
   }
-  
-  const newKey = "main";
-  localStorage.setItem(storageKey, newKey);
-  return newKey;
+  return "main";
 }
 
 /**
- * Persist the active session key for a gateway.
+ * Persist the active session key for a gateway (to SQLite).
  */
 function saveSessionKey(gatewayId: string, sessionKey: string): void {
-  if (!browser) return;
-  localStorage.setItem(`${SESSION_KEY_PREFIX}.${gatewayId}`, sessionKey);
+  db.gateways.updateState(gatewayId, "active_session_key", sessionKey).catch((e) => {
+    console.error("[Store] Failed to save session key:", e);
+  });
+  // Also update local cache
+  const row = gatewayRowCache.get(gatewayId);
+  if (row) row.activeSessionKey = sessionKey;
+}
+
+// ============================================================================
+// Gateway Row Cache (keeps DB row data in sync with reactive state)
+// ============================================================================
+
+const gatewayRowCache = new Map<string, GatewayRow>();
+
+/**
+ * Convert a GatewayRow (from DB) to a GatewayConfig (for the store/client).
+ */
+function rowToConfig(row: GatewayRow): GatewayConfig {
+  return {
+    id: row.id,
+    name: row.name,
+    url: row.url,
+    authMethod: row.authMethod as GatewayConfig["authMethod"],
+    token: row.token ?? undefined,
+    password: row.password ?? undefined,
+    deviceToken: row.deviceToken ?? undefined,
+  };
+}
+
+/**
+ * Convert a GatewayConfig (from the store) to a GatewayRow (for DB).
+ */
+function configToRow(config: GatewayConfig): GatewayRow {
+  const existing = gatewayRowCache.get(config.id);
+  return {
+    id: config.id,
+    name: config.name,
+    url: config.url,
+    authMethod: config.authMethod,
+    token: config.token ?? null,
+    password: config.password ?? null,
+    deviceToken: config.deviceToken ?? null,
+    activeSessionKey: existing?.activeSessionKey ?? "main",
+    activeNpcThemeId: existing?.activeNpcThemeId ?? "default",
+    deviceId: existing?.deviceId ?? null,
+    sortOrder: existing?.sortOrder ?? 0,
+  };
 }
 
 // ============================================================================
 // Gateway Management
 // ============================================================================
 
-export function loadGateways(): void {
+export async function loadGateways(): Promise<void> {
   if (!browser) return;
-  
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      const data = JSON.parse(saved);
-      store.gateways = data.gateways ?? [];
-      store.activeGatewayId = data.activeId ?? null;
 
-      // Restore per-gateway chat mode preference
-      if (store.activeGatewayId) {
-        const savedMode = localStorage.getItem(`${CHATMODE_KEY_PREFIX}.${store.activeGatewayId}`);
-        store.chatMode = (savedMode === "npc" ? "npc" : "chat") as "chat" | "npc";
-        loadThemeForGateway(store.activeGatewayId);
-      }
-    } catch (e) {
-      console.error("Failed to load gateways:", e);
+  try {
+    const rows = await db.gateways.list();
+    const activeId = await db.gateways.getActiveId();
+
+    // Cache rows and build configs
+    gatewayRowCache.clear();
+    for (const row of rows) {
+      gatewayRowCache.set(row.id, row);
     }
+
+    store.gateways = rows.map(rowToConfig);
+    store.activeGatewayId = activeId ?? null;
+
+    // Restore per-gateway chat mode preference (still in localStorage)
+    if (store.activeGatewayId) {
+      const savedMode = localStorage.getItem(`${CHATMODE_KEY_PREFIX}.${store.activeGatewayId}`);
+      store.chatMode = (savedMode === "npc" ? "npc" : "chat") as "chat" | "npc";
+      loadThemeForGateway(store.activeGatewayId);
+    }
+  } catch (e) {
+    console.error("Failed to load gateways from DB:", e);
   }
 }
 
-export function saveGateways(): void {
+export async function saveGateways(): Promise<void> {
   if (!browser) return;
-  
-  const data = {
-    gateways: store.gateways,
-    activeId: store.activeGatewayId,
-  };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+  try {
+    // Save active gateway ID
+    if (store.activeGatewayId) {
+      await db.gateways.setActiveId(store.activeGatewayId);
+    }
+    // Individual gateway saves are handled by addGateway/updateGateway/removeGateway
+  } catch (e) {
+    console.error("Failed to save gateways:", e);
+  }
 }
 
-export function addGateway(config: Omit<GatewayConfig, "id">): { id: string; error?: string } {
+export async function addGateway(config: Omit<GatewayConfig, "id">): Promise<{ id: string; error?: string }> {
   // Check for duplicate URL
   const normalizedUrl = config.url.replace(/\/+$/, "").toLowerCase();
-  const existing = store.gateways.find(g => 
+  const existing = store.gateways.find(g =>
     g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
   );
-  
+
   if (existing) {
     return { id: "", error: `Gateway already exists: ${existing.name}` };
   }
 
   const id = crypto.randomUUID();
   const gateway: GatewayConfig = { ...config, id };
-  
-  store.gateways = [...store.gateways, gateway];
-  saveGateways();
-  
+  const row = configToRow(gateway);
+
+  try {
+    await db.gateways.save(row);
+    gatewayRowCache.set(id, row);
+    store.gateways = [...store.gateways, gateway];
+    await saveGateways();
+  } catch (e) {
+    console.error("Failed to add gateway:", e);
+    return { id: "", error: String(e) };
+  }
+
   return { id };
 }
 
 export function isGatewayDuplicate(url: string): boolean {
   const normalizedUrl = url.replace(/\/+$/, "").toLowerCase();
-  return store.gateways.some(g => 
+  return store.gateways.some(g =>
     g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
   );
 }
 
 export function getGatewayByUrl(url: string): GatewayConfig | undefined {
   const normalizedUrl = url.replace(/\/+$/, "").toLowerCase();
-  return store.gateways.find(g => 
+  return store.gateways.find(g =>
     g.url.replace(/\/+$/, "").toLowerCase() === normalizedUrl
   );
 }
 
-export function updateGateway(id: string, updates: Partial<GatewayConfig>): void {
+export async function updateGateway(id: string, updates: Partial<GatewayConfig>): Promise<void> {
   store.gateways = store.gateways.map(g => g.id === id ? { ...g, ...updates } : g);
-  saveGateways();
+  const updated = store.gateways.find(g => g.id === id);
+  if (updated) {
+    const row = configToRow(updated);
+    try {
+      await db.gateways.save(row);
+      gatewayRowCache.set(id, row);
+    } catch (e) {
+      console.error("Failed to update gateway:", e);
+    }
+  }
 }
 
-export function removeGateway(id: string): void {
+export async function removeGateway(id: string): Promise<void> {
   // Disconnect first
   disconnectGateway(id);
-  
+
   store.gateways = store.gateways.filter(g => g.id !== id);
-  
+  gatewayRowCache.delete(id);
+
   // If removed gateway was active, set to first available
   if (store.activeGatewayId === id) {
     store.activeGatewayId = store.gateways[0]?.id ?? null;
   }
-  
-  saveGateways();
+
+  try {
+    await db.gateways.delete(id);
+    await saveGateways();
+  } catch (e) {
+    console.error("Failed to remove gateway:", e);
+  }
 }
 
-export function setActiveGateway(id: string): void {
+export async function setActiveGateway(id: string): Promise<void> {
   store.activeGatewayId = id;
-  saveGateways();
   lastSentMode = null;
 
-  // Restore per-gateway chat mode preference
+  try {
+    await db.gateways.setActiveId(id);
+  } catch (e) {
+    console.error("Failed to set active gateway:", e);
+  }
+
+  // Restore per-gateway chat mode preference (still in localStorage)
   if (browser) {
     const saved = localStorage.getItem(`${CHATMODE_KEY_PREFIX}.${id}`);
     store.chatMode = (saved === "npc" ? "npc" : "chat") as "chat" | "npc";
     loadThemeForGateway(id);
   }
-  
+
   // Reload data for newly active gateway
   const client = clients.get(id);
   if (client && client.getStatus() === "connected") {
@@ -368,7 +460,7 @@ export function setActiveGateway(id: string): void {
     store.modelsSnapshot = null;
     store.sessions = [];
     store.chatMessages = [];
-    
+
     // Load everything for the new active gateway
     loadGatewayData(id);
   }
@@ -387,14 +479,15 @@ export function connectGateway(id: string): void {
   if (!client) {
     client = new GatewayClient(gateway);
     clients.set(id, client);
-    
+
     // Set up event handlers
     client
       .on("status", (status) => handleStatusChange(id, status as ConnectionStatus))
       .on("snapshot", (snapshot) => handleSnapshot(id, snapshot as GatewaySnapshot))
-      .on("chat", (event) => handleChatEvent(event as ChatEventPayload))
-      .on("message", (message) => handleChatMessage(message as ChatMessage))
-      .on("error", (error) => handleError(id, error as string));
+      .on("chat", (event) => handleChatEvent(id, event as ChatEventPayload))
+      .on("message", (message) => handleChatMessage(id, message as ChatMessage))
+      .on("error", (error) => handleError(id, error as string))
+      .on("tool", (tool) => handleToolCall(id, tool as any));
   }
 
   // Initialize state
@@ -426,6 +519,79 @@ export function disconnectGateway(id: string): void {
 // ============================================================================
 // Event Handlers
 // ============================================================================
+
+function handleToolCall(gatewayId: string, tool: any): void {
+  if (gatewayId !== store.activeGatewayId) return;
+
+  // Intercept document editing tools
+  if (tool.name === "edit_document" || tool.name === "update_spreadsheet") {
+    console.log("[Store] Intercepted forge tool call:", tool);
+
+    // Process operations and stage patch
+    (async () => {
+      try {
+        const ops = tool.args.operations || [];
+        if (!store.forgeState.activeDocId) {
+          throw new Error("No active document to edit");
+        }
+
+        const patchOps = ops.map((op: any) => {
+          if (op.op === 'cell_update') {
+             // Value conversion for Rust enum
+             let val: any = "Empty";
+             if (op.value !== null && op.value !== undefined) {
+                 if (typeof op.value === 'string') val = { String: op.value };
+                 else if (typeof op.value === 'number') val = { Number: op.value };
+                 else if (typeof op.value === 'boolean') val = { Bool: op.value };
+                 // Basic date detection could go here but skipping for simplicity
+             }
+             return { CellUpdate: { sheet: op.sheet, row: op.row, col: op.col, value: val } };
+          } else if (op.op === 'row_delete') {
+             return { RowDelete: { sheet: op.sheet, index: op.index } };
+          } else if (op.op === 'row_insert') {
+             // Convert values array
+             const values = (op.values || []).map((v: any) => {
+                 if (v === null || v === undefined) return "Empty";
+                 if (typeof v === 'string') return { String: v };
+                 if (typeof v === 'number') return { Number: v };
+                 if (typeof v === 'boolean') return { Bool: v };
+                 return "Empty";
+             });
+             return { RowInsert: { sheet: op.sheet, index: op.index, values } };
+          } else if (op.op === 'col_delete') {
+             return { ColDelete: { sheet: op.sheet, index: op.index } };
+          }
+          return null;
+        }).filter((x: any) => x !== null);
+
+        // Call Rust backend
+        const rustPreview = await invoke<any>('doc_stage_patch', {
+            id: store.forgeState.activeDocId,
+            patch: { operations: patchOps }
+        });
+
+        // Store patch for approval UI
+        store.forgeState.pendingPatch = rustPreview;
+
+        // Notify user via chat message (optimistic)
+        store.chatMessages = [...store.chatMessages, {
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `📝 Proposed changes: ${rustPreview.summary || 'Updates ready'}. Please approve or reject in the Forge tab.`,
+          timestamp: new Date().toISOString()
+        }];
+      } catch (e: any) {
+        console.error("Failed to stage patch:", e);
+        store.chatMessages = [...store.chatMessages, {
+          id: crypto.randomUUID(),
+          role: "system",
+          content: `❌ Failed to apply changes: ${e.message || e}`,
+          timestamp: new Date().toISOString()
+        }];
+      }
+    })();
+  }
+}
 
 function handleStatusChange(id: string, status: ConnectionStatus): void {
   const newStates = new Map(store.gatewayStates);
@@ -499,7 +665,7 @@ async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<vo
 
   // Load models if this is the active gateway
   if (id === store.activeGatewayId) {
-    // Resolve session key (from localStorage or generate new)
+    // Resolve session key
     if (!store.sessionKey) {
       store.sessionKey = resolveSessionKey(id);
       console.log("[Store] Session key resolved:", store.sessionKey);
@@ -525,10 +691,10 @@ async function handleSnapshot(id: string, snapshot: GatewaySnapshot): Promise<vo
         console.warn("[Store] No client found for id:", id);
       }
     }
-    
+
     // Load sessions list
     loadSessions();
-    
+
     // Load chat history
     const client = clients.get(id);
     if (client) {
@@ -544,8 +710,8 @@ let currentRunId: string | null = null;
 let lastSentMode: "chat" | "npc" | null = null;
 let streamWatchdog: ReturnType<typeof setTimeout> | null = null;
 let streamHardDeadline: ReturnType<typeof setTimeout> | null = null;
-const STREAM_IDLE_TIMEOUT_MS = 1500;
-const STREAM_HARD_TIMEOUT_MS = 10000;
+const STREAM_IDLE_TIMEOUT_MS = 8000;
+const STREAM_HARD_TIMEOUT_MS = 120000;
 
 function clearStreamWatchdog(): void {
   if (streamWatchdog) {
@@ -576,6 +742,13 @@ function armStreamWatchdog(): void {
   streamWatchdog = setTimeout(() => {
     console.warn("[Store] Stream watchdog expired, forcing stop");
     stopStreaming();
+    // Always reload history — the response may be on the server even if no deltas were received
+    console.log("[Store] Watchdog: reloading history");
+    const activeId = store.activeGatewayId;
+    const activeClient = activeId ? clients.get(activeId) : null;
+    if (activeClient) {
+      loadChatHistory(activeClient);
+    }
   }, STREAM_IDLE_TIMEOUT_MS);
 }
 
@@ -584,6 +757,13 @@ function armStreamHardDeadline(): void {
   streamHardDeadline = setTimeout(() => {
     console.warn("[Store] Stream hard deadline reached, forcing stop");
     stopStreaming();
+    // Always reload history — the response may be on the server even if no deltas were received
+    console.log("[Store] Hard deadline: reloading history");
+    const activeId = store.activeGatewayId;
+    const activeClient = activeId ? clients.get(activeId) : null;
+    if (activeClient) {
+      loadChatHistory(activeClient);
+    }
   }, STREAM_HARD_TIMEOUT_MS);
 }
 
@@ -624,16 +804,18 @@ function extractText(message: unknown): string | null {
 /**
  * Handle chat events from openClaw gateway
  */
-function handleChatEvent(payload: ChatEventPayload): void {
+function handleChatEvent(gatewayId: string, payload: ChatEventPayload): void {
+  // Ignore events from non-active gateways (e.g. forwarded message responses)
+  if (gatewayId !== store.activeGatewayId) return;
   const currentSessionKey = store.sessionKey;
-  
+
   if (payload.sessionKey && payload.sessionKey !== currentSessionKey) {
     console.log("[Store] Ignoring chat event for different session:", payload.sessionKey);
     return;
   }
-  
+
   const payloadAny = payload as unknown as Record<string, unknown>;
-  
+
   console.log("[Store] handleChatEvent payload:", JSON.stringify({
     state: payload.state,
     runId: payload.runId,
@@ -642,19 +824,19 @@ function handleChatEvent(payload: ChatEventPayload): void {
     data: payloadAny.data,
     hasMessage: !!payload.message
   }));
-  
+
   let eventState = payload.state;
-  
+
   if (!eventState && typeof payloadAny.stream === "string") {
     const streamType = payloadAny.stream as string;
     const data = payloadAny.data as Record<string, unknown> | undefined;
-    
+
     if (streamType === "assistant" && data) {
       eventState = "delta";
       const content = data.text || data.delta;
       if (content) {
-        (payload as unknown as Record<string, unknown>).message = { 
-          content: content 
+        (payload as unknown as Record<string, unknown>).message = {
+          content: content
         };
         console.log("[Store] Normalized agent assistant event -> delta, content:", String(content).substring(0, 50));
       }
@@ -662,8 +844,8 @@ function handleChatEvent(payload: ChatEventPayload): void {
       console.log("[Store] Agent lifecycle end event, stopping stream");
       eventState = "final";
       if (data.text || data.content) {
-        (payload as unknown as Record<string, unknown>).message = { 
-          content: data.text || data.content 
+        (payload as unknown as Record<string, unknown>).message = {
+          content: data.text || data.content
         };
       }
     } else {
@@ -671,14 +853,14 @@ function handleChatEvent(payload: ChatEventPayload): void {
       return;
     }
   }
-  
+
   if (!eventState && payloadAny.type) {
     const agentType = payloadAny.type as string;
     if (agentType === "text" || agentType === "tool_output" || agentType === "thinking") {
       eventState = "delta";
       if (!payload.message && (payloadAny.content || payloadAny.delta)) {
-        (payload as unknown as Record<string, unknown>).message = { 
-          content: payloadAny.delta || payloadAny.content 
+        (payload as unknown as Record<string, unknown>).message = {
+          content: payloadAny.delta || payloadAny.content
         };
       }
     } else if (agentType === "done") {
@@ -688,20 +870,24 @@ function handleChatEvent(payload: ChatEventPayload): void {
     }
     console.log("[Store] Normalized agent event type:", agentType, "->", eventState);
   }
-  
+
   const validStates = ["delta", "final", "aborted", "error"];
   if (!eventState || !validStates.includes(eventState)) {
     console.log("[Store] Ignoring non-chat event with state:", eventState);
     return;
   }
 
+  // Only filter runId mismatches when currentRunId was confirmed by the server (not idempotencyKey).
+  // Before sendChat responds, currentRunId holds the idempotencyKey which will never match the
+  // server-assigned runId, causing all deltas to be silently dropped.
   if (eventState === "delta" && currentRunId && payload.runId && payload.runId !== currentRunId) {
-    console.log("[Store] Ignoring delta event for different run:", payload.runId, "expected:", currentRunId);
-    return;
+    // Accept and adopt the server's runId instead of filtering it out
+    console.log("[Store] Adopting server runId:", payload.runId, "(was:", currentRunId, ")");
+    currentRunId = payload.runId;
   }
-  
+
   console.log("[Store] Chat event:", eventState, payload.runId);
-  
+
   switch (eventState) {
     case "delta":
       const deltaText = extractText(payload.message);
@@ -726,11 +912,33 @@ function handleChatEvent(payload: ChatEventPayload): void {
       break;
 
     case "final": {
-      stopStreaming();
       console.log("[Store] Final event, reloading history from server");
 
-      // Send notification from streaming content before reload
+      // Save streaming content BEFORE clearing it
       const savedContent = store.streamingContent;
+
+      // Optimistic update: Add the completed message to the store immediately
+      // This prevents the "disappearing message" glitch while waiting for history reload
+      if (savedContent && currentRunId) {
+        // Check if we already have a message with this runId (unlikely but safe to check)
+        const exists = store.chatMessages.some(m => m.id === currentRunId);
+        if (!exists) {
+          const optimisticMsg: ChatMessage = {
+            id: currentRunId,
+            role: "assistant",
+            content: savedContent,
+            timestamp: new Date().toISOString(),
+          };
+          // Strip any system prefixes if present (though usually stripped at display time)
+          const cleanMsg = stripSystemPrefix(optimisticMsg);
+          store.chatMessages = [...store.chatMessages, cleanMsg];
+          console.log("[Store] Optimistically added final message:", currentRunId);
+        }
+      }
+
+      stopStreaming();
+
+      // Send notification from saved streaming content
       if (savedContent && store.notificationsEnabled) {
         const agent = getCurrentAgent();
         notifications.notifyNewMessage(
@@ -739,11 +947,12 @@ function handleChatEvent(payload: ChatEventPayload): void {
         );
       }
 
-      // Reload history from server (server is source of truth)
+      // Reload history from server with a delay to ensure server consistency
+      // Increased from 300ms to 1000ms to avoid race conditions where server hasn't committed yet
       const activeId = store.activeGatewayId;
       const activeClient = activeId ? clients.get(activeId) : null;
       if (activeClient) {
-        loadChatHistory(activeClient);
+        setTimeout(() => loadChatHistory(activeClient), 1000);
       }
       break;
     }
@@ -767,7 +976,9 @@ function handleChatEvent(payload: ChatEventPayload): void {
   }
 }
 
-function handleChatMessage(message: ChatMessage): void {
+function handleChatMessage(gatewayId: string, message: ChatMessage): void {
+  // Ignore messages from non-active gateways
+  if (gatewayId !== store.activeGatewayId) return;
   const exists = store.chatMessages.some(m => m.id === message.id);
   const clean = stripSystemPrefix(message);
   if (exists) {
@@ -795,14 +1006,14 @@ let isLoadingHistory = false;
  */
 async function loadChatHistory(client: GatewayClient): Promise<void> {
   if (!store.activeGatewayId) return;
-  
+
   // Prevent concurrent calls (connect.ok and connect response both trigger this)
   if (isLoadingHistory) {
     console.log("[Store] loadChatHistory: skipping, already in progress");
     return;
   }
   isLoadingHistory = true;
-  
+
   try {
     const serverMessages = await client.getChatHistory(store.sessionKey);
     store.chatMessages = serverMessages.map(stripSystemPrefix);
@@ -836,11 +1047,11 @@ async function fileToBase64(file: File): Promise<string> {
 
 async function filesToAttachments(files: File[]): Promise<import("./types").ChatAttachment[]> {
   const attachments: import("./types").ChatAttachment[] = [];
-  
+
   for (const file of files) {
     const content = await fileToBase64(file);
     const isImage = file.type.startsWith('image/');
-    
+
     attachments.push({
       type: isImage ? 'image' : 'file',
       mimeType: file.type || 'application/octet-stream',
@@ -848,7 +1059,7 @@ async function filesToAttachments(files: File[]): Promise<import("./types").Chat
       fileName: file.name,
     });
   }
-  
+
   return attachments;
 }
 
@@ -865,7 +1076,7 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
 
   const message = content.trim();
   const hasFiles = files && files.length > 0;
-  
+
   if (!message && !hasFiles) return;
 
   const idempotencyKey = crypto.randomUUID();
@@ -884,7 +1095,7 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
     content: displayContent,
     timestamp: new Date().toISOString(),
   };
-  
+
   store.chatMessages = [...store.chatMessages, userMessage];
   console.log("[Store] User message added (optimistic), count:", store.chatMessages.length);
 
@@ -894,12 +1105,20 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
     currentRunId = idempotencyKey;
     armStreamWatchdog();
     armStreamHardDeadline();
-    
+
     // Convert files to attachments
     const attachments = hasFiles ? await filesToAttachments(files) : undefined;
-    
+
     // Build the actual message to send — inject NPC system prompt when entering NPC mode
     let gatewayMessage = message || "Please analyze these files.";
+
+    // Inject Document Context if active
+    if (store.forgeState.activeDocId && store.forgeState.activeDocContext) {
+      const { name, type, excerpt } = store.forgeState.activeDocContext;
+      const contextPreamble = `[Document Context] File: ${name} (${type})\nContent Preview:\n${excerpt}\n---\nUser message: `;
+      gatewayMessage = contextPreamble + gatewayMessage;
+    }
+
     if (store.chatMode === "npc") {
       const theme = getActiveTheme();
       // Inject if: first NPC message, or mode/session changed since last send
@@ -925,15 +1144,26 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
       deliver: false,
       attachments,
     });
-    
+
     console.log("[Store] sendChat result:", JSON.stringify(result));
 
     if (result?.runId) {
       currentRunId = result.runId;
     }
 
-    // History will be reloaded when the server sends a 'final' chat event
-    // No need for a timer — the event-driven reload ensures we get the latest data
+    // Fallback: schedule a history reload in case streaming events (delta/final) never arrive.
+    // The 'final' event handler will also reload, but this ensures messages appear even if
+    // the server doesn't send streaming events (e.g. synchronous response, event format mismatch).
+    const fallbackClient = clients.get(id);
+    if (fallbackClient) {
+      setTimeout(() => {
+        // Only reload if we're still waiting (streaming not yet resolved by events)
+        if (store.isStreaming || store.chatMessages[store.chatMessages.length - 1]?.role === "user") {
+          console.log("[Store] Fallback: reloading history (streaming events may have been missed)");
+          loadChatHistory(fallbackClient);
+        }
+      }, 3000);
+    }
   } catch (e) {
     console.error("Failed to send message:", e);
     stopStreaming();
@@ -1024,13 +1254,13 @@ async function loadSessionsWithDefaults(client: GatewayClient): Promise<void> {
     const result = await client.getSessionsRaw({ limit: 50 });
     store.sessions = result?.sessions ?? [];
     console.log("[Store] Sessions loaded:", store.sessions.length);
-    
+
     // Extract model info from defaults if modelsSnapshot is empty
     if (!store.modelsSnapshot?.current && result?.defaults) {
       const defaults = result.defaults as Record<string, unknown>;
       const modelName = (defaults.model as string) ?? "";
       const provider = (defaults.modelProvider as string) ?? "";
-      
+
       if (modelName) {
         console.log("[Store] Setting current model from session defaults:", modelName);
         store.modelsSnapshot = {
@@ -1085,17 +1315,17 @@ export async function switchSession(sessionKey: string): Promise<void> {
 export function createNewSession(): string {
   const id = store.activeGatewayId;
   const newKey = generateSessionKey();
-  
+
   store.sessionKey = newKey;
   store.chatMessages = [];
   store.streamingContent = "";
   store.isStreaming = false;
   lastSentMode = null;
-  
+
   if (id) {
     saveSessionKey(id, newKey);
   }
-  
+
   console.log("[Store] New session created:", newKey);
   return newKey;
 }
@@ -1114,7 +1344,7 @@ export async function selectButton(messageId: string, callbackData: string, butt
     // Multi-select: toggle selection
     const currentSelections = msg.selectedButtons ?? [];
     const isSelected = currentSelections.includes(callbackData);
-    
+
     store.chatMessages = store.chatMessages.map(m => {
       if (m.id === messageId) {
         const newSelections = isSelected
@@ -1169,7 +1399,7 @@ export async function confirmMultiSelect(messageId: string): Promise<void> {
 
 export function toggleNotifications(enabled?: boolean): void {
   store.notificationsEnabled = enabled ?? !store.notificationsEnabled;
-  
+
   // Request permission if enabling
   if (store.notificationsEnabled) {
     notifications.requestPermission();
@@ -1199,27 +1429,27 @@ export function getAvailableSounds(): import("$lib/services/notifications").Noti
 // Initialize
 // ============================================================================
 
-export function initGatewayStore(): void {
-  loadGateways();
-  
+export async function initGatewayStore(): Promise<void> {
+  await loadGateways();
+
   // Auto-connect gateways that have saved credentials.
   // Connect the active gateway first for faster perceived load.
   const activeId = store.activeGatewayId;
-  
+
   if (activeId) {
     const activeGw = store.gateways.find(g => g.id === activeId);
     if (activeGw && (activeGw.token || activeGw.deviceToken || activeGw.password)) {
       connectGateway(activeId);
     }
   }
-  
+
   // Connect remaining gateways with credentials
   store.gateways.forEach(g => {
     if (g.id !== activeId && (g.token || g.deviceToken || g.password)) {
       connectGateway(g.id);
     }
   });
-  
+
   // Request notification permission on startup
   if (store.notificationsEnabled) {
     notifications.requestPermission();

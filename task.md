@@ -327,7 +327,7 @@
   - [x] Skip 버튼 (나중에 설정)
   - [x] 자동 연결 (로컬 감지 시)
 
-### Phase 2: Gateway 연결 🔄 (진행 중)
+### Phase 2: Gateway 연결 ✅ (완료)
 - [x] Gateway 연결 관리자 ✅
   - [x] WebSocket 클라이언트 (`ws://IP:18789`)
   - [x] 연결 상태 모니터링
@@ -337,8 +337,8 @@
 - [x] 멀티 Gateway 탭 UI ✅
   - [x] 탭 추가/제거
   - [x] 연결 상태 표시 (🟢/🔴/🟡)
-  - [x] Gateway 설정 저장 (로컬 스토리지)
-  - [ ] 탭 재정렬 (드래그앤드롭)
+  - [x] Gateway 설정 저장 (SQLite + localStorage fallback)
+  - [ ] 탭 재정렬 (드래그앤드롭) — 현재 탭 드래그는 메시지 포워딩용
 - [x] 채팅 UI ✅
   - [x] 메시지 송수신 (`chat.send`, `chat.history`) - 프로토콜 완료
   - [x] 스트리밍 응답 수신 (agent/chat events) - Store 업데이트 완료
@@ -348,6 +348,8 @@
   - [x] 메시지 중단 (`chat.abort`) → sessionKey 파라미터 수정 완료
   - [x] 타이핑 인디케이터 (●●●)
   - [x] 어시스턴트 노트 삽입 (`chat.inject`)
+  - [x] 메시지 포워딩 (다른 Gateway로 전송) ✅
+  - [x] 코드 블록 복사/핀 버튼 (single quote 인코딩 수정 완료) ✅
 - [x] **Model Selector (모델 선택기)** ⭐ ✅
   - [x] `models.list` 메서드로 모델 목록 조회
   - [x] 셀렉트 박스 UI (provider별 그룹화)
@@ -358,6 +360,8 @@
   - [x] 인증 방식 선택 (Tailscale/Token/Password)
   - [x] 인증 방식별 UI 전환
   - [x] 유효성 검사
+  - [x] 게이트웨이 편집 모드 ✅
+  - [x] 중복 URL 감지 ✅
 - [x] **Agent Picker (에이전트 선택기)** ✅
   - [x] 에이전트 목록 드롭다운
   - [x] 현재 에이전트 표시
@@ -367,10 +371,10 @@
   - [x] 세션 전환/새 세션 버튼
   - [x] 세션별 thinking/verbose 배지
   - [x] Gateway 연동 (실제 API 통합) ✅
-- [ ] **Status Bar (상태 바)**
-  - [ ] 연결 상태
-  - [ ] 현재 agent + session + model
-  - [ ] 토큰 카운트 (input/output/total)
+- [x] **Status Bar (상태 바)** ✅
+  - [x] 연결 상태 (connected/connecting/disconnected + 아이콘)
+  - [x] 현재 agent + session + model
+  - [x] 토큰 카운트 (input/output/total)
 - [x] **Tool Output Cards (툴 출력)** ✅
   - [x] 툴 호출 카드 (args + results)
   - [x] 확장/축소 토글
@@ -380,12 +384,31 @@
   - [x] Verbose 토글
   - [x] Reasoning 토글
   - [x] Deliver 토글
-  - [ ] Gateway 연동 (실제 API 통합)
-- [ ] **Slash Command Autocomplete**
-  - [ ] `/` 입력 시 명령어 목록
-  - [ ] 키보드 네비게이션
+  - [x] Gateway API Keys 관리 UI ✅ (ApiKeysPanel + SettingsPanel 통합)
+- [x] **Slash Command Autocomplete** ✅
+  - [x] `/` 입력 시 명령어 목록 (`/status`, `/npc`, `/model` 등)
+  - [x] 팝업 메뉴 UI
+- [x] **Notification System (알림 시스템)** ✅
+  - [x] 알림 서비스 (chime/pop/ding 사운드)
+  - [x] 브라우저 Permission 핸들링
+- [x] **NPC Mode (NPC 모드)** ✅
+  - [x] 애니메이션 캐릭터 렌더링 (blink, wave, bow)
+  - [x] 감정 감지 (emotion detection)
+  - [x] 커스텀 NPC 테마 시스템
+  - [x] 아바타 팩 (mood backgrounds, thinking faces)
+  - [x] 배경 크로스페이딩
+  - [x] 다이얼로그 패널
 
-### Phase 3: 향상된 파일 처리
+### Phase 2.5: 인프라 ✅ (완료)
+- [x] **SQLite 데이터베이스 마이그레이션** ✅
+  - [x] Rust 백엔드 (rusqlite, WAL 모드)
+  - [x] DB 스키마 (gateways, settings, device_identity, device_auth, npc_themes, npc_bg_paths)
+  - [x] Tauri 커맨드 19개 등록
+  - [x] TypeScript DAL (`src/lib/db.ts`) — Proxy 패턴으로 Tauri/localStorage 자동 전환
+  - [x] One-time 마이그레이션 (`src/lib/migration.ts`)
+  - [x] 웹 전용 개발 모드 (localStorage fallback) 지원
+
+### Phase 3: 향상된 파일 처리 ✅ (완료)
 - [x] **드래그앤드롭 파일 업로드** ✅
   - [x] 이미지 (JPG, PNG, WebP, GIF)
   - [x] 문서 (PDF, DOCX, XLSX, PPTX)
@@ -396,25 +419,41 @@
 - [x] 클립보드 이미지 붙여넣기 (Ctrl/Cmd+V) ✅
 - [x] 파일 프리뷰
   - [x] 이미지 인라인 표시
-  - [ ] PDF 썸네일
+  - [x] PDF 썸네일 ✅ (pdfjs-dist 로컬 번들)
   - [x] 문서 아이콘
-- [ ] 다운로드 관리 (에이전트가 생성한 파일)
+- [x] 다운로드 관리 (에이전트가 생성한 파일) ✅ (FileDownload 컴포넌트)
 
-### Phase 4: Document Forge (문서 협업) ⭐
-- [ ] 문서 편집기 통합
-  - [ ] Excel 편집기 (SheetJS + Handsontable 또는 유사)
-  - [ ] Word 편집기 (TipTap/ProseMirror)
-  - [ ] PowerPoint 뷰어/편집기 (pptxgenjs)
-  - [ ] Markdown 편집기
-- [ ] Forge 세션
-  - [ ] 문서 열기 → 에이전트와 공유
-  - [ ] 에이전트 수정 요청
-  - [ ] 변경 사항 실시간 반영
-  - [ ] 변경 내역 하이라이트 (diff)
-- [ ] 버전 관리
-  - [ ] 스냅샷 저장
-  - [ ] 변경 되돌리기
-  - [ ] 변경 이력 표시
+### Phase 4: Document Forge (문서 협업) ⭐ ✅ (완료)
+- [x] 문서 편집기 통합 ✅
+  - [x] Excel 편집기 (Rust: calamine + rust_xlsxwriter) ✅
+  - [x] Word 편집기 (TipTap/ProseMirror) ✅
+  - [x] PowerPoint 뷰어 (플레이스홀더 + 슬라이드 목록) ✅
+  - [ ] Markdown 편집기 (Phase 5로 이동)
+- [x] Forge 세션 ✅
+  - [x] 문서 열기 → 에이전트와 공유 (doc_open, doc_read_view)
+  - [x] 에이전트 수정 요청 (stagePatch, JsonPatch)
+  - [x] 변경 사항 실시간 반영 (tool_use 인터셉트 → forgeState → ApprovalModal) ✅
+  - [x] 변경 내역 하이라이트 (DiffViewer, ApprovalModal) ✅
+- [x] 버전 관리 ✅
+  - [x] 스냅샷 저장 (undo/redo stack, MAX_UNDO_DEPTH=20)
+  - [x] 변경 되돌리기 (doc_undo, doc_redo)
+  - [x] 변경 이력 표시 UI (HistoryTimeline) ✅
+- [x] Rust 백엔드 모듈 (`src-tauri/src/document/`) ✅
+  - [x] types.rs — DocState, CellValue, PatchOperation 등
+  - [x] manager.rs — SessionManager (Mutex + HashMap)
+  - [x] commands.rs — 11개 Tauri IPC 커맨드
+  - [x] formats/excel.rs — ExcelAdapter (read/save)
+  - [x] patch.rs — apply_patch, diff_states
+- [x] Svelte 프론트엔드 ✅
+  - [x] document.svelte.ts — Store + Rust↔UI 타입 변환
+  - [x] ExcelGrid.svelte — 페이지네이션 그리드
+  - [x] DocPreview.svelte — 멀티시트 탭 뷰어
+  - [x] DiffViewer.svelte — 변경 diff 테이블
+  - [x] ApprovalModal.svelte — HITL 승인 모달
+- [x] 보안 하드닝 ✅
+  - [x] MAX_TOTAL_CELLS=5,000,000 (DoS 방지)
+  - [x] MAX_UNDO_DEPTH=20 (메모리 제한)
+  - [x] max_rows 1000 cap (IPC 페이로드 제한)
 
 ### Phase 5: 고급 기능
 - [ ] Canvas 통합 (OpenClaw Canvas/A2UI)
@@ -437,20 +476,30 @@ src/
 │   │   └── ko/
 │   │       └── index.ts     # 한글 번역
 │   ├── theme.ts             # 테마 관리 (완료)
-│   ├── settings.ts          # 로컬 설정 (완료)
+│   ├── settings.ts          # 앱 설정 (완료, SQLite 연동)
+│   ├── db.ts                # SQLite DAL (Tauri/localStorage 자동 전환)
+│   ├── migration.ts         # localStorage → SQLite 마이그레이션
+│   ├── notifications.ts     # 알림 서비스
 │   ├── gateway/
 │   │   ├── client.ts        # WebSocket 클라이언트
 │   │   ├── types.ts         # Gateway 프로토콜 타입
-│   │   └── store.ts         # 연결 상태 스토어
+│   │   ├── store.svelte.ts  # 연결 상태 스토어 (Svelte 5 Runes)
+│   │   ├── device-identity.ts # Ed25519 키 관리
+│   │   ├── device-auth.ts   # 디바이스 인증 토큰
+│   │   ├── npcThemeStore.svelte.ts # NPC 테마 스토어
+│   │   └── npcBackgroundService.ts # NPC 배경 서비스
 │   ├── forge/
-│   │   ├── excel.ts         # Excel 편집기 래퍼
-│   │   ├── word.ts          # Word 편집기 래퍼
-│   │   └── session.ts       # Forge 세션 관리
+│   │   ├── excel.ts         # Excel 편집기 래퍼 (미구현)
+│   │   ├── word.ts          # Word 편집기 래퍼 (미구현)
+│   │   └── session.ts       # Forge 세션 관리 (미구현)
 │   └── components/
-│       ├── Chat/
-│       ├── Tabs/
-│       ├── FileUpload/
-│       └── Forge/
+│       ├── Chat/            # 채팅 UI (MessageBubble, ChatInput, ChatPanel 등)
+│       ├── Gateway/         # Gateway 모달 (AddGatewayModal, ForwardModal)
+│       ├── Tabs/            # Gateway 탭 UI
+│       ├── FileUpload/      # 파일 업로드/프리뷰
+│       ├── Wizard/          # 설정 마법사
+│       ├── NPC/             # NPC 아바타/테마
+│       └── Forge/           # 문서 협업 (미구현)
 ├── routes/
 │   ├── +layout.svelte       # 앱 쉘 + 탭바
 │   ├── +page.svelte         # 홈 (대시보드)
@@ -463,9 +512,20 @@ src/
 │   └── onboarding/
 │       └── +page.svelte     # 첫 실행 가이드
 src-tauri/
+├── Cargo.toml               # rusqlite 의존성 포함
 ├── tauri.conf.json
 ├── src/
-│   └── lib.rs               # Rust 백엔드 (파일 시스템, 클립보드 등)
+│   ├── lib.rs               # Rust 백엔드 + DB 초기화 + 19개 커맨드
+│   └── database/            # SQLite 데이터베이스 모듈
+│       ├── mod.rs            # DbState, init_db()
+│       ├── schema.rs         # CREATE TABLE SQL
+│       ├── models.rs         # Rust 데이터 구조체
+│       ├── gateways.rs       # Gateway CRUD 커맨드
+│       ├── settings.rs       # Settings 커맨드
+│       ├── identity.rs       # Device Identity 커맨드
+│       ├── auth.rs           # Device Auth 커맨드
+│       ├── themes.rs         # NPC Theme 커맨드
+│       └── migration.rs      # 마이그레이션 커맨드
 └── icons/
 ```
 
@@ -857,11 +917,11 @@ OpenClaw는 세 가지 UI를 제공:
 
 ## 다음 작업 (우선순위)
 
-1. **Gateway WebSocket 클라이언트 구현** - 핵심 연결 로직
-2. **탭 UI 구현** - 멀티 Gateway 관리
-3. **채팅 UI 구현** - 메시지 송수신
-4. **파일 드래그앤드롭** - 웹챗 대비 차별점
-5. **Forge 프로토타입** - Excel 편집기부터 시작
+1. **탭 재정렬 (드래그앤드롭)** - Gateway 탭 순서 변경 (현재 DnD는 메시지 포워딩용)
+2. **Markdown 편집기** - Forge에 Markdown 편집 지원 추가
+3. **API Key 암호화** - SQLite에 저장된 키를 keyring/encryption으로 보호
+4. **Store 리팩토링** - NPC/Forge 로직을 별도 서비스로 분리
+5. **PowerPoint 실제 렌더링** - 현재 플레이스홀더 → JSZip 기반 슬라이드 파싱
 
 ---
 

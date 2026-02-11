@@ -55,9 +55,9 @@
     onclose?.();
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!isValid()) return;
-    
+
     error = null;
 
     if (isEditMode && editGateway) {
@@ -70,7 +70,7 @@
         password: authMethod === "password" ? password : undefined,
       };
 
-      updateGateway(editGateway.id, updates);
+      await updateGateway(editGateway.id, updates);
 
       // If URL or auth changed, reconnect
       if (url.trim() !== editGateway.url || authMethod !== editGateway.authMethod || token !== (editGateway.token ?? "") || password !== (editGateway.password ?? "")) {
@@ -82,7 +82,7 @@
       onclose?.();
     } else {
       // Add new gateway
-      const result = addGateway({
+      const result = await addGateway({
         name: name.trim(),
         url: url.trim(),
         authMethod,
@@ -95,7 +95,7 @@
         return;
       }
 
-      setActiveGateway(result.id);
+      await setActiveGateway(result.id);
       connectGateway(result.id);
 
       onadded?.(result.id);
@@ -121,7 +121,7 @@
           id="gateway-name"
           type="text"
           bind:value={name}
-          placeholder="e.g. Home Server"
+          placeholder={$t("gateway.placeholder.name")}
         />
       </div>
 
@@ -131,19 +131,19 @@
           id="gateway-url"
           type="text"
           bind:value={url}
-          placeholder="ws://192.168.1.100:18789"
+          placeholder={$t("gateway.placeholder.url")}
           class:error={isDuplicate()}
         />
         {#if isDuplicate()}
-          <span class="error-text">⚠️ Gateway already exists: {existingGateway()?.name}</span>
+          <span class="error-text">⚠️ {$t("gateway.duplicate")} {existingGateway()?.name}</span>
         {:else}
-          <span class="hint">WebSocket URL (ws:// or wss://)</span>
+          <span class="hint">{$t("gateway.url_hint")}</span>
         {/if}
       </div>
 
       <div class="form-group">
         <!-- svelte-ignore a11y_label_has_associated_control -->
-        <label>Authentication</label>
+        <label>{$t("gateway.auth")}</label>
         <div class="auth-options">
           <button
             class="auth-option"
@@ -151,7 +151,7 @@
             onclick={() => authMethod = "tailscale"}
           >
             <span class="icon">🔒</span>
-            <span>Tailscale</span>
+            <span>{$t("gateway.auth.tailscale")}</span>
           </button>
           <button
             class="auth-option"
@@ -159,7 +159,7 @@
             onclick={() => authMethod = "token"}
           >
             <span class="icon">🔑</span>
-            <span>Token</span>
+            <span>{$t("gateway.auth.token")}</span>
           </button>
           <button
             class="auth-option"
@@ -167,7 +167,7 @@
             onclick={() => authMethod = "password"}
           >
             <span class="icon">🔐</span>
-            <span>Password</span>
+            <span>{$t("gateway.auth.password")}</span>
           </button>
         </div>
       </div>
@@ -179,23 +179,23 @@
             id="gateway-token"
             type="password"
             bind:value={token}
-            placeholder="Enter your token"
+            placeholder={$t("gateway.placeholder.token")}
           />
         </div>
       {:else if authMethod === "password"}
         <div class="form-group">
-          <label for="gateway-password">Password</label>
+          <label for="gateway-password">{$t("gateway.auth.password")}</label>
           <input
             id="gateway-password"
             type="password"
             bind:value={password}
-            placeholder="Enter your password"
+            placeholder={$t("gateway.placeholder.password")}
           />
         </div>
       {:else}
         <div class="tailscale-info">
           <span class="icon">ℹ️</span>
-          <p>Tailscale authentication uses your network identity. No credentials needed.</p>
+          <p>{$t("gateway.auth.tailscale_desc")}</p>
         </div>
       {/if}
 

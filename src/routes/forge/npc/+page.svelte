@@ -455,6 +455,8 @@
                 {#each BG_EMOTIONS as bgKey}
                   {@const src = getBgSrc(bgKey)}
                   {@const modified = isBgModified(bgKey)}
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
                   <div class="bg-card" class:modified class:active={
                     (previewEmotion === "neutral" && bgKey === "default") ||
                     (previewEmotion !== "neutral" && bgKey === previewEmotion)
@@ -471,7 +473,7 @@
                     <span class="bg-label">{BG_EMOTION_LABELS[bgKey]}</span>
                     <div class="part-actions">
                       <!-- svelte-ignore a11y_click_events_have_key_events -->
-                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                       <label class="part-upload-btn" title="Upload {BG_EMOTION_LABELS[bgKey]} background" onclick={(e) => e.stopPropagation()}>
                         <Upload size={12} />
                         <input
@@ -510,7 +512,9 @@
                   {@const src = getPartSrc(key)}
                   {@const modified = isPartModified(key)}
                   {@const selected = selectedPart === key}
-                  <button class="part-card" class:modified class:selected onclick={() => {
+                  <!-- svelte-ignore a11y_click_events_have_key_events -->
+                  <!-- svelte-ignore a11y_no_static_element_interactions -->
+                  <div class="part-card" class:modified class:selected onclick={() => {
                     selectedPart = selected ? null : key;
                     // Auto-switch preview emotion when selecting a face part
                     if (!selected && key.startsWith("face_")) {
@@ -528,7 +532,7 @@
                     <span class="part-label">{label}</span>
                     <div class="part-actions">
                       <!-- svelte-ignore a11y_click_events_have_key_events -->
-                      <!-- svelte-ignore a11y_no_static_element_interactions -->
+                      <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
                       <label class="part-upload-btn" title="Upload {label}" onclick={(e) => e.stopPropagation()}>
                         <Upload size={12} />
                         <input
@@ -544,7 +548,7 @@
                         </button>
                       {/if}
                     </div>
-                  </button>
+                  </div>
                 {/each}
               </div>
 

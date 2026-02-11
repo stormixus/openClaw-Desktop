@@ -1,6 +1,7 @@
 <script lang="ts">
   import { X, Send } from "@lucide/svelte";
   import { store, sendMessageToGateway } from "$lib/gateway/store.svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     content: string;
@@ -33,7 +34,7 @@
 <div class="overlay" onclick={handleOverlayClick}>
   <div class="modal">
     <div class="header">
-      <h3>Forward Message</h3>
+      <h3>{$t("forward.title")}</h3>
       <button class="close-btn" onclick={() => onclose?.()}>
         <X size={18} />
       </button>
@@ -44,10 +45,10 @@
     </div>
 
     <div class="gateway-list">
-      <span class="label">Send to:</span>
+      <span class="label">{$t("forward.send_to")}</span>
       {#each otherGateways as gateway (gateway.id)}
         {@const state = store.gatewayStates.get(gateway.id)}
-        <button 
+        <button
           class="gateway-item"
           class:connected={state?.status === "connected"}
           onclick={() => forwardTo(gateway.id)}
@@ -57,10 +58,10 @@
           <span class="gateway-status">
             {#if state?.status === "connected"}
               <span class="status-dot connected"></span>
-              Connected
+              {$t("gateway.status.connected")}
             {:else}
               <span class="status-dot"></span>
-              Disconnected
+              {$t("gateway.status.disconnected")}
             {/if}
           </span>
           <Send size={14} />
@@ -68,7 +69,7 @@
       {/each}
 
       {#if otherGateways.length === 0}
-        <div class="empty">No other gateways available</div>
+        <div class="empty">{$t("forward.empty")}</div>
       {/if}
     </div>
   </div>

@@ -5,6 +5,9 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
+mod database;
+mod document;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct LocalOpenClawConfig {
     pub found: bool,
@@ -22,7 +25,7 @@ fn greet(name: &str) -> String {
 #[tauri::command]
 fn detect_local_openclaw() -> LocalOpenClawConfig {
     let home = dirs::home_dir().unwrap_or_default();
-    
+
     // Common config locations to check
     let config_paths = vec![
         home.join(".config/openclaw/config.toml"),
@@ -35,7 +38,7 @@ fn detect_local_openclaw() -> LocalOpenClawConfig {
         home.join(".config/openclaw-gateway/config.yaml"),
         home.join(".local/share/openclaw/config.toml"),
     ];
-    
+
     for path in config_paths {
         if path.exists() {
             if let Some(config) = try_parse_config(&path) {
@@ -43,7 +46,7 @@ fn detect_local_openclaw() -> LocalOpenClawConfig {
             }
         }
     }
-    
+
     // Also check for running process and default port
     if check_port_available(18789) == false {
         // Port is in use, likely openClaw is running
@@ -54,7 +57,7 @@ fn detect_local_openclaw() -> LocalOpenClawConfig {
             config_path: None,
         };
     }
-    
+
     LocalOpenClawConfig {
         found: false,
         port: None,
@@ -66,37 +69,37 @@ fn detect_local_openclaw() -> LocalOpenClawConfig {
 fn try_parse_config(path: &PathBuf) -> Option<LocalOpenClawConfig> {
     let content = fs::read_to_string(path).ok()?;
     let path_str = path.to_string_lossy().to_string();
-    
+
     // Try to extract port and token from various formats
     let mut port: Option<u16> = None;
     let mut token: Option<String> = None;
-    
+
     // Simple regex-like parsing for common patterns
     for line in content.lines() {
         let line = line.trim();
-        
+
         // Port detection
         if line.contains("port") {
             if let Some(num) = extract_number(line) {
                 port = Some(num);
             }
         }
-        
+
         // Token detection
         if line.contains("token") || line.contains("secret") || line.contains("api_key") {
             if let Some(t) = extract_quoted_string(line) {
                 token = Some(t);
             }
         }
-        
-        // Device token detection  
+
+        // Device token detection
         if line.contains("device_token") {
             if let Some(t) = extract_quoted_string(line) {
                 token = Some(t);
             }
         }
     }
-    
+
     if port.is_some() || token.is_some() {
         Some(LocalOpenClawConfig {
             found: true,
@@ -161,7 +164,7 @@ async fn fetch_assistant_meta(url: String) -> Result<AssistantMeta, String> {
     let http_url = url
         .replace("ws://", "http://")
         .replace("wss://", "https://");
-    
+
     // Ensure path ends with /chat
     let fetch_url = if http_url.ends_with('/') {
         format!("{}chat", http_url)
@@ -261,13 +264,59 @@ fn delete_npc_background(app: tauri::AppHandle, theme_id: String) -> Result<(), 
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+            fs::create_dir_all(&data_dir)
+                .map_err(|e| format!("Failed to create data dir: {}", e))?;
+            let conn = database::init_db(&data_dir)
+                .map_err(|e| format!("Failed to init database: {}", e))?;
+            app.manage(database::DbState(std::sync::Mutex::new(conn)));
+            app.manage(document::manager::SessionManager::new());
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             detect_local_openclaw,
             fetch_assistant_meta,
             save_npc_background,
             get_npc_bg_path,
-            delete_npc_background
+            delete_npc_background,
+            // Document commands
+            document::commands::doc_open,
+            document::commands::doc_read_view,
+            document::commands::doc_stage_patch,
+            document::commands::doc_commit,
+            document::commands::doc_save,
+            document::commands::doc_discard,
+            document::commands::doc_close,
+            document::commands::doc_undo,
+            document::commands::doc_redo,
+            document::commands::doc_list_sessions,
+            // Database commands
+            database::gateways::db_get_gateways,
+            database::gateways::db_save_gateway,
+            database::gateways::db_delete_gateway,
+            database::gateways::db_get_active_gateway_id,
+            database::gateways::db_set_active_gateway_id,
+            database::gateways::db_update_gateway_state,
+            database::gateways::db_update_gateway_orders,
+            database::settings::db_get_settings,
+            database::settings::db_save_settings,
+            database::identity::db_get_device_identity,
+            database::identity::db_save_device_identity,
+            database::auth::db_get_device_auth,
+            database::auth::db_save_device_auth,
+            database::auth::db_clear_device_auth,
+            database::themes::db_get_custom_themes,
+            database::themes::db_save_custom_theme,
+            database::themes::db_delete_custom_theme,
+            database::themes::db_get_bg_path,
+            database::themes::db_set_bg_path,
+            database::migration::db_migrate_from_json,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

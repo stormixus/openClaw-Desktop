@@ -5,10 +5,13 @@
   import { applyThemeToDocument, initTheme, theme } from "$lib/theme";
   import { initGatewayStore } from "$lib/gateway/store.svelte";
   import { initBackgroundService } from "$lib/gateway/npcBackgroundService";
-  import { loadThemeManifests } from "$lib/gateway/npcThemeStore.svelte";
+  import { loadThemeManifests, loadCustomThemesFromDb } from "$lib/gateway/npcThemeStore.svelte";
+  import { initSettings } from "$lib/settings";
+  import { migrateIfNeeded } from "$lib/migration";
 
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SetupWizard from "$lib/components/Wizard/SetupWizard.svelte";
+  import StatusBar from "$lib/components/StatusBar/StatusBar.svelte";
 
   let { children } = $props();
 
@@ -16,11 +19,9 @@
   let initialized = $state(false);
 
   onMount(() => {
+    // Synchronous inits (localStorage-based, unchanged)
     initLocale();
     initTheme();
-    initGatewayStore();
-    initBackgroundService();
-    loadThemeManifests();
 
     // Check if first run
     if (browser) {
@@ -28,7 +29,28 @@
       showWizard = !wizardComplete;
     }
 
-    initialized = true;
+    // Async inits (SQLite-based)
+    (async () => {
+      try {
+        // 1. Run one-time migration from localStorage → SQLite
+        await migrateIfNeeded();
+
+        // 2. Load data from SQLite
+        await Promise.all([
+          initGatewayStore(),
+          initSettings(),
+          loadCustomThemesFromDb(),
+        ]);
+
+        // 3. Non-blocking background tasks
+        initBackgroundService();
+        loadThemeManifests();
+      } catch (e) {
+        console.error("[Layout] Initialization failed:", e);
+      }
+
+      initialized = true;
+    })();
 
     const unsubscribe = theme.subscribe((value) => {
       applyThemeToDocument(value);
@@ -68,6 +90,7 @@
     <main class="main-content">
       {@render children()}
     </main>
+    <StatusBar />
   </div>
 </div>
 
