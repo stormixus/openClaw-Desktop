@@ -138,7 +138,7 @@
     multiple
     on:change={handleFileSelect}
     style="display: none"
-    accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md"
+    accept="image/*,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,.txt,.md"
   />
 
   {#if files.length === 0}

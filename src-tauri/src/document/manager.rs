@@ -194,6 +194,56 @@ impl SessionManager {
                 }
 
                 sheet_data.rows[*row][*col] = value.clone();
+                remove_formula_at(sheet_data, *row, *col);
+            },
+            PatchOperation::CellFormulaUpdate { sheet, row, col, formula } => {
+                const MAX_ROWS: usize = 1_048_576;
+                const MAX_COLS: usize = 16_384;
+                const MAX_TOTAL_CELLS: usize = 5_000_000;
+
+                if *row >= MAX_ROWS || *col >= MAX_COLS {
+                    return Err(DocError::PatchError(format!("Dimensions exceed limits: row={}, col={}", row, col)));
+                }
+
+                let sheet_data = state.sheets.iter_mut().find(|s| s.name == *sheet)
+                    .ok_or_else(|| DocError::PatchError(format!("Sheet not found: {}", sheet)))?;
+
+                let current_rows = sheet_data.rows.len();
+                let current_cols = sheet_data.total_cols;
+                let new_rows = std::cmp::max(current_rows, *row + 1);
+                let new_cols = std::cmp::max(current_cols, *col + 1);
+                if new_rows * new_cols > MAX_TOTAL_CELLS {
+                    return Err(DocError::PatchError(format!("Operation would exceed max cell limit of {}", MAX_TOTAL_CELLS)));
+                }
+
+                while sheet_data.rows.len() <= *row {
+                    sheet_data.rows.push(vec![CellValue::Empty; sheet_data.total_cols]);
+                }
+                while sheet_data.rows[*row].len() <= *col {
+                    sheet_data.rows[*row].push(CellValue::Empty);
+                }
+
+                if sheet_data.rows.len() > sheet_data.total_rows {
+                    sheet_data.total_rows = sheet_data.rows.len();
+                }
+                if *col >= sheet_data.total_cols {
+                    sheet_data.total_cols = *col + 1;
+                    for r in &mut sheet_data.rows {
+                        if r.len() < sheet_data.total_cols {
+                            r.resize(sheet_data.total_cols, CellValue::Empty);
+                        }
+                    }
+                }
+
+                let clean_formula = formula.trim().trim_start_matches('=').to_string();
+                if clean_formula.is_empty() {
+                    remove_formula_at(sheet_data, *row, *col);
+                    sheet_data.rows[*row][*col] = CellValue::Empty;
+                } else {
+                    upsert_formula(sheet_data, *row, *col, clean_formula.clone());
+                    // Keep a visible marker value until workbook recalculates.
+                    sheet_data.rows[*row][*col] = CellValue::String(format!("={}", clean_formula));
+                }
             },
             PatchOperation::RowDelete { sheet, index } => {
                 let sheet_data = state.sheets.iter_mut().find(|s| s.name == *sheet)
@@ -201,6 +251,7 @@ impl SessionManager {
                 if *index < sheet_data.rows.len() {
                     sheet_data.rows.remove(*index);
                     sheet_data.total_rows = sheet_data.rows.len();
+                    invalidate_sheet_metadata(sheet_data);
                 }
             },
             PatchOperation::RowInsert { sheet, index, values } => {
@@ -215,6 +266,28 @@ impl SessionManager {
                     sheet_data.rows.push(new_row);
                 }
                 sheet_data.total_rows = sheet_data.rows.len();
+                invalidate_sheet_metadata(sheet_data);
+            },
+            PatchOperation::ColInsert { sheet, index } => {
+                let sheet_data = state.sheets.iter_mut().find(|s| s.name == *sheet)
+                    .ok_or_else(|| DocError::PatchError(format!("Sheet not found: {}", sheet)))?;
+
+                for row in &mut sheet_data.rows {
+                    if *index <= row.len() {
+                        row.insert(*index, CellValue::Empty);
+                    } else {
+                        row.push(CellValue::Empty);
+                    }
+                }
+
+                sheet_data.total_cols = sheet_data.total_cols.saturating_add(1);
+                for row in &mut sheet_data.rows {
+                    if row.len() < sheet_data.total_cols {
+                        row.resize(sheet_data.total_cols, CellValue::Empty);
+                    }
+                }
+
+                invalidate_sheet_metadata(sheet_data);
             },
             PatchOperation::ColDelete { sheet, index } => {
                 let sheet_data = state.sheets.iter_mut().find(|s| s.name == *sheet)
@@ -228,6 +301,7 @@ impl SessionManager {
                     if sheet_data.total_cols > 0 {
                         sheet_data.total_cols -= 1;
                     }
+                    invalidate_sheet_metadata(sheet_data);
                 }
             }
         }
@@ -274,5 +348,27 @@ impl SessionManager {
             }
         }
         changes
+    }
+}
+
+fn invalidate_sheet_metadata(sheet: &mut SheetData) {
+    // Spreadsheet structural edits invalidate formula/merge coordinates.
+    // Recompute on reopen to avoid showing stale positions.
+    sheet.formulas.clear();
+    sheet.merged_ranges.clear();
+    sheet.styled_cells.clear();
+    sheet.row_heights.clear();
+    sheet.col_widths.clear();
+}
+
+fn remove_formula_at(sheet: &mut SheetData, row: usize, col: usize) {
+    sheet.formulas.retain(|f| !(f.row == row && f.col == col));
+}
+
+fn upsert_formula(sheet: &mut SheetData, row: usize, col: usize, formula: String) {
+    if let Some(existing) = sheet.formulas.iter_mut().find(|f| f.row == row && f.col == col) {
+        existing.formula = formula;
+    } else {
+        sheet.formulas.push(FormulaCell { row, col, formula });
     }
 }

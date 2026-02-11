@@ -5,6 +5,8 @@ use crate::document::error::DocError;
 pub mod excel;
 pub mod pdf;
 pub mod docx;
+pub mod hwp;
+pub mod xlsx_visuals;
 
 pub trait DocumentAdapter: Send + Sync {
     fn read(path: &Path) -> Result<DocState, DocError>;

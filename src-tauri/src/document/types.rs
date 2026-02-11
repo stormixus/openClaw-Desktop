@@ -22,6 +22,65 @@ pub struct SheetData {
     pub rows: Vec<Vec<CellValue>>,
     pub total_rows: usize,
     pub total_cols: usize,
+    pub formulas: Vec<FormulaCell>,
+    pub merged_ranges: Vec<MergeRange>,
+    pub row_heights: Vec<RowHeight>,
+    pub col_widths: Vec<ColWidth>,
+    pub styled_cells: Vec<StyledCell>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct FormulaCell {
+    pub row: usize,
+    pub col: usize,
+    pub formula: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct MergeRange {
+    pub start_row: usize,
+    pub start_col: usize,
+    pub end_row: usize,
+    pub end_col: usize,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct RowHeight {
+    pub row: usize,
+    pub height: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct ColWidth {
+    pub start_col: usize,
+    pub end_col: usize,
+    pub width: f32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct StyledCell {
+    pub row: usize,
+    pub col: usize,
+    pub style: CellStyle,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+pub struct CellStyle {
+    pub font_name: Option<String>,
+    pub font_size: Option<f32>,
+    pub bold: bool,
+    pub italic: bool,
+    pub underline: bool,
+    pub font_color: Option<String>,
+    pub bg_color: Option<String>,
+    pub h_align: Option<String>,
+    pub v_align: Option<String>,
+    pub wrap_text: bool,
+    pub border_left: bool,
+    pub border_right: bool,
+    pub border_top: bool,
+    pub border_bottom: bool,
+    pub number_format_id: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -58,6 +117,12 @@ pub enum PatchOperation {
         col: usize,
         value: CellValue,
     },
+    CellFormulaUpdate {
+        sheet: String,
+        row: usize,
+        col: usize,
+        formula: String,
+    },
     RowDelete {
         sheet: String,
         index: usize,
@@ -66,6 +131,10 @@ pub enum PatchOperation {
         sheet: String,
         index: usize,
         values: Vec<CellValue>,
+    },
+    ColInsert {
+        sheet: String,
+        index: usize,
     },
     ColDelete {
         sheet: String,

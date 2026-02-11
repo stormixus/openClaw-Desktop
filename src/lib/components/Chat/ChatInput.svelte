@@ -336,7 +336,7 @@
         type="file"
         multiple
         onchange={handleFileSelect}
-        accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.md"
+        accept="image/*,.pdf,.doc,.docx,.hwp,.hwpx,.xls,.xlsx,.ppt,.pptx,.txt,.md"
         style="display: none"
       />
       <button class="toolbar-btn" title={$t("toolbar.files")} onclick={() => fileInputEl?.click()}>

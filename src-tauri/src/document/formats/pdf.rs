@@ -42,6 +42,11 @@ impl DocumentAdapter for PdfAdapter {
                 rows,
                 total_rows,
                 total_cols: 1,
+                formulas: vec![],
+                merged_ranges: vec![],
+                row_heights: vec![],
+                col_widths: vec![],
+                styled_cells: vec![],
             }],
             modified: false,
         })

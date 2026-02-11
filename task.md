@@ -947,3 +947,75 @@ bun run check
 - [Gateway 문서](https://docs.openclaw.ai/gateway)
 - [WebSocket 아키텍처](https://docs.openclaw.ai/concepts/architecture)
 - [Tauri 2 Docs](https://v2.tauri.app)
+
+---
+
+## 작업 로그 (2026-02-11)
+
+### 이번에 완료한 주요 구현
+
+1. Forge 문서 협업 UX/에디터 확장
+- Chat 패널 폭 확장 및 리사이즈(패널 드래그) 지원
+- 문서 열기 타임아웃 처리(Opening 무한 대기 방지)
+- Markdown 간단 WYSIWYG 에디터 추가
+- JSON 포맷/검증 에디터 추가
+- Plain text 에디터 추가
+- PDF.js 기반 PDF 뷰어 추가
+- OCR 추출 커맨드(`doc_pdf_ocr_extract`) 및 PDF bytes 커맨드(`doc_get_pdf_bytes`) 추가
+
+2. DOC/DOCX 파이프라인 개선
+- DOCX 스타일 파싱 강화(`styles.xml` 기반)
+- 문단 정렬/글자 크기/기본 폰트 크기 반영 개선
+- `.doc` 열기 경로 보완(`textutil` 변환 경유)
+- WordEditor 확장:
+  - 정렬(left/center/right/justify)
+  - 폰트 크기
+  - Heading/BlockQuote/Strike/Code/Underline
+  - Superscript/Subscript
+  - 글자색(Color) / 하이라이트(Highlight)
+
+3. Excel 협업 편집 개선
+- 시트 탭 UX 개선(하단 탭)
+- 컨텍스트 메뉴 기반 행/열 삽입/삭제 흐름 보완
+- 인라인 셀 편집/스타일 메타 반영 개선
+
+4. HWP/HWPX 1차 지원 추가
+- Forge 파일 선택/업로드 확장자에 `.hwp/.hwpx` 추가
+- Rust `HwpAdapter` 신규 추가 (`src-tauri/src/document/formats/hwp.rs`)
+- 로딩 후보 경로 다중화:
+  - `hwp5txt`
+  - `textutil -> docx -> DocxAdapter`
+  - `textutil -> html`
+  - native HWP BodyText 파서
+- 후보 결과 스코어링 로직 도입(테이블 구조/가시 텍스트/노이즈 기준)
+- `CTRL_HEADER(tbl)` + `LIST_HEADER` 기반 셀 위치 복원 로직 추가
+
+### 이번 작업에서 확인된 문제점 / 리스크
+
+1. HWP 원본 충실도
+- 일부 문서는 표 골격만 살아 있고 텍스트가 누락되거나, 반대로 텍스트만 세로로 나오는 케이스가 있음
+- 원인: HWP 내부 제어문자/컨트롤(특히 `LIST_HEADER`/`TABLE`/캡션/폼 필드) 케이스 다양성
+- 대응 상태: 후보 선택 로직 + 테이블 셀 복원 로직 보강 완료, 하지만 문서별 편차 여전히 존재
+
+2. 외부 파서 의존성 제약
+- 현재 환경에서 `hwpjs`(또는 동급 파서) 패키지 직접 설치/연동 제약이 있었음
+- 네트워크/레지스트리 접근 조건에 따라 고급 파서 교체 작업이 지연될 수 있음
+
+3. 저장 포맷 한계
+- `.hwp/.hwpx` 네이티브 저장은 아직 미지원
+- 현재는 읽기/편집 중심이며, 저장은 `.docx` 등으로 변환 저장 전략이 필요
+
+4. 운영 상 주의점
+- Rust 백엔드 변경 후에는 앱(tauri dev) 완전 재시작이 필요
+- 미재시작 상태에서 테스트하면 “수정했는데 동일” 현상이 반복될 수 있음
+
+### 다음 액션 권장
+
+1. 문서 샘플 고정 기반 디버그 덤프
+- 문제 HWP 2~3개를 기준으로 파서 중간 산출(JSON) 저장 후 케이스별 규칙 보강
+
+2. HWP 렌더링 계층 분리
+- 현재 후보 선택 + 파싱 혼합 로직을 `parse -> normalize -> render` 3단계로 분리해 유지보수성 개선
+
+3. 저장 UX 보강
+- `.hwp/.hwpx` 편집 시 `Save As .docx`를 명시적으로 제공

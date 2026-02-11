@@ -546,6 +546,15 @@ function handleToolCall(gatewayId: string, tool: any): void {
                  // Basic date detection could go here but skipping for simplicity
              }
              return { CellUpdate: { sheet: op.sheet, row: op.row, col: op.col, value: val } };
+          } else if (op.op === 'cell_formula_update' || op.op === 'cell_formula') {
+             return {
+               CellFormulaUpdate: {
+                 sheet: op.sheet,
+                 row: op.row,
+                 col: op.col,
+                 formula: typeof op.formula === 'string' ? op.formula : (typeof op.value === 'string' ? op.value : '')
+               }
+             };
           } else if (op.op === 'row_delete') {
              return { RowDelete: { sheet: op.sheet, index: op.index } };
           } else if (op.op === 'row_insert') {
@@ -558,6 +567,8 @@ function handleToolCall(gatewayId: string, tool: any): void {
                  return "Empty";
              });
              return { RowInsert: { sheet: op.sheet, index: op.index, values } };
+          } else if (op.op === 'col_insert') {
+             return { ColInsert: { sheet: op.sheet, index: op.index } };
           } else if (op.op === 'col_delete') {
              return { ColDelete: { sheet: op.sheet, index: op.index } };
           }

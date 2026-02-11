@@ -25,6 +25,7 @@
     undo,
     redo,
     saveDocument,
+    setTextContent,
     commitChanges,
     discardChanges,
     type PatchPreview
@@ -33,6 +34,10 @@
 
   import DocPreview from "$lib/components/Document/DocPreview.svelte";
   import WordEditor from "$lib/components/Forge/WordEditor.svelte";
+  import MarkdownEditor from "$lib/components/Forge/MarkdownEditor.svelte";
+  import JsonEditor from "$lib/components/Forge/JsonEditor.svelte";
+  import PlainTextEditor from "$lib/components/Forge/PlainTextEditor.svelte";
+  import PdfViewer from "$lib/components/Forge/PdfViewer.svelte";
   import ApprovalModal from "$lib/components/Document/ApprovalModal.svelte";
   import ChatPanel from "$lib/components/Chat/ChatPanel.svelte";
 
@@ -43,16 +48,141 @@
 
   // Chat panel state
   let chatOpen = $state(true);
+  let workspaceEl = $state<HTMLDivElement | null>(null);
+  let chatPaneWidth = $state(520);
+  let isResizingPane = $state(false);
+  let openFileError = $state<string | null>(null);
+  let pendingTextContent = $state<string | null>(null);
+  let textSyncTimer = $state<ReturnType<typeof setTimeout> | null>(null);
+  let isTextSyncing = $state(false);
+
+  const CHAT_PANE_MIN = 360;
+  const CHAT_PANE_MAX_RATIO = 0.72;
+  const MOBILE_BREAKPOINT = 980;
+  const WORD_RICH_MAX_HTML = 1_500_000;
+  const OPEN_DOC_TIMEOUT_MS = 15_000;
+
+  function htmlToPlainText(input: string): string {
+    if (!input) return "";
+    return input
+      .replace(/<style[\s\S]*?<\/style>/gi, "")
+      .replace(/<script[\s\S]*?<\/script>/gi, "")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>|<\/div>|<\/li>|<\/h[1-6]>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  }
 
   // Gateway connection
   const activeGateway = $derived(gatewayStore.gateways.find(g => g.id === gatewayStore.activeGatewayId) ?? null);
   const activeGatewayState = $derived(gatewayStore.activeGatewayId ? gatewayStore.gatewayStates.get(gatewayStore.activeGatewayId) ?? null : null);
   const isConnected = $derived(activeGatewayState?.status === "connected");
+  const activeExtension = $derived(
+    activeDoc ? activeDoc.fileName.split(".").pop()?.toLowerCase() ?? "" : ""
+  );
+  const isWordDoc = $derived(["docx", "doc", "hwp", "hwpx"].includes(activeExtension));
+  const isLegacyDoc = $derived(activeExtension === "doc");
+  const isHanwordDoc = $derived(activeExtension === "hwp" || activeExtension === "hwpx");
+  const isMarkdownDoc = $derived(activeExtension === "md" || activeExtension === "markdown");
+  const isJsonDoc = $derived(activeExtension === "json");
+  const canSave = $derived(activeDoc ? activeDoc.docType !== "pdf" && !isLegacyDoc && !isHanwordDoc : false);
+
+  function rowsToPlainText(rows: Array<Array<{ value: unknown }>> | undefined): string {
+    if (!rows || rows.length === 0) return "";
+    return rows
+      .map((row) => {
+        const first = row?.[0];
+        if (!first || first.value === null || first.value === undefined) return "";
+        return String(first.value);
+      })
+      .join("\n");
+  }
+
+  const plainTextContent = $derived.by(() => {
+    const doc = activeDoc;
+    if (!doc || doc.docType !== "text") return "";
+    const rows = doc.sheets[0]?.rows as Array<Array<{ value: unknown }>> | undefined;
+    return rowsToPlainText(rows);
+  });
+
+  const wordEditorContent = $derived.by(() => {
+    if (!activeDoc || activeDoc.docType !== "text" || !isWordDoc) return "";
+    const value = activeDoc.sheets[0]?.rows?.[0]?.[0]?.value;
+    return typeof value === "string" ? value : "";
+  });
+
+  const useRichWordEditor = $derived(!isWordDoc || wordEditorContent.length <= WORD_RICH_MAX_HTML);
+
+  const wordPlainFallbackContent = $derived.by(() => {
+    if (!isWordDoc) return plainTextContent;
+    return useRichWordEditor ? plainTextContent : htmlToPlainText(wordEditorContent);
+  });
+
+  function getChatPaneMaxWidth(): number {
+    const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 1200;
+    const baseWidth = workspaceEl?.clientWidth ?? viewportWidth;
+    return Math.max(CHAT_PANE_MIN, Math.floor(baseWidth * CHAT_PANE_MAX_RATIO));
+  }
+
+  function clampChatPaneWidth(next: number): number {
+    if (!Number.isFinite(next)) {
+      return CHAT_PANE_MIN;
+    }
+    return Math.min(Math.max(next, CHAT_PANE_MIN), getChatPaneMaxWidth());
+  }
+
+  function startPaneResize(event: MouseEvent): void {
+    if (typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
+    isResizingPane = true;
+    event.preventDefault();
+  }
+
+  function handlePaneResize(event: MouseEvent): void {
+    if (!isResizingPane || !workspaceEl) return;
+    const rect = workspaceEl.getBoundingClientRect();
+    const next = rect.right - event.clientX;
+    chatPaneWidth = clampChatPaneWidth(next);
+  }
+
+  function stopPaneResize(): void {
+    if (!isResizingPane) return;
+    isResizingPane = false;
+  }
+
+  function handleWindowResize(): void {
+    if (typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
+    const clamped = clampChatPaneWidth(chatPaneWidth);
+    if (!Object.is(clamped, chatPaneWidth)) {
+      chatPaneWidth = clamped;
+    }
+  }
+
+  function toggleChatPane(): void {
+    chatOpen = !chatOpen;
+    if (!chatOpen) {
+      isResizingPane = false;
+      return;
+    }
+    if (typeof window === "undefined" || window.innerWidth < MOBILE_BREAKPOINT) return;
+    const clamped = clampChatPaneWidth(chatPaneWidth);
+    if (!Object.is(clamped, chatPaneWidth)) {
+      chatPaneWidth = clamped;
+    }
+  }
 
   // File opening logic
   async function handleOpenFile(filterType?: 'spreadsheet' | 'document' | 'presentation') {
     try {
       const { open } = await import('@tauri-apps/plugin-dialog');
+      openFileError = null;
 
       let filters;
       switch (filterType) {
@@ -60,23 +190,39 @@
           filters = [{ name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv', 'ods'] }];
           break;
         case 'document':
-          filters = [{ name: 'Documents', extensions: ['txt', 'md', 'json', 'pdf', 'docx'] }];
+          filters = [{ name: 'Documents', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] }];
           break;
         case 'presentation':
           filters = [{ name: 'Presentations', extensions: ['pptx', 'ppt'] }];
           break;
         default:
           filters = [
-            { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx'] },
+            { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] },
             { name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv', 'ods'] },
-            { name: 'Text', extensions: ['txt', 'md', 'json', 'pdf', 'docx'] }
+            { name: 'Text', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] }
           ];
       }
 
       const selected = await open({ filters });
 
       if (selected && typeof selected === 'string') {
-        const doc = await openDocument(selected);
+        const lowerPath = selected.toLowerCase();
+        if (lowerPath.endsWith('.ppt') || lowerPath.endsWith('.pptx')) {
+          openFileError = "PPT/PPTX는 아직 Forge에서 직접 열 수 없습니다. PDF로 변환해서 열어주세요.";
+          return;
+        }
+
+        const doc = await Promise.race([
+          openDocument(selected),
+          new Promise<null>((resolve) => {
+            setTimeout(() => resolve(null), OPEN_DOC_TIMEOUT_MS);
+          })
+        ]);
+        if (!doc) {
+          docStore.isLoading = false;
+          openFileError = `문서 열기 시간이 초과되었습니다 (${Math.round(OPEN_DOC_TIMEOUT_MS / 1000)}초). 파일이 너무 복잡하거나 변환이 지연되고 있습니다.`;
+          return;
+        }
         if (doc) {
           const excerpt = doc.sheets[0]?.rows
             .slice(0, 50)
@@ -85,20 +231,45 @@
           setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
         }
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Failed to open file dialog:", err);
+      openFileError = err instanceof Error ? err.message : "파일을 열지 못했습니다.";
+    }
+  }
+
+  async function flushTextSync(): Promise<void> {
+    if (!activeDoc || activeDoc.docType !== 'text' || pendingTextContent === null) return;
+    if (isTextSyncing) return;
+
+    const content = pendingTextContent;
+    pendingTextContent = null;
+    isTextSyncing = true;
+    try {
+      await setTextContent(activeDoc.id, content, isWordDoc ? 'html' : 'plain');
+    } finally {
+      isTextSyncing = false;
     }
   }
 
   // Toolbar actions
   async function handleSave() {
     if (activeDoc) {
+      if (activeDoc.docType === 'text') {
+        await flushTextSync();
+      }
       await saveDocument(activeDoc.id);
     }
   }
 
   async function handleClose() {
     if (activeDoc) {
+      if (textSyncTimer) {
+        clearTimeout(textSyncTimer);
+        textSyncTimer = null;
+      }
+      if (activeDoc.docType === 'text') {
+        await flushTextSync();
+      }
       setForgeDocument(null);
       await closeDocument(activeDoc.id);
     }
@@ -117,7 +288,17 @@
   }
 
   function handleTextChange(newContent: string) {
-    console.log("Text changed (not yet synced to backend):", newContent);
+    if (!activeDoc || activeDoc.docType !== 'text') return;
+    activeDoc.modified = true;
+    pendingTextContent = newContent;
+
+    if (textSyncTimer) {
+      clearTimeout(textSyncTimer);
+    }
+    textSyncTimer = setTimeout(() => {
+      textSyncTimer = null;
+      void flushTextSync();
+    }, 350);
   }
 
   // Approval Modal Handlers
@@ -148,7 +329,13 @@
   <title>{$t("nav.forge")} | {$t("app.title")}</title>
 </svelte:head>
 
-<div class="forge-page">
+<svelte:window
+  onmousemove={handlePaneResize}
+  onmouseup={stopPaneResize}
+  onresize={handleWindowResize}
+/>
+
+<div class="forge-page" class:resizing-pane={isResizingPane}>
   {#if activeDoc}
     <!-- Document View Mode -->
     <div class="toolbar">
@@ -169,7 +356,7 @@
       </div>
 
       <div class="toolbar-right">
-        <button class="tool-btn" onclick={() => chatOpen = !chatOpen} title={chatOpen ? 'Hide Chat' : 'Show Chat'}>
+        <button class="tool-btn" onclick={toggleChatPane} title={chatOpen ? 'Hide Chat' : 'Show Chat'}>
           {#if chatOpen}
             <PanelRightClose size={18} />
           {:else}
@@ -180,14 +367,29 @@
           <X size={16} />
           Close
         </button>
-        <button class="action-btn primary" onclick={handleSave}>
+        <button
+          class="action-btn primary"
+          onclick={handleSave}
+          disabled={!canSave}
+          title={
+            !canSave
+              ? (
+                  isLegacyDoc
+                    ? ".doc 저장은 지원되지 않습니다. .docx로 저장하세요."
+                    : isHanwordDoc
+                      ? ".hwp/.hwpx 직접 저장은 아직 지원되지 않습니다. .docx로 저장하세요."
+                      : "PDF는 저장이 지원되지 않습니다."
+                )
+              : "Save"
+          }
+        >
           <Save size={16} />
           Save
         </button>
       </div>
     </div>
 
-    <div class="workspace">
+    <div class="workspace" bind:this={workspaceEl}>
       <div class="main-area">
         {#if activeDoc.docType === 'excel'}
           <DocPreview
@@ -195,11 +397,45 @@
             docType="excel"
             fileName={activeDoc.fileName}
           />
+        {:else if activeDoc.docType === 'pdf'}
+          <PdfViewer sessionId={activeDoc.id} />
         {:else if activeDoc.docType === 'text'}
-          <WordEditor
-            content={activeDoc.sheets[0]?.rows.map(r => r.map(c => c.value).join(' ')).join('\n') ?? ''}
-            onchange={handleTextChange}
-          />
+          {#if isWordDoc}
+            {#if useRichWordEditor}
+              <WordEditor
+                content={wordEditorContent}
+                editable={true}
+                onchange={handleTextChange}
+              />
+            {:else}
+              <div class="word-fallback-banner">
+                문서가 복잡해서 안정 모드(텍스트 편집)로 열었습니다.
+              </div>
+              <PlainTextEditor
+                content={wordPlainFallbackContent}
+                editable={true}
+                onchange={handleTextChange}
+              />
+            {/if}
+          {:else if isMarkdownDoc}
+            <MarkdownEditor
+              content={plainTextContent}
+              editable={true}
+              onchange={handleTextChange}
+            />
+          {:else if isJsonDoc}
+            <JsonEditor
+              content={plainTextContent}
+              editable={true}
+              onchange={handleTextChange}
+            />
+          {:else}
+            <PlainTextEditor
+              content={plainTextContent}
+              editable={true}
+              onchange={handleTextChange}
+            />
+          {/if}
         {:else}
           <div class="placeholder-view">
             <FileText size={48} />
@@ -209,7 +445,13 @@
       </div>
 
       {#if chatOpen}
-        <div class="chat-side">
+        <button
+          type="button"
+          class="pane-resizer"
+          aria-label="Resize chat panel"
+          onmousedown={startPaneResize}
+        ></button>
+        <div class="chat-side" style:width={`${chatPaneWidth}px`}>
           {#if isConnected}
             <ChatPanel />
           {:else if activeGateway}
@@ -241,13 +483,19 @@
 
   {:else}
     <!-- Landing State -->
-    <div class="landing-wrapper">
+    <div class="landing-wrapper" bind:this={workspaceEl}>
       <div class="landing">
         <div class="icon-container">
           <Hammer size={32} strokeWidth={1.5} />
         </div>
         <h2>문서 협업 도구</h2>
         <p>파일을 열고 AI와 함께 수정안을 만들고 승인하세요</p>
+        {#if openFileError}
+          <div class="open-error">
+            <AlertCircle size={14} />
+            <span>{openFileError}</span>
+          </div>
+        {/if}
 
         <div class="collab-hero">
           <div class="collab-hero-left">
@@ -283,7 +531,7 @@
               <FileText size={24} strokeWidth={1.5} />
             </div>
             <h3>문서 협업</h3>
-            <p>Text/Markdown/PDF/DOCX 문서 열기</p>
+            <p>Text/Markdown/PDF/DOCX/HWP 문서 열기</p>
             <span class="badge">Core</span>
           </button>
 
@@ -292,7 +540,7 @@
               <Presentation size={24} strokeWidth={1.5} />
             </div>
             <h3>Presentations</h3>
-            <p>View presentation decks</p>
+            <p>PPT/PPTX는 PDF 변환 후 열기</p>
           </button>
         </div>
 
@@ -310,7 +558,13 @@
       </div>
 
       {#if chatOpen}
-        <div class="chat-side landing-chat">
+        <button
+          type="button"
+          class="pane-resizer"
+          aria-label="Resize chat panel"
+          onmousedown={startPaneResize}
+        ></button>
+        <div class="chat-side landing-chat" style:width={`${chatPaneWidth}px`}>
           {#if isConnected}
             <ChatPanel />
           {:else if activeGateway}
@@ -357,6 +611,11 @@
     min-height: 0;
     background: var(--color-bg);
     position: relative;
+  }
+
+  .forge-page.resizing-pane {
+    cursor: col-resize;
+    user-select: none;
   }
 
   /* Toolbar */
@@ -446,6 +705,11 @@
     background: var(--color-primary-hover);
   }
 
+  .action-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
   /* Workspace */
   .workspace {
     flex: 1;
@@ -460,9 +724,36 @@
     background: var(--color-bg);
   }
 
+  .pane-resizer {
+    width: 8px;
+    cursor: col-resize;
+    flex-shrink: 0;
+    position: relative;
+    background: transparent;
+    border: none;
+    padding: 0;
+  }
+
+  .pane-resizer::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 3px;
+    width: 2px;
+    background: var(--color-border);
+    transition: background var(--duration-fast) var(--ease-out);
+  }
+
+  .pane-resizer:hover::before,
+  .forge-page.resizing-pane .pane-resizer::before {
+    background: var(--color-primary);
+  }
+
   /* Chat Side Panel */
   .chat-side {
-    width: 380px;
+    width: clamp(360px, 34vw, 520px);
+    flex-shrink: 0;
     border-left: 1px solid var(--color-border);
     background: var(--color-surface);
     display: flex;
@@ -527,6 +818,17 @@
     border-radius: var(--radius-lg);
   }
 
+  .word-fallback-banner {
+    margin-bottom: 8px;
+    padding: 8px 10px;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
   /* Landing State */
   .landing-wrapper {
     flex: 1;
@@ -571,6 +873,21 @@
   .landing p {
     margin: 0;
     color: var(--color-text-muted);
+  }
+
+  .open-error {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(239, 68, 68, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+    border-radius: 8px;
+    color: #ef4444;
+    font-size: 12px;
+    width: 100%;
+    max-width: 600px;
   }
 
   .features-grid {
@@ -687,6 +1004,24 @@
     .collab-hero {
       flex-direction: column;
       align-items: flex-start;
+    }
+  }
+
+  @media (max-width: 980px) {
+    .workspace,
+    .landing-wrapper {
+      flex-direction: column;
+    }
+
+    .pane-resizer {
+      display: none;
+    }
+
+    .chat-side {
+      width: 100% !important;
+      height: 44vh;
+      border-left: none;
+      border-top: 1px solid var(--color-border);
     }
   }
 

@@ -1,11 +1,13 @@
-use tauri::State;
+use tauri::{Manager, State};
 use crate::document::types::*;
 use crate::document::manager::SessionManager;
 use crate::document::formats::excel::ExcelAdapter;
 use crate::document::formats::pdf::PdfAdapter;
 use crate::document::formats::docx::DocxAdapter;
+use crate::document::formats::hwp::HwpAdapter;
 use crate::document::formats::DocumentAdapter;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[tauri::command]
 pub async fn doc_open(
@@ -25,8 +27,11 @@ pub async fn doc_open(
         "pdf" => {
              PdfAdapter::read(file_path).map_err(|e| e.to_string())?
         },
-        "docx" => {
+        "docx" | "doc" => {
              DocxAdapter::read(file_path).map_err(|e| e.to_string())?
+        },
+        "hwp" | "hwpx" => {
+             HwpAdapter::read(file_path).map_err(|e| e.to_string())?
         },
         "csv" => {
             read_csv_file(file_path)?
@@ -41,6 +46,237 @@ pub async fn doc_open(
 
     state.create_session(doc_state.clone());
     Ok(doc_state)
+}
+
+#[tauri::command]
+pub async fn doc_get_pdf_bytes(
+    id: String,
+    state: State<'_, SessionManager>,
+) -> Result<Vec<u8>, String> {
+    const MAX_FILE_SIZE: u64 = 200 * 1024 * 1024; // 200MB
+    let bytes = state
+        .get_session(&id, |session| -> Result<Vec<u8>, String> {
+            if !matches!(session.state.doc_type, DocumentType::Pdf) {
+                return Err("Document is not a PDF session".to_string());
+            }
+
+            let file_path = Path::new(&session.state.file_path);
+            let metadata = std::fs::metadata(file_path)
+                .map_err(|e| format!("Failed to read PDF metadata: {}", e))?;
+
+            if metadata.len() > MAX_FILE_SIZE {
+                return Err(format!(
+                    "PDF is too large ({:.1} MB). Maximum supported size is 200 MB.",
+                    metadata.len() as f64 / 1024.0 / 1024.0
+                ));
+            }
+
+            std::fs::read(file_path).map_err(|e| format!("Failed to read PDF bytes: {}", e))
+        })
+        .map_err(|e| e.to_string())??;
+
+    Ok(bytes)
+}
+
+#[tauri::command]
+pub async fn doc_pdf_ocr_extract(
+    app: tauri::AppHandle,
+    id: String,
+    lang: Option<String>,
+    tessdata_dir: Option<String>,
+    tesseract_bin: Option<String>,
+    state: State<'_, SessionManager>,
+) -> Result<String, String> {
+    let file_path = state
+        .get_session(&id, |session| -> Result<String, String> {
+            if !matches!(session.state.doc_type, DocumentType::Pdf) {
+                return Err("Document is not a PDF session".to_string());
+            }
+            Ok(session.state.file_path.clone())
+        })
+        .map_err(|e| e.to_string())??;
+
+    let pdf_path = Path::new(&file_path);
+    let binary_path = resolve_tesseract_bin(&app, tesseract_bin);
+    let lang_value = lang
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("kor+eng");
+
+    let mut cmd = Command::new(&binary_path);
+    cmd.arg(pdf_path).arg("stdout").arg("-l").arg(lang_value);
+
+    if let Some(dir) = resolve_tessdata_dir(&app, tessdata_dir) {
+        cmd.arg("--tessdata-dir").arg(dir);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to execute tesseract: {}", e))?;
+
+    if output.status.success() {
+        let extracted = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if !extracted.is_empty() {
+            return Ok(extracted);
+        }
+    }
+
+    // If OCR fails (often due to missing PDF support in tesseract build),
+    // return parser text as a fallback so the user still gets usable content.
+    let fallback = pdf_extract::extract_text(pdf_path)
+        .map_err(|e| {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            format!(
+                "OCR failed and fallback extraction also failed. tesseract stderr: {} / fallback error: {}",
+                stderr.trim(),
+                e
+            )
+        })?
+        .trim()
+        .to_string();
+
+    if fallback.is_empty() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "OCR returned empty text. tesseract stderr: {}",
+            stderr.trim()
+        ));
+    }
+
+    Ok(fallback)
+}
+
+fn resolve_tesseract_bin(app: &tauri::AppHandle, configured: Option<String>) -> PathBuf {
+    if let Some(path) = configured
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+    {
+        return path;
+    }
+
+    if let Ok(from_env) = std::env::var("OPENCLAW_TESSERACT_BIN") {
+        let trimmed = from_env.trim();
+        if !trimmed.is_empty() {
+            return PathBuf::from(trimmed);
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let executable = if cfg!(target_os = "windows") {
+            "tesseract.exe"
+        } else {
+            "tesseract"
+        };
+
+        let candidates = [
+            resource_dir.join("tesseract").join("bin").join(executable),
+            resource_dir.join("tesseract").join(executable),
+            resource_dir.join(executable),
+        ];
+
+        for candidate in candidates {
+            if candidate.exists() {
+                return candidate;
+            }
+        }
+    }
+
+    PathBuf::from(if cfg!(target_os = "windows") {
+        "tesseract.exe"
+    } else {
+        "tesseract"
+    })
+}
+
+fn resolve_tessdata_dir(app: &tauri::AppHandle, configured: Option<String>) -> Option<PathBuf> {
+    if let Some(path) = configured
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from)
+    {
+        return Some(path);
+    }
+
+    if let Ok(from_env) = std::env::var("TESSDATA_PREFIX") {
+        let trimmed = from_env.trim();
+        if !trimmed.is_empty() {
+            return Some(PathBuf::from(trimmed));
+        }
+    }
+
+    if let Ok(resource_dir) = app.path().resource_dir() {
+        let candidate = resource_dir.join("tesseract").join("tessdata");
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+#[tauri::command]
+pub async fn doc_set_text_content(
+    id: String,
+    content: String,
+    format: Option<String>,
+    state: State<'_, SessionManager>,
+) -> Result<(), String> {
+    state
+        .get_session_mut(&id, |session| -> Result<(), String> {
+            if !matches!(session.state.doc_type, DocumentType::Text) {
+                return Err("Document is not a text-like document".to_string());
+            }
+
+            if session.state.sheets.is_empty() {
+                session.state.sheets.push(SheetData {
+                    name: "Content".to_string(),
+                    rows: vec![],
+                    total_rows: 0,
+                    total_cols: 1,
+                    formulas: vec![],
+                    merged_ranges: vec![],
+                    row_heights: vec![],
+                    col_widths: vec![],
+                    styled_cells: vec![],
+                });
+            }
+
+            let sheet = &mut session.state.sheets[0];
+            let is_html = format
+                .as_deref()
+                .map(|f| f.eq_ignore_ascii_case("html"))
+                .unwrap_or(false);
+
+            if is_html {
+                sheet.rows = vec![vec![CellValue::String(content)]];
+            } else {
+                let mut rows: Vec<Vec<CellValue>> = content
+                    .split('\n')
+                    .map(|line| vec![CellValue::String(line.to_string())])
+                    .collect();
+                if rows.is_empty() {
+                    rows.push(vec![CellValue::String(String::new())]);
+                }
+                sheet.rows = rows;
+            }
+
+            sheet.total_rows = sheet.rows.len();
+            sheet.total_cols = 1;
+            sheet.formulas.clear();
+            sheet.merged_ranges.clear();
+            sheet.row_heights.clear();
+            sheet.col_widths.clear();
+            sheet.styled_cells.clear();
+            session.state.modified = true;
+            Ok(())
+        })
+        .map_err(|e| e.to_string())??;
+
+    Ok(())
 }
 
 fn read_text_file(file_path: &Path) -> Result<DocState, String> {
@@ -80,6 +316,11 @@ fn read_text_file(file_path: &Path) -> Result<DocState, String> {
             rows,
             total_rows,
             total_cols: 1,
+            formulas: vec![],
+            merged_ranges: vec![],
+            row_heights: vec![],
+            col_widths: vec![],
+            styled_cells: vec![],
         }],
         modified: false,
     })
@@ -142,6 +383,11 @@ fn read_csv_file(file_path: &Path) -> Result<DocState, String> {
             rows,
             total_rows,
             total_cols: max_cols,
+            formulas: vec![],
+            merged_ranges: vec![],
+            row_heights: vec![],
+            col_widths: vec![],
+            styled_cells: vec![],
         }],
         modified: false,
     })
@@ -251,8 +497,26 @@ fn doc_save_inner(id: &str, path: &str, state: &SessionManager) -> Result<(), St
 
 fn save_text_file(state: &DocState, path: &Path) -> Result<(), String> {
     let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    if ext.eq_ignore_ascii_case("doc") {
+        return Err("Legacy .doc 저장은 지원되지 않습니다. .docx로 저장해 주세요.".to_string());
+    }
+    if ext.eq_ignore_ascii_case("hwp") || ext.eq_ignore_ascii_case("hwpx") {
+        return Err(
+            ".hwp/.hwpx 직접 저장은 아직 지원되지 않습니다. .docx로 변환 저장해 주세요."
+                .to_string(),
+        );
+    }
     if ext.eq_ignore_ascii_case("docx") {
-        return Err("Cannot save as .docx format. Use 'Save As' with a .txt or .md extension.".to_string());
+        let rich_content = state.sheets.first()
+            .and_then(|sheet| sheet.rows.first())
+            .and_then(|row| row.first())
+            .and_then(|cell| match cell {
+                CellValue::String(s) => Some(s.clone()),
+                _ => None,
+            })
+            .unwrap_or_default();
+
+        return DocxAdapter::save(path, &rich_content).map_err(|e| e.to_string());
     }
 
     let content: String = state.sheets.first()

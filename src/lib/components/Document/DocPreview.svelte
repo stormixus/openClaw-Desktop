@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { docStore, loadView } from '$lib/stores/document.svelte';
+  import { docStore, loadView, updateCellValue, updateSheetStructure } from '$lib/stores/document.svelte';
   import ExcelGrid from './ExcelGrid.svelte';
   import { Loader2, AlertCircle, FileText } from '@lucide/svelte';
 
@@ -33,6 +33,14 @@
     isCorrectSession ? activeDoc?.sheets?.find(s => s.name === activeTab) : undefined
   );
 
+  const extractedText = $derived(
+    isCorrectSession && activeDoc?.sheets?.[0]
+      ? activeDoc.sheets[0].rows
+          .map((row) => row.map((c) => c.value ?? "").join(" "))
+          .join("\n")
+      : ""
+  );
+
   function handleTabClick(sheetName: string) {
     activeTab = sheetName;
     if (activeDoc && isCorrectSession) {
@@ -55,6 +63,19 @@
         });
       }
     }
+  }
+
+  async function handleCellUpdate(row: number, col: number, input: string) {
+    if (docType !== 'excel' || !activeTab || !isCorrectSession) return;
+    await updateCellValue(sessionId, activeTab, row, col, input);
+  }
+
+  async function handleStructureChange(
+    action: 'row_insert' | 'row_delete' | 'col_insert' | 'col_delete',
+    index: number
+  ) {
+    if (docType !== 'excel' || !activeTab || !isCorrectSession) return;
+    await updateSheetStructure(sessionId, activeTab, action, index);
   }
 </script>
 
@@ -88,6 +109,27 @@
     <div class="preview-content">
       {#if docType === 'excel' && activeDoc?.sheets}
         <div class="excel-view">
+          <div class="grid-wrapper">
+            {#if activeSheetData}
+              <ExcelGrid
+                rows={activeSheetData.rows}
+                totalRows={activeSheetData.totalRows}
+                totalCols={activeSheetData.totalCols}
+                startRow={activeSheetData.startRow || 0}
+                formulas={activeSheetData.formulas}
+                mergedRanges={activeSheetData.mergedRanges}
+                rowHeights={activeSheetData.rowHeights}
+                colWidths={activeSheetData.colWidths}
+                styledCells={activeSheetData.styledCells}
+                oncellupdate={handleCellUpdate}
+                onstructurechange={handleStructureChange}
+                onpaginate={handlePaginate}
+              />
+            {:else}
+              <div class="empty-sheet">No data in this sheet</div>
+            {/if}
+          </div>
+
           {#if activeDoc.sheets.length > 1}
             <div class="sheet-tabs">
               {#each activeDoc.sheets as sheet}
@@ -101,25 +143,19 @@
               {/each}
             </div>
           {/if}
-
-          <div class="grid-wrapper">
-            {#if activeSheetData}
-              <ExcelGrid
-                rows={activeSheetData.rows}
-                totalRows={activeSheetData.totalRows}
-                totalCols={activeSheetData.totalCols}
-                startRow={activeSheetData.startRow || 0}
-                onpaginate={handlePaginate}
-              />
-            {:else}
-              <div class="empty-sheet">No data in this sheet</div>
-            {/if}
-          </div>
         </div>
       {:else if docType === 'text'}
         <div class="text-view">
-          {#if activeDoc?.sheets[0]}
-             <pre>{activeDoc.sheets[0].rows.map(row => row.map(c => c.value).join(' ')).join('\n')}</pre>
+          {#if extractedText}
+             <pre>{extractedText}</pre>
+          {/if}
+        </div>
+      {:else if docType === 'pdf'}
+        <div class="text-view pdf-view">
+          {#if extractedText.trim().length > 0}
+            <pre>{extractedText}</pre>
+          {:else}
+            <div class="empty-sheet">텍스트를 추출할 수 없는 PDF입니다. (스캔본/OCR 필요)</div>
           {/if}
         </div>
       {:else}
@@ -202,32 +238,38 @@
 
   .sheet-tabs {
     display: flex;
-    gap: 2px;
+    gap: 4px;
     background: var(--color-surface);
-    padding: 4px 8px 0;
-    border-bottom: 1px solid var(--color-border);
+    padding: 6px 10px 0;
+    border-top: 1px solid var(--color-border);
     overflow-x: auto;
   }
 
   .tab-btn {
-    padding: 6px 16px;
+    padding: 7px 16px;
     background: var(--color-surface-elevated);
     border: 1px solid var(--color-border);
-    border-bottom: none;
+    border-bottom-color: transparent;
     border-radius: 6px 6px 0 0;
     font-size: 12px;
     color: var(--color-text-muted);
     cursor: pointer;
     white-space: nowrap;
+    margin-bottom: -1px;
   }
 
   .tab-btn.active {
     background: var(--color-bg);
     color: var(--color-primary);
     font-weight: 500;
-    border-top: 2px solid var(--color-primary);
-    margin-bottom: -1px;
-    padding-bottom: 7px;
+    border-color: color-mix(in srgb, var(--color-primary) 55%, var(--color-border));
+    border-bottom-color: var(--color-bg);
+    box-shadow: 0 -1px 0 color-mix(in srgb, var(--color-primary) 32%, transparent);
+  }
+
+  .tab-btn:hover {
+    color: var(--color-text);
+    background: color-mix(in srgb, var(--color-primary) 8%, var(--color-surface-elevated));
   }
 
   .grid-wrapper {
@@ -249,6 +291,16 @@
     line-height: 1.6;
     color: var(--color-text);
     white-space: pre-wrap;
+  }
+
+  .pdf-view {
+    background: var(--color-surface);
+  }
+
+  .empty-sheet {
+    color: var(--color-text-muted);
+    font-size: 13px;
+    padding: 24px;
   }
 
   /* Animations */

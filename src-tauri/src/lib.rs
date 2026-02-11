@@ -288,6 +288,9 @@ pub fn run() {
             // Document commands
             document::commands::doc_open,
             document::commands::doc_read_view,
+            document::commands::doc_set_text_content,
+            document::commands::doc_get_pdf_bytes,
+            document::commands::doc_pdf_ocr_extract,
             document::commands::doc_stage_patch,
             document::commands::doc_commit,
             document::commands::doc_save,

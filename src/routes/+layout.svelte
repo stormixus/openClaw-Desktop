@@ -11,7 +11,6 @@
 
   import Sidebar from "$lib/components/Sidebar.svelte";
   import SetupWizard from "$lib/components/Wizard/SetupWizard.svelte";
-  import StatusBar from "$lib/components/StatusBar/StatusBar.svelte";
 
   let { children } = $props();
 
@@ -90,7 +89,6 @@
     <main class="main-content">
       {@render children()}
     </main>
-    <StatusBar />
   </div>
 </div>
 
