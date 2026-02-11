@@ -1,8 +1,8 @@
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Cursor, Read};
 use std::path::Path;
 use std::process::Command;
-use std::collections::HashMap;
 
 use cfb::CompoundFile;
 use flate2::read::{DeflateDecoder, ZlibDecoder};
@@ -215,7 +215,8 @@ impl HwpAdapter {
         for name in targets.into_iter().take(MAX_SECTION_COUNT) {
             let mut xml_bytes = Vec::new();
             if let Ok(mut file) = archive.by_name(&name) {
-                file.read_to_end(&mut xml_bytes).map_err(DocError::IoError)?;
+                file.read_to_end(&mut xml_bytes)
+                    .map_err(DocError::IoError)?;
                 let xml = String::from_utf8_lossy(&xml_bytes);
                 all_lines.extend(extract_lines_from_hwpx_xml(&xml));
                 if all_lines.len() >= MAX_EXTRACTED_LINES {
@@ -236,54 +237,57 @@ impl HwpAdapter {
 }
 
 fn read_hwp_binary_as_html(path: &Path) -> Result<String, DocError> {
-        let mut comp = cfb::open(path)
-            .map_err(|e| DocError::ParseError(format!("Invalid HWP container: {}", e)))?;
+    let mut comp = cfb::open(path)
+        .map_err(|e| DocError::ParseError(format!("Invalid HWP container: {}", e)))?;
 
-        let file_header = read_stream_bytes(&mut comp, "/FileHeader")
-            .or_else(|_| read_stream_bytes(&mut comp, "FileHeader"))?;
+    let file_header = read_stream_bytes(&mut comp, "/FileHeader")
+        .or_else(|_| read_stream_bytes(&mut comp, "FileHeader"))?;
 
-        if !looks_like_hwp_header(&file_header) {
-            return Err(DocError::ParseError(
-                "Not a valid HWP v5 file header".to_string(),
-            ));
+    if !looks_like_hwp_header(&file_header) {
+        return Err(DocError::ParseError(
+            "Not a valid HWP v5 file header".to_string(),
+        ));
+    }
+
+    let compressed = hwp_is_compressed(&file_header);
+    let section_paths = collect_body_section_paths(&comp);
+    if section_paths.is_empty() {
+        return Err(DocError::ParseError(
+            "HWP BodyText sections not found".to_string(),
+        ));
+    }
+
+    let mut budget = ExtractBudget::new();
+    let mut body_html = String::new();
+
+    for section_path in section_paths.into_iter().take(MAX_SECTION_COUNT) {
+        if budget.exhausted() {
+            break;
         }
 
-        let compressed = hwp_is_compressed(&file_header);
-        let section_paths = collect_body_section_paths(&comp);
-        if section_paths.is_empty() {
-            return Err(DocError::ParseError(
-                "HWP BodyText sections not found".to_string(),
-            ));
+        let section_raw = read_stream_bytes(&mut comp, &section_path)?;
+        let section_data = if compressed {
+            inflate_hwp_stream(&section_raw).unwrap_or(section_raw)
+        } else {
+            section_raw
+        };
+
+        let section_html = render_hwp_section_as_html(&section_data, &mut budget);
+        if !section_html.is_empty() {
+            body_html.push_str(&section_html);
         }
+    }
 
-        let mut budget = ExtractBudget::new();
-        let mut body_html = String::new();
+    if body_html.trim().is_empty() {
+        return Err(DocError::ParseError(
+            "본문 텍스트를 추출하지 못했습니다. 배포용/암호화 문서일 수 있습니다.".to_string(),
+        ));
+    }
 
-        for section_path in section_paths.into_iter().take(MAX_SECTION_COUNT) {
-            if budget.exhausted() {
-                break;
-            }
-
-            let section_raw = read_stream_bytes(&mut comp, &section_path)?;
-            let section_data = if compressed {
-                inflate_hwp_stream(&section_raw).unwrap_or(section_raw)
-            } else {
-                section_raw
-            };
-
-            let section_html = render_hwp_section_as_html(&section_data, &mut budget);
-            if !section_html.is_empty() {
-                body_html.push_str(&section_html);
-            }
-        }
-
-        if body_html.trim().is_empty() {
-            return Err(DocError::ParseError(
-                "본문 텍스트를 추출하지 못했습니다. 배포용/암호화 문서일 수 있습니다.".to_string(),
-            ));
-        }
-
-    Ok(format!("<div class=\"docx-root hwp-root\">{}</div>", body_html))
+    Ok(format!(
+        "<div class=\"docx-root hwp-root\">{}</div>",
+        body_html
+    ))
 }
 
 fn render_hwp_section_as_html(data: &[u8], budget: &mut ExtractBudget) -> String {
@@ -362,11 +366,19 @@ fn render_hwp_table_from_ctrl_header(
         let child_end = find_next_at_or_above_level(records, child_start, end_idx, list_level);
 
         let mut cell_lines: Vec<String> = Vec::new();
-        collect_para_text_lines(records, child_start, child_end, budget, &mut cell_lines, true);
+        collect_para_text_lines(
+            records,
+            child_start,
+            child_end,
+            budget,
+            &mut cell_lines,
+            true,
+        );
         let cell_text = join_nonempty_lines(&cell_lines);
 
-        let is_caption =
-            first_table_idx.map(|table_idx| idx < table_idx).unwrap_or(false);
+        let is_caption = first_table_idx
+            .map(|table_idx| idx < table_idx)
+            .unwrap_or(false);
         if is_caption {
             if !cell_text.is_empty() {
                 caption_lines.push(cell_text);
@@ -403,7 +415,11 @@ fn render_hwp_table_from_ctrl_header(
     if !cells.is_empty() {
         html.push_str(&render_table_with_positions(&cells, decl_rows, decl_cols));
     } else {
-        html.push_str(&render_fallback_table(&fallback_cells, decl_rows, decl_cols));
+        html.push_str(&render_fallback_table(
+            &fallback_cells,
+            decl_rows,
+            decl_cols,
+        ));
     }
 
     (html, end_idx, true)
@@ -1095,10 +1111,12 @@ fn decode_para_text(payload: &[u8]) -> String {
         if payload[idx + 1] == 0 && payload[idx] <= 31 {
             let code = payload[idx];
             match code {
-                9 => out.push('|'),
+                9 => out.push('\t'),
                 10 | 13 => out.push('\n'),
+                2 | 23 => out.push('\n'),
                 24 => out.push('-'),
                 30 | 31 => out.push(' '),
+                1 | 25..=29 => {} // reserved: skip silently
                 _ => {}
             }
 
@@ -1109,6 +1127,23 @@ fn decode_para_text(payload: &[u8]) -> String {
 
         let code = u16::from_le_bytes([payload[idx], payload[idx + 1]]);
         idx += 2;
+
+        // Handle UTF-16 surrogate pairs for characters above U+FFFF
+        if (0xD800..=0xDBFF).contains(&code) {
+            if idx + 1 < payload.len() {
+                let low = u16::from_le_bytes([payload[idx], payload[idx + 1]]);
+                idx += 2;
+                if (0xDC00..=0xDFFF).contains(&low) {
+                    let cp = 0x10000 + ((code as u32 - 0xD800) << 10) + (low as u32 - 0xDC00);
+                    if let Some(ch) = char::from_u32(cp) {
+                        if is_doc_char(ch) {
+                            out.push(ch);
+                        }
+                    }
+                }
+            }
+            continue;
+        }
 
         if let Some(ch) = char::from_u32(code as u32) {
             if is_doc_char(ch) {
@@ -1126,8 +1161,11 @@ fn decode_para_text(payload: &[u8]) -> String {
 
 fn control_char_wchar_size(code: u8) -> usize {
     match code {
-        0 | 10 | 13 | 24 | 30 | 31 => 1,
-        _ => 8,
+        // HWP v5 spec: codes 0-2, 9, 10, 13, 23-31 are 1-wchar (2 bytes)
+        // codes 3-8, 11-22 are 8-wchar extended controls (16 bytes)
+        0..=2 | 9 | 10 | 13 | 23..=31 => 1,
+        3..=8 | 11..=22 => 8,
+        _ => 1,
     }
 }
 
@@ -1258,11 +1296,11 @@ fn is_reasonable_line(line: &str) -> bool {
         }
     }
 
-    has_word && total > 0 && valid * 100 >= total * 80
+    has_word && total > 0 && valid * 100 >= total * 55
 }
 
 fn is_doc_char(ch: char) -> bool {
-    if ch == '\n' || ch == ' ' {
+    if ch == '\n' || ch == ' ' || ch == '\t' {
         return true;
     }
     if ch == '\u{FFFD}' || ch.is_control() {
@@ -1272,6 +1310,12 @@ fn is_doc_char(ch: char) -> bool {
         return true;
     }
     if is_hangul(ch) || is_cjk(ch) {
+        return true;
+    }
+
+    // Circled numbers ①-⑳ (U+2460..=U+2473)
+    let code = ch as u32;
+    if (0x2460..=0x2473).contains(&code) {
         return true;
     }
 
@@ -1289,22 +1333,28 @@ fn is_doc_char(ch: char) -> bool {
             | '{' | '}'
             | '!' | '?'
             | '"' | '\''
-            | '*'
-            | '+'
-            | '='
-            | '&'
-            | '%'
-            | '#'
-            | '@'
-            | '~'
-            | '|'
-            | '<'
-            | '>'
-            | '·'
-            | '“' | '”'
-            | '‘' | '’'
+            | '*' | '+' | '='
+            | '&' | '%' | '#' | '@'
+            | '~' | '|'
+            | '<' | '>'
+            | '\u{00B7}'
+            | '\u{201C}' | '\u{201D}'
+            | '\u{2018}' | '\u{2019}'
+            | '\u{20A9}' | '\u{20AC}' | '\u{00A3}' | '\u{00A5}'
+            | '\u{00B0}' | '\u{00B1}' | '\u{00D7}' | '\u{00F7}'
+            | '\u{25CF}' | '\u{25CB}' | '\u{25A0}' | '\u{25A1}'
+            | '\u{25B6}' | '\u{25B7}' | '\u{25C6}' | '\u{25C7}'
+            | '\u{2605}' | '\u{2606}'
+            | '\u{25B3}' | '\u{25B2}' | '\u{25BD}' | '\u{25BC}'
+            | '\u{300C}' | '\u{300D}' | '\u{300E}' | '\u{300F}'
+            | '\u{3008}' | '\u{3009}' | '\u{300A}' | '\u{300B}'
+            | '\u{3010}' | '\u{3011}'
+            | '\u{2026}' | '\u{2014}' | '\u{2013}'
+            | '\u{3001}' | '\u{3002}'
+            | '\u{2192}' | '\u{2190}' | '\u{2191}' | '\u{2193}'
     )
 }
+
 
 fn is_hangul(ch: char) -> bool {
     let code = ch as u32;
