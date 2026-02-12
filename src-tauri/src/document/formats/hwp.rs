@@ -363,7 +363,11 @@ fn render_hwp_table_from_ctrl_header(
 
         let list_level = rec.level;
         let child_start = idx + 1;
-        let child_end = find_next_at_or_above_level(records, child_start, end_idx, list_level);
+        // Find end of this cell's content: next boundary record (LIST_HEADER,
+        // TABLE, CTRL_HEADER at same level) or any record at a lower level.
+        // Some HWP files place PARA_TEXT at the same level as LIST_HEADER,
+        // so we can't simply use find_next_at_or_above_level here.
+        let child_end = find_next_cell_boundary(records, child_start, end_idx, list_level);
 
         let mut cell_lines: Vec<String> = Vec::new();
         collect_para_text_lines(
@@ -423,6 +427,33 @@ fn render_hwp_table_from_ctrl_header(
     }
 
     (html, end_idx, true)
+}
+
+/// Find the end of a table cell's content range.
+/// Unlike `find_next_at_or_above_level`, this only breaks on boundary tags
+/// (LIST_HEADER, TABLE, CTRL_HEADER) at the same level, or any record at a
+/// lower level.  This correctly handles HWP files where PARA_TEXT records
+/// inside cells share the same level as the parent LIST_HEADER.
+fn find_next_cell_boundary(
+    records: &[HwpRecord<'_>],
+    from: usize,
+    to: usize,
+    level: u16,
+) -> usize {
+    let mut idx = from;
+    while idx < to {
+        let r = records[idx];
+        if r.level < level {
+            break;
+        }
+        if r.level == level
+            && (r.tag == TAG_LIST_HEADER || r.tag == TAG_TABLE || r.tag == TAG_CTRL_HEADER)
+        {
+            break;
+        }
+        idx += 1;
+    }
+    idx
 }
 
 fn find_subtree_end(records: &[HwpRecord<'_>], start_index: usize) -> usize {
@@ -1284,7 +1315,7 @@ fn clean_line(raw: &str) -> String {
 }
 
 fn is_reasonable_line(line: &str) -> bool {
-    if line.len() < 2 {
+    if line.is_empty() {
         return false;
     }
 
