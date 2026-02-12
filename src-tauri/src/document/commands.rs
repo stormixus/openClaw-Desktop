@@ -44,7 +44,7 @@ pub async fn doc_open(
         }
     };
 
-    state.create_session(doc_state.clone());
+    state.create_session(doc_state.clone()).map_err(|e| e.to_string())?;
     Ok(doc_state)
 }
 
@@ -84,7 +84,6 @@ pub async fn doc_pdf_ocr_extract(
     id: String,
     lang: Option<String>,
     tessdata_dir: Option<String>,
-    tesseract_bin: Option<String>,
     state: State<'_, SessionManager>,
 ) -> Result<String, String> {
     let file_path = state
@@ -97,12 +96,17 @@ pub async fn doc_pdf_ocr_extract(
         .map_err(|e| e.to_string())??;
 
     let pdf_path = Path::new(&file_path);
-    let binary_path = resolve_tesseract_bin(&app, tesseract_bin);
+    let binary_path = resolve_tesseract_bin(&app, None);
     let lang_value = lang
         .as_deref()
         .map(str::trim)
         .filter(|v| !v.is_empty())
         .unwrap_or("kor+eng");
+
+    // Validate lang to prevent argument injection (allow alphanumeric, +, -, _)
+    if !lang_value.chars().all(|c| c.is_alphanumeric() || c == '+' || c == '-' || c == '_') {
+        return Err(format!("Invalid OCR language value: {}", lang_value));
+    }
 
     let mut cmd = Command::new(&binary_path);
     cmd.arg(pdf_path).arg("stdout").arg("-l").arg(lang_value);
@@ -198,7 +202,11 @@ fn resolve_tessdata_dir(app: &tauri::AppHandle, configured: Option<String>) -> O
         .filter(|v| !v.is_empty())
         .map(PathBuf::from)
     {
-        return Some(path);
+        // Only accept absolute paths that actually exist to prevent traversal
+        if path.is_absolute() && path.exists() {
+            return Some(path);
+        }
+        return None;
     }
 
     if let Ok(from_env) = std::env::var("TESSDATA_PREFIX") {
@@ -575,5 +583,5 @@ pub async fn doc_redo(
 pub async fn doc_list_sessions(
     state: State<'_, SessionManager>,
 ) -> Result<Vec<SessionSummary>, String> {
-    Ok(state.list_sessions())
+    state.list_sessions().map_err(|e| e.to_string())
 }

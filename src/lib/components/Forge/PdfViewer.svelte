@@ -33,7 +33,6 @@
 
   let ocrLang = $state("kor+eng");
   let tessdataDir = $state("");
-  let tesseractBin = $state("");
   let ocrResult = $state("");
   let ocrError = $state<string | null>(null);
   let ocrRunning = $state(false);
@@ -128,7 +127,6 @@
         id: sessionId,
         lang: ocrLang,
         tessdata_dir: tessdataDir.trim().length > 0 ? tessdataDir.trim() : null,
-        tesseract_bin: tesseractBin.trim().length > 0 ? tesseractBin.trim() : null,
       });
       ocrResult = extracted;
       if (!ocrResult.trim()) {
@@ -196,10 +194,6 @@
       <label>
         OCR Language
         <input type="text" bind:value={ocrLang} placeholder="kor+eng" />
-      </label>
-      <label>
-        Tesseract Binary (optional)
-        <input type="text" bind:value={tesseractBin} placeholder="/path/to/tesseract" />
       </label>
       <label>
         Tessdata Dir (optional)

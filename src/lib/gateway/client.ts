@@ -125,7 +125,7 @@ export class GatewayClient {
     try {
       // Build WebSocket URL with token as query parameter
       const wsUrl = this.buildWebSocketUrl();
-      console.log("[Gateway] Connecting to:", wsUrl);
+      console.log("[Gateway] Connecting to:", this.sanitizeUrl(wsUrl));
       
       this.ws = new WebSocket(wsUrl);
       this.ws.onopen = () => this.handleOpen();
@@ -164,6 +164,19 @@ export class GatewayClient {
     }
 
     return url.toString();
+  }
+
+  /** Strip sensitive query params (token, deviceToken, password) from URLs before logging. */
+  private sanitizeUrl(url: string): string {
+    try {
+      const u = new URL(url);
+      for (const key of ["token", "deviceToken", "password"]) {
+        if (u.searchParams.has(key)) u.searchParams.set(key, "***");
+      }
+      return u.toString();
+    } catch {
+      return url.replace(/([?&])(token|deviceToken|password)=[^&]*/gi, "$1$2=***");
+    }
   }
 
   private extractTextFromContent(content: unknown): string | null {
@@ -324,7 +337,9 @@ export class GatewayClient {
 
   private async handleMessage(event: MessageEvent): Promise<void> {
     try {
-      console.log("[Gateway] Received message:", event.data.substring(0, 500));
+      // Log message type/id only; full payload may contain auth tokens
+      const preview = event.data.substring(0, 200);
+      console.log("[Gateway] Received message (preview):", preview.replace(/"(token|password|deviceToken)"\s*:\s*"[^"]*"/gi, '"$1":"***"'));
       const data = JSON.parse(event.data);
       
       // Handle openClaw event format: {type:"event", event:"name", payload:{}}
@@ -336,7 +351,7 @@ export class GatewayClient {
       
       // Handle openClaw response format: {type:"res", id:..., ok:true/false, payload:...}
       if ((data.type === "res" || data.type === "response") && data.id !== undefined) {
-        console.log(`[Gateway] Response for request ${data.id}:`, data.ok ? 'OK' : 'ERROR', data);
+        console.log(`[Gateway] Response for request ${data.id}:`, data.ok ? 'OK' : 'ERROR');
         const pending = this.pendingRequests.get(data.id);
         if (pending) {
           this.pendingRequests.delete(data.id);
@@ -546,12 +561,13 @@ export class GatewayClient {
       params,
     };
 
-    console.log("[Gateway] Sending connect request:", JSON.stringify(connectRequest, null, 2));
+    const logSafe = { ...connectRequest, params: { ...connectRequest.params, auth: connectRequest.params.auth ? { ...connectRequest.params.auth, token: "***", password: "***" } : undefined } };
+    console.log("[Gateway] Sending connect request:", JSON.stringify(logSafe, null, 2));
     
     return new Promise((resolve, reject) => {
       this.pendingRequests.set(requestId, {
         resolve: (result: unknown) => {
-          console.log("[Gateway] Connect response received:", result);
+          console.log("[Gateway] Connect response received (auth redacted)");
           const res = result as HelloOkResult & { auth?: { deviceToken?: string; role?: string; scopes?: string[] } };
           
           // Save device token for future connections
@@ -668,7 +684,7 @@ export class GatewayClient {
         reject,
       });
 
-      console.log(`[Gateway] Sending request: ${method}`, params);
+      console.log(`[Gateway] Sending request: ${method}`);
       this.ws.send(JSON.stringify(msg));
 
       // Timeout after 30s

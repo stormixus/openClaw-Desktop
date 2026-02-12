@@ -7,7 +7,7 @@ pub fn apply_patch(state: &DocState, patch: JsonPatch) -> Result<PatchPreview, D
     let mut staged = state.clone();
 
     for op in &patch.operations {
-        apply_op(&mut staged, op)?;
+        apply_single_op(&mut staged, op)?;
     }
 
     let changes = diff_states(state, &staged);
@@ -16,7 +16,7 @@ pub fn apply_patch(state: &DocState, patch: JsonPatch) -> Result<PatchPreview, D
     Ok(PatchPreview { changes, summary })
 }
 
-fn apply_op(state: &mut DocState, op: &PatchOperation) -> Result<(), DocError> {
+pub fn apply_single_op(state: &mut DocState, op: &PatchOperation) -> Result<(), DocError> {
     match op {
         PatchOperation::CellUpdate { sheet, row, col, value } => {
             const MAX_ROWS: usize = 1_048_576; // Excel max

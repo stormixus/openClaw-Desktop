@@ -7,6 +7,7 @@ pub enum DocError {
     ParseError(String),
     PatchError(String),
     SessionNotFound(String),
+    LockError(String),
     UnsupportedFormat(String),
     ValidationError(String),
 }
@@ -18,6 +19,7 @@ impl fmt::Display for DocError {
             DocError::ParseError(msg) => write!(f, "Parse Error: {}", msg),
             DocError::PatchError(msg) => write!(f, "Patch Error: {}", msg),
             DocError::SessionNotFound(id) => write!(f, "Session not found: {}", id),
+            DocError::LockError(msg) => write!(f, "Lock Error: {}", msg),
             DocError::UnsupportedFormat(fmt) => write!(f, "Unsupported format: {}", fmt),
             DocError::ValidationError(msg) => write!(f, "Validation Error: {}", msg),
         }

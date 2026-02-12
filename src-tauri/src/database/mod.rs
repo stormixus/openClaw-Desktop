@@ -27,8 +27,21 @@ pub fn init_db(app_data_dir: &Path) -> Result<Connection, String> {
         .map_err(|e| format!("Failed to apply schema: {}", e))?;
 
     // Migration: Add sort_order column if it doesn't exist
-    // This is a naive migration but safe for adding columns with default values
-    let _ = conn.execute("ALTER TABLE gateways ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0", []);
+    let has_sort_order: bool = conn
+        .prepare("PRAGMA table_info(gateways)")
+        .and_then(|mut stmt| {
+            let columns: Vec<String> = stmt
+                .query_map([], |row| row.get::<_, String>(1))
+                .map(|rows| rows.filter_map(|r| r.ok()).collect())
+                .unwrap_or_default();
+            Ok(columns.iter().any(|c| c == "sort_order"))
+        })
+        .unwrap_or(false);
+
+    if !has_sort_order {
+        conn.execute("ALTER TABLE gateways ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0", [])
+            .map_err(|e| format!("Failed to add sort_order column: {}", e))?;
+    }
 
     Ok(conn)
 }

@@ -220,9 +220,17 @@ fn get_bg_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(bg_dir)
 }
 
+fn validate_theme_id(theme_id: &str) -> Result<(), String> {
+    if theme_id.is_empty() || !theme_id.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(format!("Invalid theme_id: {}", theme_id));
+    }
+    Ok(())
+}
+
 /// Save a base64-encoded PNG image as a file. Returns the absolute file path.
 #[tauri::command]
 fn save_npc_background(app: tauri::AppHandle, theme_id: String, base64_data: String) -> Result<String, String> {
+    validate_theme_id(&theme_id)?;
     let bg_dir = get_bg_dir(&app)?;
     let file_path = bg_dir.join(format!("{}.png", theme_id));
 
@@ -239,6 +247,7 @@ fn save_npc_background(app: tauri::AppHandle, theme_id: String, base64_data: Str
 /// Check if a background file exists for a theme. Returns the path if it exists.
 #[tauri::command]
 fn get_npc_bg_path(app: tauri::AppHandle, theme_id: String) -> Result<Option<String>, String> {
+    validate_theme_id(&theme_id)?;
     let bg_dir = get_bg_dir(&app)?;
     let file_path = bg_dir.join(format!("{}.png", theme_id));
     if file_path.exists() {
@@ -251,6 +260,7 @@ fn get_npc_bg_path(app: tauri::AppHandle, theme_id: String) -> Result<Option<Str
 /// Delete a background file for a theme.
 #[tauri::command]
 fn delete_npc_background(app: tauri::AppHandle, theme_id: String) -> Result<(), String> {
+    validate_theme_id(&theme_id)?;
     let bg_dir = get_bg_dir(&app)?;
     let file_path = bg_dir.join(format!("{}.png", theme_id));
     if file_path.exists() {
