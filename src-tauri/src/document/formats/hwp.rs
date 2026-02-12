@@ -1111,13 +1111,17 @@ fn decode_para_text(payload: &[u8]) -> String {
         if payload[idx + 1] == 0 && payload[idx] <= 31 {
             let code = payload[idx];
             match code {
-                9 => out.push('\t'),
-                10 | 13 => out.push('\n'),
-                2 | 23 => out.push('\n'),
-                24 => out.push('-'),
-                30 | 31 => out.push(' '),
-                1 | 25..=29 => {} // reserved: skip silently
-                _ => {}
+                9 => out.push('\t'),             // TAB (INLINE, 16 bytes)
+                10 => out.push('\n'),            // Line break (CHAR, 2 bytes)
+                13 => out.push('\n'),            // Paragraph break (CHAR, 2 bytes)
+                2 => out.push('\n'),             // Section/column define (EXTENDED, 16 bytes)
+                21 => out.push('\n'),            // Page control: new page/col (EXTENDED, 16 bytes)
+                23 => {}                         // Overlap text (EXTENDED, 16 bytes): skip
+                24 => out.push('-'),             // Non-breaking hyphen (CHAR, 2 bytes)
+                30 => out.push(' '),             // Non-breaking space (CHAR, 2 bytes)
+                31 => out.push(' '),             // Fixed-width space (CHAR, 2 bytes)
+                0 | 25..=29 => {}                // Reserved CHAR types: skip
+                _ => {}                          // Other INLINE/EXTENDED controls: skip
             }
 
             let wchar_size = control_char_wchar_size(code);
@@ -1161,10 +1165,12 @@ fn decode_para_text(payload: &[u8]) -> String {
 
 fn control_char_wchar_size(code: u8) -> usize {
     match code {
-        // HWP v5 spec: codes 0-2, 9, 10, 13, 23-31 are 1-wchar (2 bytes)
-        // codes 3-8, 11-22 are 8-wchar extended controls (16 bytes)
-        0..=2 | 9 | 10 | 13 | 23..=31 => 1,
-        3..=8 | 11..=22 => 8,
+        // HWP v5 spec (Table 4):
+        // CHAR type (1 WCHAR = 2 bytes): 0, 10, 13, 24-31
+        // INLINE type (8 WCHAR = 16 bytes): 4, 5, 6, 7, 8, 9
+        // EXTENDED type (8 WCHAR = 16 bytes): 1, 2, 3, 11, 12, 14-23
+        0 | 10 | 13 | 24..=31 => 1,
+        1..=9 | 11..=23 => 8,
         _ => 1,
     }
 }
@@ -1296,63 +1302,35 @@ fn is_reasonable_line(line: &str) -> bool {
         }
     }
 
-    has_word && total > 0 && valid * 100 >= total * 55
+    has_word && total > 0 && valid * 100 >= total * 40
 }
 
 fn is_doc_char(ch: char) -> bool {
     if ch == '\n' || ch == ' ' || ch == '\t' {
         return true;
     }
-    if ch == '\u{FFFD}' || ch.is_control() {
+    // Reject replacement char and control characters
+    if ch == '\u{FFFD}' {
         return false;
     }
-    if ch.is_ascii_alphanumeric() {
-        return true;
-    }
-    if is_hangul(ch) || is_cjk(ch) {
-        return true;
+    if ch.is_control() {
+        return false;
     }
 
-    // Circled numbers ①-⑳ (U+2460..=U+2473)
     let code = ch as u32;
-    if (0x2460..=0x2473).contains(&code) {
-        return true;
+
+    // Reject Private Use Area (font-specific symbols that render as garbage)
+    if (0xE000..=0xF8FF).contains(&code) {
+        return false;
+    }
+    // Reject surrogates (should never appear as decoded chars)
+    if (0xD800..=0xDFFF).contains(&code) {
+        return false;
     }
 
-    matches!(
-        ch,
-        '.' | ','
-            | ':'
-            | ';'
-            | '-'
-            | '_'
-            | '/'
-            | '\\'
-            | '(' | ')'
-            | '[' | ']'
-            | '{' | '}'
-            | '!' | '?'
-            | '"' | '\''
-            | '*' | '+' | '='
-            | '&' | '%' | '#' | '@'
-            | '~' | '|'
-            | '<' | '>'
-            | '\u{00B7}'
-            | '\u{201C}' | '\u{201D}'
-            | '\u{2018}' | '\u{2019}'
-            | '\u{20A9}' | '\u{20AC}' | '\u{00A3}' | '\u{00A5}'
-            | '\u{00B0}' | '\u{00B1}' | '\u{00D7}' | '\u{00F7}'
-            | '\u{25CF}' | '\u{25CB}' | '\u{25A0}' | '\u{25A1}'
-            | '\u{25B6}' | '\u{25B7}' | '\u{25C6}' | '\u{25C7}'
-            | '\u{2605}' | '\u{2606}'
-            | '\u{25B3}' | '\u{25B2}' | '\u{25BD}' | '\u{25BC}'
-            | '\u{300C}' | '\u{300D}' | '\u{300E}' | '\u{300F}'
-            | '\u{3008}' | '\u{3009}' | '\u{300A}' | '\u{300B}'
-            | '\u{3010}' | '\u{3011}'
-            | '\u{2026}' | '\u{2014}' | '\u{2013}'
-            | '\u{3001}' | '\u{3002}'
-            | '\u{2192}' | '\u{2190}' | '\u{2191}' | '\u{2193}'
-    )
+    // Accept everything else: ASCII, Latin Extended, Greek, Cyrillic,
+    // Hangul, CJK, Kana, fullwidth forms, symbols, punctuation, etc.
+    true
 }
 
 
@@ -1362,11 +1340,6 @@ fn is_hangul(ch: char) -> bool {
         || (0x3130..=0x318F).contains(&code)
         || (0xA960..=0xA97F).contains(&code)
         || (0xAC00..=0xD7AF).contains(&code)
-}
-
-fn is_cjk(ch: char) -> bool {
-    let code = ch as u32;
-    (0x4E00..=0x9FFF).contains(&code) || (0x3400..=0x4DBF).contains(&code)
 }
 
 fn dedupe_lines(lines: Vec<String>) -> Vec<String> {
