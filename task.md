@@ -1019,3 +1019,121 @@ bun run check
 
 3. 저장 UX 보강
 - `.hwp/.hwpx` 편집 시 `Save As .docx`를 명시적으로 제공
+
+---
+
+## 작업 로그 (2026-02-12 ~ 2026-02-13)
+
+### PDF AI Editor 구현 (Phase 4.5)
+
+pdf-AI.md 스펙에 따른 오버레이 기반 PDF AI 에디터 전면 구현. PDF 원본은 건드리지 않고 Op 모델로 편집하는 아키텍처.
+
+#### 완료된 작업
+
+**1. Rust 백엔드 — bbox OCR + Layout Engine**
+
+- `src-tauri/src/document/types.rs` — PDF 레이아웃 타입 추가 (`BBox`, `PdfWord`, `PdfLine`, `PdfBlock`, `PdfLayoutResult`)
+- `src-tauri/src/document/formats/pdf_layout.rs` — **신규 파일** (Layout Engine)
+  - `parse_tsv_words()` — Tesseract TSV 파싱
+  - `group_words_into_lines()` — y좌표 클러스터링 (overlap > 0.5)
+  - `group_lines_into_blocks()` — 간격 기반 문단 그룹핑
+  - `detect_block_kind()` — title/header/footer/paragraph 분류
+  - `build_layout()` — 통합 파이프라인
+- `src-tauri/src/document/commands.rs` — `doc_pdf_ocr_layout` 커맨드
+  - **이미지 기반 OCR**: 프론트에서 300 DPI PNG → base64 → Rust에서 디코딩 → 임시 PNG 저장 → Tesseract 실행
+  - Tesseract는 macOS에서 PDF 직접 읽기 불가 → 이미지 파이프라인 필수
+
+**2. Rust 백엔드 — PDF Export (lopdf)**
+
+- `src-tauri/Cargo.toml` — `lopdf = "0.34"` 의존성 추가
+- `src-tauri/src/document/formats/pdf_export.rs` — **신규 파일** (~415줄)
+  - `ExportOp` enum (delete, replaceText, insertText, highlight, move, comment)
+  - `ExportBlock` struct (id, page, bbox)
+  - 좌표 변환 (top-left → bottom-left PDF 좌표계)
+  - 화이트 rect + 새 텍스트 렌더링
+  - 하이라이트 반투명 rect 렌더링
+  - 폰트 리소스 관리 (Helvetica 임베드)
+  - content stream 조작 via lopdf
+- `src-tauri/src/document/commands.rs` — `doc_pdf_export_overlay` 커맨드
+  - `output_path: String` 받아서 Rust에서 직접 파일 저장 (IPC 오버헤드 방지)
+
+**3. 프론트엔드 — 타입 + 스토어**
+
+- `src/lib/types/pdfEditor.ts` — **신규 파일**
+  - `BBox`, `PdfWord`, `PdfLine`, `PdfBlock`, `Op`, `PdfDocState`, `PdfLayoutResultRaw` 타입 정의
+  - `PdfDocState.pageHeights: number[]` 필드 추가
+- `src/lib/stores/pdfEditor.svelte.ts` — **신규 파일** (Svelte 5 runes)
+  - `docState`, `selectedBlockId`, `activeOp`, `isAnalyzing` 상태
+  - `analyzePages(sessionId, pageHeights, pageImages, lang?, tessdataDir?)` — OCR 호출 → docState 구성
+  - `initEmpty(pages, heights?)` — OCR 없이 어노테이션 전용 모드 초기화
+  - `pushOp()` / `undoOp()` / `redoOp()` — 로컬 Op 히스토리
+  - `getModifiedBlock()` — Ops 적용된 블록 상태 계산
+  - `getInsertedTexts()` / `getHighlights()` / `getComments()` — 페이지별 Op 필터
+  - `exportState()` — 내보내기용 전체 상태 반환
+
+**4. 프론트엔드 — PdfViewer 리팩토링 (레이어 시스템)**
+
+- `src/lib/components/Forge/PdfViewer.svelte` — 기존 캔버스 뷰어 → 풀 에디터로 확장 (~1100줄)
+  - **레이어 구조**: canvas bg-layer + text-select-layer + edit-layer + annot-layer
+  - **편집 도구**: Select blocks, Highlight, Comment, Insert Text
+  - **블록 편집**: 클릭 선택 (파란 테두리), 더블클릭 인라인 편집, Delete키 삭제
+  - **AI Rewrite**: 블록 툴바에서 "AI Rewrite" 클릭 → `onAiRewrite` 콜백 → forge에서 AI 메시지 전송 → 응답 자동 적용
+  - **하이라이트 도구**: 드래그로 영역 선택, 실시간 미리보기 사각형
+  - **코멘트 도구**: 클릭 위치에 핀 + 텍스트 입력
+  - **텍스트 삽입**: 클릭 위치에 새 텍스트 입력
+  - **OCR 분석**: 300 DPI 렌더링 → base64 PNG → Rust OCR → 블록 시각화
+  - **에러 핸들링**: `analyzeError` 상태 + 인라인 빨간 에러 배너
+  - `setModeWithInit()` — OCR 없이도 도구 사용 가능 (`initEmpty` 호출)
+  - `tessScale()` — OCR 데이터 없으면 1 반환 (어노테이션 전용 모드)
+  - Undo/Redo 버튼 연동
+
+**5. Forge 라우트 연동**
+
+- `src/routes/forge/+page.svelte` — PDF AI 편집 모드 통합
+  - `pdfEditorStore` import + 블록 선택 핸들러
+  - `handlePdfAiRewrite(blockId, text)` — gateway로 rewrite 메시지 전송
+  - `$effect` — 스트리밍 종료 감지 → 마지막 AI 응답을 `replaceText` Op으로 자동 적용
+  - `handlePdfExport()` — save dialog → `doc_pdf_export_overlay` 호출 → 파일 저장
+  - Export PDF 버튼 (OCR layout 완료 시 표시)
+  - `onBlockSelect` + `onAiRewrite` props를 PdfViewer에 전달
+
+**6. 기타 수정**
+
+- `src/lib/stores/fonts.svelte.ts` — Svelte 5 모듈에서 `$derived` export 불가 버그 수정 → getter 함수로 변경
+- `src/lib/components/Forge/WordEditor.svelte` — `systemFonts` → `getSystemFonts()` 업데이트
+- `src/lib/components/Document/ExcelGrid.svelte` — 동일 업데이트
+- 랜딩 페이지 채팅 패널 제거 (문서 열었을 때만 표시)
+- "새 문서" 드롭다운 메뉴 추가 (txt, md, docx, xlsx → 임시 파일 생성 → 편집기 열기)
+- `src-tauri/src/lib.rs` — `create_temp_document` 커맨드 추가, invoke_handler 등록
+
+#### 파일 변경 요약
+
+| 파일 | 작업 |
+|------|------|
+| `src-tauri/src/document/types.rs` | PDF 레이아웃 타입 추가 |
+| `src-tauri/src/document/commands.rs` | `doc_pdf_ocr_layout`, `doc_pdf_export_overlay` 커맨드 |
+| `src-tauri/src/document/formats/pdf_layout.rs` | **신규** — Layout Engine |
+| `src-tauri/src/document/formats/pdf_export.rs` | **신규** — PDF Export (lopdf) |
+| `src-tauri/src/document/formats/mod.rs` | `pub mod pdf_layout;`, `pub mod pdf_export;` |
+| `src-tauri/src/lib.rs` | `create_temp_document`, 커맨드 등록 |
+| `src-tauri/Cargo.toml` | `lopdf = "0.34"` |
+| `src/lib/types/pdfEditor.ts` | **신규** — TS 타입 정의 |
+| `src/lib/stores/pdfEditor.svelte.ts` | **신규** — PDF 에디터 스토어 |
+| `src/lib/stores/fonts.svelte.ts` | `$derived` export 버그 수정 |
+| `src/lib/components/Forge/PdfViewer.svelte` | 레이어 시스템 + 편집 도구 |
+| `src/lib/components/Forge/WordEditor.svelte` | fonts import 변경 |
+| `src/lib/components/Document/ExcelGrid.svelte` | fonts import 변경 |
+| `src/routes/forge/+page.svelte` | AI Rewrite + Export + 새문서 + 랜딩 정리 |
+
+#### 빌드 상태
+
+- `cargo check`: 0 errors ✅
+- `svelte-check`: 0 errors ✅
+- `vite build`: success ✅
+
+#### 알려진 제한/이슈
+
+1. **Tesseract 필수**: OCR 분석은 `tesseract` CLI가 설치되어 있어야 함 (`brew install tesseract`)
+2. **한국어 OCR**: `kor.traineddata` 별도 설치 필요 (`brew install tesseract-lang`)
+3. **폰트 제한**: PDF Export는 Helvetica만 임베드 (한국어 폰트 미지원 → 추후 개선 필요)
+4. **좌표 정밀도**: OCR bbox와 실제 PDF 좌표 간 미세 오차 가능 (DPI 변환)

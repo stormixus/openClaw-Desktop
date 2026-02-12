@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(echo:*)",
+      "mcp__plugin_oh-my-claudecode_t__lsp_diagnostics"
+    ]
+  }
+}
