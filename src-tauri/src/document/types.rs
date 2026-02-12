@@ -5,6 +5,7 @@ pub enum DocumentType {
     Excel,
     Pdf,
     Text,
+    Presentation,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]

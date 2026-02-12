@@ -26,6 +26,34 @@ const TAG_PARA_TEXT: u16 = 67;
 const TAG_CTRL_HEADER: u16 = 71;
 const TAG_LIST_HEADER: u16 = 72;
 const TAG_TABLE: u16 = 77;
+const TAG_PARA_HEADER: u16 = 66;
+const TAG_PARA_CHAR_SHAPE: u16 = 68;
+const TAG_DOCINFO_CHAR_SHAPE: u16 = 21;
+const TAG_DOCINFO_PARA_SHAPE: u16 = 25;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum HwpAlignment {
+    Justify,
+    Left,
+    Right,
+    Center,
+    Distribute,
+}
+
+#[derive(Clone, Debug)]
+struct HwpParaShape {
+    alignment: HwpAlignment,
+}
+
+#[derive(Clone, Debug)]
+struct HwpCharShape {
+    font_size_pt: f32,
+}
+
+struct HwpDocInfo {
+    char_shapes: Vec<HwpCharShape>,
+    para_shapes: Vec<HwpParaShape>,
+}
 
 #[derive(Clone, Copy)]
 struct HwpRecord<'a> {
@@ -46,6 +74,7 @@ struct ParsedCellAddr {
 struct ParsedTableCell {
     addr: ParsedCellAddr,
     text: String,
+    font_size_pt: Option<f32>,
 }
 
 #[derive(Clone, Copy)]
@@ -250,6 +279,7 @@ fn read_hwp_binary_as_html(path: &Path) -> Result<String, DocError> {
     }
 
     let compressed = hwp_is_compressed(&file_header);
+    let doc_info = parse_docinfo(&mut comp, compressed);
     let section_paths = collect_body_section_paths(&comp);
     if section_paths.is_empty() {
         return Err(DocError::ParseError(
@@ -272,7 +302,7 @@ fn read_hwp_binary_as_html(path: &Path) -> Result<String, DocError> {
             section_raw
         };
 
-        let section_html = render_hwp_section_as_html(&section_data, &mut budget);
+        let section_html = render_hwp_section_as_html(&section_data, &mut budget, &doc_info);
         if !section_html.is_empty() {
             body_html.push_str(&section_html);
         }
@@ -290,7 +320,7 @@ fn read_hwp_binary_as_html(path: &Path) -> Result<String, DocError> {
     ))
 }
 
-fn render_hwp_section_as_html(data: &[u8], budget: &mut ExtractBudget) -> String {
+fn render_hwp_section_as_html(data: &[u8], budget: &mut ExtractBudget, doc_info: &HwpDocInfo) -> String {
     let records = parse_hwp_records(data);
     if records.is_empty() {
         return String::new();
@@ -298,23 +328,32 @@ fn render_hwp_section_as_html(data: &[u8], budget: &mut ExtractBudget) -> String
 
     let mut out = String::new();
     let mut idx = 0usize;
+    let mut current_alignment: Option<HwpAlignment> = None;
 
     while idx < records.len() && !budget.exhausted() {
         let rec = records[idx];
 
+        // Track PARA_HEADER to extract paragraph shape (alignment)
+        if rec.tag == TAG_PARA_HEADER {
+            current_alignment = extract_para_alignment(rec.payload, &doc_info.para_shapes);
+        }
+
         if rec.tag == TAG_CTRL_HEADER && is_table_ctrl_header(rec.payload) {
             let (table_html, next_idx, has_table_content) =
-                render_hwp_table_from_ctrl_header(&records, idx, budget);
+                render_hwp_table_from_ctrl_header(&records, idx, budget, doc_info);
             if has_table_content {
                 out.push_str(&table_html);
             }
             idx = next_idx;
+            current_alignment = None;
             continue;
         }
 
         if rec.tag == TAG_PARA_TEXT {
             let paragraph = decode_para_text(rec.payload);
-            append_paragraph_html(&mut out, &paragraph, budget);
+            let primary_shape = find_primary_char_shape(&records, idx, &doc_info.char_shapes);
+            append_paragraph_html(&mut out, &paragraph, budget, primary_shape, current_alignment);
+            current_alignment = None;
         }
 
         idx += 1;
@@ -323,10 +362,31 @@ fn render_hwp_section_as_html(data: &[u8], budget: &mut ExtractBudget) -> String
     out
 }
 
+/// Extract alignment from PARA_HEADER payload.
+/// Bytes 8-9: paraShapeId (UINT16) referencing the PARA_SHAPE table in DocInfo.
+fn extract_para_alignment(payload: &[u8], para_shapes: &[HwpParaShape]) -> Option<HwpAlignment> {
+    if payload.len() < 10 {
+        return None;
+    }
+    let para_shape_id = u16::from_le_bytes([payload[8], payload[9]]) as usize;
+    let shape = para_shapes.get(para_shape_id)?;
+    Some(shape.alignment)
+}
+
+fn alignment_to_css(align: HwpAlignment) -> Option<&'static str> {
+    match align {
+        HwpAlignment::Left => None, // default, no style needed
+        HwpAlignment::Center => Some("center"),
+        HwpAlignment::Right => Some("right"),
+        HwpAlignment::Justify | HwpAlignment::Distribute => Some("justify"),
+    }
+}
+
 fn render_hwp_table_from_ctrl_header(
     records: &[HwpRecord<'_>],
     ctrl_index: usize,
     budget: &mut ExtractBudget,
+    doc_info: &HwpDocInfo,
 ) -> (String, usize, bool) {
     let end_idx = find_subtree_end(records, ctrl_index);
 
@@ -391,10 +451,12 @@ fn render_hwp_table_from_ctrl_header(
             continue;
         }
 
+        let cell_font_size = find_cell_primary_font_size(records, child_start, child_end, &doc_info.char_shapes);
         if let Some(addr) = parse_cell_addr_from_list_header(rec.payload) {
             cells.push(ParsedTableCell {
                 addr,
                 text: cell_text,
+                font_size_pt: cell_font_size,
             });
         } else if !cell_text.is_empty() {
             fallback_cells.push(cell_text);
@@ -657,6 +719,11 @@ fn render_table_with_positions(
                     html.push_str(&col_span.to_string());
                     html.push('"');
                 }
+                if let Some(sz) = cell.font_size_pt {
+                    if sz > 0.0 && sz.is_finite() {
+                        html.push_str(&format!(" style=\"font-size:{:.1}pt\"", sz));
+                    }
+                }
                 html.push('>');
                 if cell.text.trim().is_empty() {
                     html.push_str("&nbsp;");
@@ -730,7 +797,13 @@ fn is_table_ctrl_header(payload: &[u8]) -> bool {
     id_bytes == *b"tbl " || id_bytes == *b" lbt"
 }
 
-fn append_paragraph_html(out: &mut String, text: &str, budget: &mut ExtractBudget) {
+fn append_paragraph_html(
+    out: &mut String,
+    text: &str,
+    budget: &mut ExtractBudget,
+    shape: Option<&HwpCharShape>,
+    alignment: Option<HwpAlignment>,
+) {
     for raw in text.split('\n') {
         if budget.exhausted() {
             break;
@@ -765,7 +838,26 @@ fn append_paragraph_html(out: &mut String, text: &str, budget: &mut ExtractBudge
             }
         }
 
-        out.push_str("<p>");
+        // Build inline styles: font-size and text-align
+        let mut styles = Vec::new();
+        if let Some(s) = shape {
+            if s.font_size_pt > 0.0 && s.font_size_pt.is_finite() {
+                styles.push(format!("font-size:{:.1}pt", s.font_size_pt));
+            }
+        }
+        if let Some(align) = alignment {
+            if let Some(css) = alignment_to_css(align) {
+                styles.push(format!("text-align:{}", css));
+            }
+        }
+
+        if styles.is_empty() {
+            out.push_str("<p>");
+        } else {
+            out.push_str("<p style=\"");
+            out.push_str(&styles.join(";"));
+            out.push_str("\">");
+        }
         out.push_str(&escape_html(&cleaned));
         out.push_str("</p>");
     }
@@ -1204,6 +1296,132 @@ fn control_char_wchar_size(code: u8) -> usize {
         1..=9 | 11..=23 => 8,
         _ => 1,
     }
+}
+
+/// Parse the DocInfo stream to extract CHAR_SHAPE and PARA_SHAPE records.
+fn parse_docinfo(
+    comp: &mut CompoundFile<File>,
+    compressed: bool,
+) -> HwpDocInfo {
+    let raw = match read_stream_bytes(comp, "/DocInfo")
+        .or_else(|_| read_stream_bytes(comp, "DocInfo"))
+    {
+        Ok(data) => data,
+        Err(_) => return HwpDocInfo { char_shapes: Vec::new(), para_shapes: Vec::new() },
+    };
+
+    let data = if compressed {
+        inflate_hwp_stream(&raw).unwrap_or(raw)
+    } else {
+        raw
+    };
+
+    let records = parse_hwp_records(&data);
+    let mut char_shapes = Vec::new();
+    let mut para_shapes = Vec::new();
+
+    for rec in &records {
+        match rec.tag {
+            TAG_DOCINFO_CHAR_SHAPE => {
+                char_shapes.push(parse_char_shape_record(rec.payload));
+            }
+            TAG_DOCINFO_PARA_SHAPE => {
+                para_shapes.push(parse_para_shape_record(rec.payload));
+            }
+            _ => {}
+        }
+    }
+
+    HwpDocInfo { char_shapes, para_shapes }
+}
+
+/// Parse a single PARA_SHAPE record from DocInfo.
+/// Bytes 0-3: attribute flags (UINT32). Bits 2-4 = alignment.
+fn parse_para_shape_record(payload: &[u8]) -> HwpParaShape {
+    let alignment = if payload.len() >= 4 {
+        let attr = u32::from_le_bytes([payload[0], payload[1], payload[2], payload[3]]);
+        let align_val = ((attr >> 2) & 0x07) as u8;
+        match align_val {
+            0 => HwpAlignment::Justify,
+            1 => HwpAlignment::Left,
+            2 => HwpAlignment::Right,
+            3 => HwpAlignment::Center,
+            _ => HwpAlignment::Distribute,
+        }
+    } else {
+        HwpAlignment::Left
+    };
+    HwpParaShape { alignment }
+}
+
+/// Parse a single CHAR_SHAPE record from DocInfo.
+/// Layout: faceId[7]*WORD(14) + ratio[7](7) + spacing[7](7) + relSize[7](7) + offset[7](7)
+///       = 42 bytes, then INT32 baseSize at offset 42 (in 1/100 pt).
+fn parse_char_shape_record(payload: &[u8]) -> HwpCharShape {
+    let font_size_pt = if payload.len() >= 46 {
+        let raw = i32::from_le_bytes([payload[42], payload[43], payload[44], payload[45]]);
+        (raw as f32 / 100.0).clamp(1.0, 200.0)
+    } else {
+        10.0
+    };
+
+    HwpCharShape { font_size_pt }
+}
+
+/// Find the primary (first) char shape for a paragraph given its PARA_TEXT index.
+/// Looks for the sibling PARA_CHAR_SHAPE record (tag 68) at the same level.
+fn find_primary_char_shape<'a>(
+    records: &[HwpRecord<'_>],
+    para_text_idx: usize,
+    char_shapes: &'a [HwpCharShape],
+) -> Option<&'a HwpCharShape> {
+    if char_shapes.is_empty() {
+        return None;
+    }
+    let level = records[para_text_idx].level;
+
+    for i in 1..=5 {
+        let next = para_text_idx + i;
+        if next >= records.len() {
+            break;
+        }
+        let r = records[next];
+        if r.level < level {
+            break;
+        }
+        if r.level > level {
+            continue;
+        }
+        if r.tag == TAG_PARA_CHAR_SHAPE && r.payload.len() >= 8 {
+            // First entry: (DWORD position, DWORD shapeId)
+            // position at [0..4], shapeId at [4..8]
+            let shape_id = u32::from_le_bytes([
+                r.payload[4], r.payload[5], r.payload[6], r.payload[7],
+            ]) as usize;
+            return char_shapes.get(shape_id);
+        }
+    }
+    None
+}
+
+/// Find the primary font size for a table cell's record range.
+fn find_cell_primary_font_size(
+    records: &[HwpRecord<'_>],
+    start: usize,
+    end: usize,
+    char_shapes: &[HwpCharShape],
+) -> Option<f32> {
+    if char_shapes.is_empty() {
+        return None;
+    }
+    for i in start..end {
+        if records[i].tag == TAG_PARA_TEXT {
+            if let Some(shape) = find_primary_char_shape(records, i, char_shapes) {
+                return Some(shape.font_size_pt);
+            }
+        }
+    }
+    None
 }
 
 fn run_stdout_converter(program: &str, args: &[&str]) -> Option<String> {

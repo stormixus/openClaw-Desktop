@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
+  import { invoke } from '@tauri-apps/api/core';
   import {
     Hammer,
     Table2,
@@ -30,7 +31,7 @@
     discardChanges,
     type PatchPreview
   } from "$lib/stores/document.svelte";
-  import { store as gatewayStore, setForgeDocument } from "$lib/gateway/store.svelte";
+  import { store as gatewayStore, setForgeDocument, updateForgeContent } from "$lib/gateway/store.svelte";
 
   import DocPreview from "$lib/components/Document/DocPreview.svelte";
   import WordEditor from "$lib/components/Forge/WordEditor.svelte";
@@ -38,6 +39,7 @@
   import JsonEditor from "$lib/components/Forge/JsonEditor.svelte";
   import PlainTextEditor from "$lib/components/Forge/PlainTextEditor.svelte";
   import PdfViewer from "$lib/components/Forge/PdfViewer.svelte";
+  import PptxViewer from "$lib/components/Forge/PptxViewer.svelte";
   import ApprovalModal from "$lib/components/Document/ApprovalModal.svelte";
   import ChatPanel from "$lib/components/Chat/ChatPanel.svelte";
 
@@ -45,6 +47,7 @@
   const activeDoc = $derived(docStore.activeDocument);
   const isLoading = $derived(docStore.isLoading);
   const pendingPatch = $derived(gatewayStore.forgeState.pendingPatch);
+  const isAgentEditing = $derived(gatewayStore.forgeState.isAgentEditing);
 
   // Chat panel state
   let chatOpen = $state(true);
@@ -55,6 +58,11 @@
   let pendingTextContent = $state<string | null>(null);
   let textSyncTimer = $state<ReturnType<typeof setTimeout> | null>(null);
   let isTextSyncing = $state(false);
+
+  // PDF OCR editing state
+  let pdfOcrMode = $state(false);
+  let pdfOcrText = $state("");
+  let pdfOcrLoading = $state(false);
 
   const CHAT_PANE_MIN = 360;
   const CHAT_PANE_MAX_RATIO = 0.72;
@@ -93,7 +101,7 @@
   const isHanwordDoc = $derived(activeExtension === "hwp" || activeExtension === "hwpx");
   const isMarkdownDoc = $derived(activeExtension === "md" || activeExtension === "markdown");
   const isJsonDoc = $derived(activeExtension === "json");
-  const canSave = $derived(activeDoc ? activeDoc.docType !== "pdf" && !isLegacyDoc && !isHanwordDoc : false);
+  const canSave = $derived(activeDoc ? activeDoc.docType !== "pdf" && activeDoc.docType !== "presentation" && !isLegacyDoc && !isHanwordDoc : false);
 
   function rowsToPlainText(rows: Array<Array<{ value: unknown }>> | undefined): string {
     if (!rows || rows.length === 0) return "";
@@ -124,6 +132,14 @@
   const wordPlainFallbackContent = $derived.by(() => {
     if (!isWordDoc) return plainTextContent;
     return useRichWordEditor ? plainTextContent : htmlToPlainText(wordEditorContent);
+  });
+
+  const presentationSlides = $derived.by(() => {
+    if (!activeDoc || activeDoc.docType !== 'presentation') return [];
+    return activeDoc.sheets.map(sheet => ({
+      name: sheet.name,
+      content: (sheet.rows[0]?.[0]?.value as string) ?? "",
+    }));
   });
 
   function getChatPaneMaxWidth(): number {
@@ -197,21 +213,16 @@
           break;
         default:
           filters = [
-            { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] },
+            { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx', 'pptx', 'ppt'] },
             { name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv', 'ods'] },
-            { name: 'Text', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] }
+            { name: 'Text', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] },
+            { name: 'Presentations', extensions: ['pptx', 'ppt'] }
           ];
       }
 
       const selected = await open({ filters });
 
       if (selected && typeof selected === 'string') {
-        const lowerPath = selected.toLowerCase();
-        if (lowerPath.endsWith('.ppt') || lowerPath.endsWith('.pptx')) {
-          openFileError = "PPT/PPTX는 아직 Forge에서 직접 열 수 없습니다. PDF로 변환해서 열어주세요.";
-          return;
-        }
-
         const doc = await Promise.race([
           openDocument(selected),
           new Promise<null>((resolve) => {
@@ -224,11 +235,22 @@
           return;
         }
         if (doc) {
-          const excerpt = doc.sheets[0]?.rows
-            .slice(0, 50)
-            .map(r => r.map(c => c.value ?? '').join('\t'))
-            .join('\n') ?? '';
-          setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
+          if (doc.docType === 'presentation') {
+            const fullContent = doc.sheets.map(s =>
+              (s.rows[0]?.[0]?.value as string) ?? ""
+            ).join('\n---\n');
+            const excerpt = fullContent.slice(0, 2000);
+            setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
+            updateForgeContent(fullContent);
+          } else {
+            const isWord = ["docx","doc","hwp","hwpx"].some(ext => doc.fileName.toLowerCase().endsWith(ext));
+            const fullContent = isWord
+              ? (doc.sheets[0]?.rows?.[0]?.[0]?.value as string) ?? ""
+              : doc.sheets[0]?.rows?.map(r => r.map(c => c.value ?? '').join('\t')).join('\n') ?? "";
+            const excerpt = fullContent.slice(0, 2000);
+            setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
+            updateForgeContent(fullContent);
+          }
         }
       }
     } catch (err: unknown) {
@@ -270,6 +292,9 @@
       if (activeDoc.docType === 'text') {
         await flushTextSync();
       }
+      // Reset PDF OCR state
+      pdfOcrMode = false;
+      pdfOcrText = "";
       setForgeDocument(null);
       await closeDocument(activeDoc.id);
     }
@@ -292,6 +317,9 @@
     activeDoc.modified = true;
     pendingTextContent = newContent;
 
+    // Keep forge context fresh for next chat message
+    updateForgeContent(newContent);
+
     if (textSyncTimer) {
       clearTimeout(textSyncTimer);
     }
@@ -301,11 +329,88 @@
     }, 350);
   }
 
+  // PDF OCR editing
+  async function handlePdfOcrEdit() {
+    if (!activeDoc || activeDoc.docType !== 'pdf') return;
+    pdfOcrLoading = true;
+    try {
+      const text = await invoke<string>('doc_pdf_ocr_extract', {
+        id: activeDoc.id,
+        lang: null,
+        tessdataDir: null,
+      });
+      pdfOcrText = text;
+      pdfOcrMode = true;
+      // Update forge context with OCR text for agent awareness
+      updateForgeContent(text);
+    } catch (err: any) {
+      console.error("OCR extraction failed:", err);
+      openFileError = `OCR 추출 실패: ${err.message || err}`;
+    } finally {
+      pdfOcrLoading = false;
+    }
+  }
+
+  function handlePdfOcrBack() {
+    pdfOcrMode = false;
+  }
+
+  function handlePdfOcrTextChange(newContent: string) {
+    pdfOcrText = newContent;
+    updateForgeContent(newContent);
+  }
+
+  async function handleSaveAsDocx() {
+    if (!pdfOcrText) return;
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const savePath = await save({
+        filters: [{ name: 'Word Document', extensions: ['docx'] }],
+        defaultPath: activeDoc?.fileName.replace(/\.pdf$/i, '.docx') ?? 'document.docx',
+      });
+      if (savePath) {
+        await invoke('doc_save_text_as_docx', { content: pdfOcrText, savePath });
+      }
+    } catch (err: any) {
+      console.error("Save as DOCX failed:", err);
+      openFileError = `DOCX 저장 실패: ${err.message || err}`;
+    }
+  }
+
+  // Slide editing handler for PPTX
+  function handleSlideChange(slideIndex: number, content: string) {
+    if (!activeDoc || activeDoc.docType !== 'presentation') return;
+    // Update local state
+    if (activeDoc.sheets[slideIndex]) {
+      activeDoc.sheets[slideIndex].rows = [[{ type: 'string' as const, value: content }]];
+      activeDoc.modified = true;
+    }
+    // Sync to backend
+    setTextContent(activeDoc.id, content, 'html', slideIndex);
+    // Update forge context
+    const fullContent = activeDoc.sheets.map(s =>
+      (s.rows[0]?.[0]?.value as string) ?? ""
+    ).join('\n---\n');
+    updateForgeContent(fullContent);
+  }
+
   // Approval Modal Handlers
   async function handleApprovePatch() {
     if (activeDoc && pendingPatch) {
       try {
-        await commitChanges(activeDoc.id);
+        if (pendingPatch.type === "content_replace") {
+          // Content replacement from agent
+          const fmt = pendingPatch.format === "html" ? "html" : "plain";
+          await setTextContent(activeDoc.id, pendingPatch.content, fmt);
+          // Reload the document to reflect changes
+          const doc = await openDocument(activeDoc.filePath);
+          if (doc) {
+            updateForgeContent(pendingPatch.content);
+          }
+        } else {
+          // Existing spreadsheet patch flow
+          await commitChanges(activeDoc.id);
+        }
         gatewayStore.forgeState.pendingPatch = null;
       } catch (e) {
         console.error("Failed to commit patch:", e);
@@ -347,12 +452,39 @@
       </div>
 
       <div class="toolbar-center">
-        <button class="tool-btn" onclick={handleUndo} title="Undo">
-          <Undo size={18} />
-        </button>
-        <button class="tool-btn" onclick={handleRedo} title="Redo">
-          <Redo size={18} />
-        </button>
+        {#if activeDoc.docType === 'pdf'}
+          {#if pdfOcrMode}
+            <button class="tool-btn active" onclick={handlePdfOcrBack} title="PDF 원본 보기">
+              <FileText size={18} />
+            </button>
+            <button class="action-btn ocr-save" onclick={handleSaveAsDocx} title="DOCX로 저장">
+              <Save size={16} />
+              .docx 저장
+            </button>
+          {:else}
+            <button
+              class="action-btn ocr-btn"
+              onclick={handlePdfOcrEdit}
+              disabled={pdfOcrLoading}
+              title="OCR로 텍스트 추출 후 편집"
+            >
+              {#if pdfOcrLoading}
+                <Loader2 size={16} class="spin" />
+                OCR 추출 중...
+              {:else}
+                <FileText size={16} />
+                OCR 편집
+              {/if}
+            </button>
+          {/if}
+        {:else}
+          <button class="tool-btn" onclick={handleUndo} title="Undo">
+            <Undo size={18} />
+          </button>
+          <button class="tool-btn" onclick={handleRedo} title="Redo">
+            <Redo size={18} />
+          </button>
+        {/if}
       </div>
 
       <div class="toolbar-right">
@@ -378,7 +510,9 @@
                     ? ".doc 저장은 지원되지 않습니다. .docx로 저장하세요."
                     : isHanwordDoc
                       ? ".hwp/.hwpx 직접 저장은 아직 지원되지 않습니다. .docx로 저장하세요."
-                      : "PDF는 저장이 지원되지 않습니다."
+                      : activeDoc?.docType === "presentation"
+                        ? "프레젠테이션은 저장이 지원되지 않습니다."
+                        : "PDF는 저장이 지원되지 않습니다."
                 )
               : "Save"
           }
@@ -391,6 +525,12 @@
 
     <div class="workspace" bind:this={workspaceEl}>
       <div class="main-area">
+        {#if isAgentEditing && activeDoc.docType !== 'presentation'}
+          <div class="agent-editing-banner">
+            <div class="agent-editing-spinner"></div>
+            <span>AI가 문서를 수정하고 있습니다...</span>
+          </div>
+        {/if}
         {#if activeDoc.docType === 'excel'}
           <DocPreview
             sessionId={activeDoc.id}
@@ -398,7 +538,22 @@
             fileName={activeDoc.fileName}
           />
         {:else if activeDoc.docType === 'pdf'}
-          <PdfViewer sessionId={activeDoc.id} />
+          {#if pdfOcrMode}
+            <PlainTextEditor
+              content={pdfOcrText}
+              editable={true}
+              onchange={handlePdfOcrTextChange}
+            />
+          {:else}
+            <PdfViewer sessionId={activeDoc.id} />
+          {/if}
+        {:else if activeDoc.docType === 'presentation'}
+          <PptxViewer
+            slides={presentationSlides}
+            editable={true}
+            isAgentEditing={isAgentEditing}
+            onchange={handleSlideChange}
+          />
         {:else if activeDoc.docType === 'text'}
           {#if isWordDoc}
             {#if useRichWordEditor}
@@ -540,7 +695,7 @@
               <Presentation size={24} strokeWidth={1.5} />
             </div>
             <h3>Presentations</h3>
-            <p>PPT/PPTX는 PDF 변환 후 열기</p>
+            <p>PPTX 슬라이드 뷰어</p>
           </button>
         </div>
 
@@ -589,7 +744,7 @@
     </div>
   {/if}
 
-  <!-- Approval Modal Overlay -->
+  <!-- Approval Modal Overlay (only for spreadsheet patches and non-auto-applied content) -->
   {#if pendingPatch && activeDoc}
     <ApprovalModal
       fileName={activeDoc.fileName}
@@ -640,6 +795,32 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    gap: 6px;
+  }
+
+  .action-btn.ocr-btn {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+  }
+
+  .action-btn.ocr-btn:hover:not(:disabled) {
+    background: rgba(99, 102, 241, 0.18);
+  }
+
+  .action-btn.ocr-save {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #10b981;
+  }
+
+  .action-btn.ocr-save:hover {
+    background: rgba(16, 185, 129, 0.2);
+  }
+
+  .tool-btn.active {
+    background: rgba(99, 102, 241, 0.12);
+    color: var(--color-primary);
   }
 
   .doc-title {
@@ -722,6 +903,30 @@
     overflow: hidden;
     padding: 16px;
     background: var(--color-bg);
+    position: relative;
+  }
+
+  .agent-editing-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    margin-bottom: 8px;
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-primary);
+  }
+
+  .agent-editing-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-top-color: var(--color-primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
   }
 
   .pane-resizer {

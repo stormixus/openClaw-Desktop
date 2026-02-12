@@ -1,25 +1,25 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
   <defs>
     <linearGradient id="bg" x1="170" y1="110" x2="854" y2="914" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#f8fbff"/>
-      <stop offset="1" stop-color="#e5eefb"/>
+      <stop offset="0" stop-color="#1e2a43"/>
+      <stop offset="1" stop-color="#0d1426"/>
     </linearGradient>
     <linearGradient id="lobster-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ff8f6b"/>
-      <stop offset="100%" stop-color="#e0563e"/>
+      <stop offset="0%" stop-color="#ff9d78"/>
+      <stop offset="100%" stop-color="#ff6b4a"/>
     </linearGradient>
   </defs>
   <rect x="88" y="88" width="848" height="848" rx="190" fill="url(#bg)"/>
-  <rect x="89.5" y="89.5" width="845" height="845" rx="188.5" fill="none" stroke="#d4deef" stroke-width="3"/>
+  <rect x="89.5" y="89.5" width="845" height="845" rx="188.5" fill="none" stroke="#3a4867" stroke-width="3"/>
   <g transform="translate(182 182) scale(5.5)">
     <path d="M60 10 C30 10 15 35 15 55 C15 75 30 95 45 100 L45 110 L55 110 L55 100 C55 100 60 102 65 100 L65 110 L75 110 L75 100 C90 95 105 75 105 55 C105 35 90 10 60 10Z" fill="url(#lobster-gradient)"/>
     <path d="M20 45 C5 40 0 50 5 60 C10 70 20 65 25 55 C28 48 25 45 20 45Z" fill="url(#lobster-gradient)"/>
     <path d="M100 45 C115 40 120 50 115 60 C110 70 100 65 95 55 C92 48 95 45 100 45Z" fill="url(#lobster-gradient)"/>
-    <path d="M45 15 Q35 5 30 8" stroke="#ff7f60" stroke-width="2" stroke-linecap="round"/>
-    <path d="M75 15 Q85 5 90 8" stroke="#ff7f60" stroke-width="2" stroke-linecap="round"/>
-    <circle cx="45" cy="35" r="6" fill="#0f1729"/>
-    <circle cx="75" cy="35" r="6" fill="#0f1729"/>
-    <circle cx="46" cy="34" r="2" fill="#74d9ff"/>
-    <circle cx="76" cy="34" r="2" fill="#74d9ff"/>
+    <path d="M45 15 Q35 5 30 8" stroke="#ff8f70" stroke-width="2" stroke-linecap="round"/>
+    <path d="M75 15 Q85 5 90 8" stroke="#ff8f70" stroke-width="2" stroke-linecap="round"/>
+    <circle cx="45" cy="35" r="6" fill="#0a0f1d"/>
+    <circle cx="75" cy="35" r="6" fill="#0a0f1d"/>
+    <circle cx="46" cy="34" r="2" fill="#80e3ff"/>
+    <circle cx="76" cy="34" r="2" fill="#80e3ff"/>
   </g>
 </svg>

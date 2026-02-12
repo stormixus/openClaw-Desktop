@@ -5,6 +5,7 @@ use crate::document::formats::excel::ExcelAdapter;
 use crate::document::formats::pdf::PdfAdapter;
 use crate::document::formats::docx::DocxAdapter;
 use crate::document::formats::hwp::HwpAdapter;
+use crate::document::formats::pptx::PptxAdapter;
 use crate::document::formats::DocumentAdapter;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -32,6 +33,9 @@ pub async fn doc_open(
         },
         "hwp" | "hwpx" => {
              HwpAdapter::read(file_path).map_err(|e| e.to_string())?
+        },
+        "pptx" | "ppt" => {
+             PptxAdapter::read(file_path).map_err(|e| e.to_string())?
         },
         "csv" => {
             read_csv_file(file_path)?
@@ -231,60 +235,83 @@ pub async fn doc_set_text_content(
     id: String,
     content: String,
     format: Option<String>,
+    sheet_index: Option<usize>,
     state: State<'_, SessionManager>,
 ) -> Result<(), String> {
     state
         .get_session_mut(&id, |session| -> Result<(), String> {
-            if !matches!(session.state.doc_type, DocumentType::Text) {
-                return Err("Document is not a text-like document".to_string());
+            match session.state.doc_type {
+                DocumentType::Text => {
+                    if session.state.sheets.is_empty() {
+                        session.state.sheets.push(SheetData {
+                            name: "Content".to_string(),
+                            rows: vec![],
+                            total_rows: 0,
+                            total_cols: 1,
+                            formulas: vec![],
+                            merged_ranges: vec![],
+                            row_heights: vec![],
+                            col_widths: vec![],
+                            styled_cells: vec![],
+                        });
+                    }
+
+                    let sheet = &mut session.state.sheets[0];
+                    let is_html = format
+                        .as_deref()
+                        .map(|f| f.eq_ignore_ascii_case("html"))
+                        .unwrap_or(false);
+
+                    if is_html {
+                        sheet.rows = vec![vec![CellValue::String(content)]];
+                    } else {
+                        let mut rows: Vec<Vec<CellValue>> = content
+                            .split('\n')
+                            .map(|line| vec![CellValue::String(line.to_string())])
+                            .collect();
+                        if rows.is_empty() {
+                            rows.push(vec![CellValue::String(String::new())]);
+                        }
+                        sheet.rows = rows;
+                    }
+
+                    sheet.total_rows = sheet.rows.len();
+                    sheet.total_cols = 1;
+                    sheet.formulas.clear();
+                    sheet.merged_ranges.clear();
+                    sheet.row_heights.clear();
+                    sheet.col_widths.clear();
+                    sheet.styled_cells.clear();
+                    session.state.modified = true;
+                    Ok(())
+                },
+                DocumentType::Presentation => {
+                    let idx = sheet_index.unwrap_or(0);
+                    if let Some(sheet) = session.state.sheets.get_mut(idx) {
+                        sheet.rows = vec![vec![CellValue::String(content)]];
+                        sheet.total_rows = 1;
+                        sheet.total_cols = 1;
+                        session.state.modified = true;
+                        Ok(())
+                    } else {
+                        Err(format!("Slide index {} out of range (total: {})", idx, session.state.sheets.len()))
+                    }
+                },
+                _ => Err("Document type does not support text editing".to_string()),
             }
-
-            if session.state.sheets.is_empty() {
-                session.state.sheets.push(SheetData {
-                    name: "Content".to_string(),
-                    rows: vec![],
-                    total_rows: 0,
-                    total_cols: 1,
-                    formulas: vec![],
-                    merged_ranges: vec![],
-                    row_heights: vec![],
-                    col_widths: vec![],
-                    styled_cells: vec![],
-                });
-            }
-
-            let sheet = &mut session.state.sheets[0];
-            let is_html = format
-                .as_deref()
-                .map(|f| f.eq_ignore_ascii_case("html"))
-                .unwrap_or(false);
-
-            if is_html {
-                sheet.rows = vec![vec![CellValue::String(content)]];
-            } else {
-                let mut rows: Vec<Vec<CellValue>> = content
-                    .split('\n')
-                    .map(|line| vec![CellValue::String(line.to_string())])
-                    .collect();
-                if rows.is_empty() {
-                    rows.push(vec![CellValue::String(String::new())]);
-                }
-                sheet.rows = rows;
-            }
-
-            sheet.total_rows = sheet.rows.len();
-            sheet.total_cols = 1;
-            sheet.formulas.clear();
-            sheet.merged_ranges.clear();
-            sheet.row_heights.clear();
-            sheet.col_widths.clear();
-            sheet.styled_cells.clear();
-            session.state.modified = true;
-            Ok(())
         })
         .map_err(|e| e.to_string())??;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn doc_save_text_as_docx(
+    content: String,
+    save_path: String,
+) -> Result<(), String> {
+    let path = Path::new(&save_path);
+    DocxAdapter::save(path, &content).map_err(|e| e.to_string())
 }
 
 fn read_text_file(file_path: &Path) -> Result<DocState, String> {
@@ -481,6 +508,7 @@ pub async fn doc_save(
             DocumentType::Text => {
                 save_text_file(&session.state, file_path)
             },
+            DocumentType::Presentation => Err("Save not supported for presentations".to_string()),
             _ => Err("Save not supported for this document type".to_string()),
         }
     }).map_err(|e| e.to_string())??;
@@ -498,6 +526,7 @@ fn doc_save_inner(id: &str, path: &str, state: &SessionManager) -> Result<(), St
             DocumentType::Text => {
                 save_text_file(&session.state, file_path)
             },
+            DocumentType::Presentation => Err("Save not supported for presentations".to_string()),
             _ => Err("Save not supported for this document type".to_string()),
         }
     }).map_err(|e| e.to_string())?

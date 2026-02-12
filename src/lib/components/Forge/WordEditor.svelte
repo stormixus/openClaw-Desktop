@@ -79,7 +79,6 @@
       return {
         size: {
           default: null,
-          parseHTML: (element) => element.style.fontSize || null,
           renderHTML: (attrs) => {
             if (!attrs.size) return {};
             return { style: `font-size:${attrs.size}` };
@@ -88,7 +87,13 @@
       };
     },
     parseHTML() {
-      return [{ style: "font-size" }];
+      return [{
+        style: "font-size",
+        getAttrs: (value: string) => {
+          if (!value || value === "inherit" || value === "initial") return false;
+          return { size: value };
+        },
+      }];
     },
     renderHTML({ HTMLAttributes }) {
       return ["span", mergeAttributes(HTMLAttributes), 0];
@@ -101,7 +106,6 @@
       return {
         color: {
           default: null,
-          parseHTML: (element) => element.style.color || null,
           renderHTML: (attrs) => {
             if (!attrs.color) return {};
             return { style: `color:${attrs.color}` };
@@ -110,7 +114,13 @@
       };
     },
     parseHTML() {
-      return [{ style: "color" }];
+      return [{
+        style: "color",
+        getAttrs: (value: string) => {
+          if (!value || value === "inherit" || value === "initial") return false;
+          return { color: value };
+        },
+      }];
     },
     renderHTML({ HTMLAttributes }) {
       return ["span", mergeAttributes(HTMLAttributes), 0];
@@ -132,13 +142,61 @@
       };
     },
     parseHTML() {
-      return [{ tag: "mark" }, { style: "background-color" }];
+      return [
+        { tag: "mark" },
+        {
+          style: "background-color",
+          getAttrs: (value: string) => {
+            if (!value || value === "inherit" || value === "initial" || value === "transparent") return false;
+            return { color: value };
+          },
+        },
+      ];
     },
     renderHTML({ HTMLAttributes }) {
       return ["mark", mergeAttributes(HTMLAttributes), 0];
     },
   });
 
+  const FontFamilyMark = Mark.create({
+    name: "fontFamily",
+    addAttributes() {
+      return {
+        family: {
+          default: null,
+          renderHTML: (attrs) => {
+            if (!attrs.family) return {};
+            return { style: `font-family:${attrs.family}` };
+          },
+        },
+      };
+    },
+    parseHTML() {
+      return [{
+        style: "font-family",
+        getAttrs: (value: string) => {
+          if (!value || value === "inherit" || value === "initial") return false;
+          return { family: value };
+        },
+      }];
+    },
+    renderHTML({ HTMLAttributes }) {
+      return ["span", mergeAttributes(HTMLAttributes), 0];
+    },
+  });
+
+  const FONT_FAMILY_OPTIONS = [
+    { label: "기본", value: "" },
+    { label: "맑은 고딕", value: "'Malgun Gothic','맑은 고딕',sans-serif" },
+    { label: "나눔고딕", value: "'Nanum Gothic','나눔고딕',sans-serif" },
+    { label: "바탕", value: "Batang,'바탕',serif" },
+    { label: "돋움", value: "Dotum,'돋움',sans-serif" },
+    { label: "굴림", value: "Gulim,'굴림',sans-serif" },
+    { label: "Arial", value: "Arial,Helvetica,sans-serif" },
+    { label: "Times New Roman", value: "'Times New Roman',Times,serif" },
+    { label: "Georgia", value: "Georgia,serif" },
+    { label: "Courier New", value: "'Courier New',Courier,monospace" },
+  ];
   const FONT_SIZE_OPTIONS = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40];
   const DEFAULT_TEXT_COLOR = "#111827";
   const DEFAULT_HIGHLIGHT_COLOR = "#fff59d";
@@ -157,6 +215,7 @@
   let lastExternalContent: string | null = null;
   let skipInitialUpdate = true;
   let currentAlign = $state<"left" | "center" | "right" | "justify">("left");
+  let currentFontFamily = $state("");
   let currentFontSize = $state("14");
   let activeBold = $state(false);
   let activeItalic = $state(false);
@@ -222,6 +281,9 @@
       currentAlign = "left";
     }
 
+    const fontFamily = (editor.getAttributes("fontFamily") as { family?: string }).family;
+    currentFontFamily = fontFamily || "";
+
     const fontSize = (editor.getAttributes("fontSize") as { size?: string }).size;
     currentFontSize = normalizeFontSize(fontSize);
 
@@ -257,6 +319,7 @@
         FontSizeMark,
         TextColorMark,
         TextHighlightMark,
+        FontFamilyMark,
         SuperscriptMark,
         SubscriptMark,
         Table.configure({ resizable: true }),
@@ -330,6 +393,19 @@
       .updateAttributes("heading", { textAlign: value })
       .run();
     currentAlign = value;
+  }
+
+  function applyFontFamily(event: Event): void {
+    if (!editor) return;
+    const target = event.currentTarget as HTMLSelectElement;
+    const family = target.value;
+    if (!family) {
+      editor.chain().focus().unsetMark("fontFamily").run();
+      currentFontFamily = "";
+    } else {
+      editor.chain().focus().setMark("fontFamily", { family }).run();
+      currentFontFamily = family;
+    }
   }
 
   function applyFontSize(event: Event): void {
@@ -452,6 +528,13 @@
         <Quote size={16} />
       </button>
       <div class="divider"></div>
+      <div class="font-family-control">
+        <select value={currentFontFamily} onchange={applyFontFamily} aria-label="Font family">
+          {#each FONT_FAMILY_OPTIONS as opt}
+            <option value={opt.value}>{opt.label}</option>
+          {/each}
+        </select>
+      </div>
       <div class="font-size-control">
         <Type size={14} />
         <select value={currentFontSize} onchange={applyFontSize} aria-label="Font size">
@@ -570,6 +653,24 @@
     height: 16px;
     background: var(--color-border);
     margin: 0 4px;
+  }
+
+  .font-family-control {
+    display: inline-flex;
+    align-items: center;
+    padding: 0 4px;
+  }
+
+  .font-family-control select {
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 12px;
+    line-height: 1;
+    padding: 4px 6px;
+    min-width: 100px;
+    max-width: 140px;
   }
 
   .font-size-control {

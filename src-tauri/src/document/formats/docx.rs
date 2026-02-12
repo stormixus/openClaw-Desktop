@@ -382,6 +382,10 @@ fn render_run(
                 font_size_pt = Some(style_size);
             }
         }
+
+        let mut sz_val: Option<f32> = None;
+        let mut sz_cs_val: Option<f32> = None;
+
         for p in props.children().filter(|n| n.is_element()) {
             match p.tag_name().name() {
                 "b" | "bCs" => {
@@ -401,13 +405,23 @@ fn render_run(
                 "color" => {
                     color = attr_any(p, "val").as_deref().and_then(normalize_hex_color);
                 }
-                "sz" | "szCs" => {
-                    font_size_pt = attr_any(p, "val")
+                "sz" => {
+                    sz_val = attr_any(p, "val")
+                        .and_then(|v| v.parse::<f32>().ok())
+                        .map(|half| half / 2.0);
+                }
+                "szCs" => {
+                    sz_cs_val = attr_any(p, "val")
                         .and_then(|v| v.parse::<f32>().ok())
                         .map(|half| half / 2.0);
                 }
                 _ => {}
             }
+        }
+
+        // Prefer sz (Latin) over szCs (complex-script); keep inherited if both fail
+        if let Some(sz) = sz_val.or(sz_cs_val) {
+            font_size_pt = Some(sz);
         }
     }
 
@@ -440,12 +454,18 @@ fn render_run(
         return String::new();
     }
 
-    let mut wrapped = content;
-    if let Some(c) = color {
-        wrapped = format!("<span style=\"color:{};\">{}</span>", c, wrapped);
-    }
+    // Build a single span with all inline styles to reduce DOM depth
+    let mut inline_styles = Vec::new();
     if let Some(sz) = font_size_pt {
-        wrapped = format!("<span style=\"font-size:{:.1}pt;\">{}</span>", sz, wrapped);
+        inline_styles.push(format!("font-size:{:.1}pt", sz));
+    }
+    if let Some(ref c) = color {
+        inline_styles.push(format!("color:{}", c));
+    }
+
+    let mut wrapped = content;
+    if !inline_styles.is_empty() {
+        wrapped = format!("<span style=\"{}\">{}</span>", inline_styles.join(";"), wrapped);
     }
     if underline {
         wrapped = format!("<u>{}</u>", wrapped);
@@ -639,17 +659,24 @@ fn map_style_heading_tag(style_id: &str, style_name: Option<&str>) -> Option<Str
 }
 
 fn extract_rpr_font_size_pt(rpr: Node<'_, '_>) -> Option<f32> {
+    let mut sz_val: Option<f32> = None;
+    let mut sz_cs_val: Option<f32> = None;
     for prop in rpr.children().filter(|n| n.is_element()) {
-        if prop.tag_name().name() == "sz" || prop.tag_name().name() == "szCs" {
-            if let Some(size) = attr_any(prop, "val")
-                .and_then(|v| v.parse::<f32>().ok())
-                .map(|half| half / 2.0)
-            {
-                return Some(size);
+        match prop.tag_name().name() {
+            "sz" => {
+                sz_val = attr_any(prop, "val")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|half| half / 2.0);
             }
+            "szCs" => {
+                sz_cs_val = attr_any(prop, "val")
+                    .and_then(|v| v.parse::<f32>().ok())
+                    .map(|half| half / 2.0);
+            }
+            _ => {}
         }
     }
-    None
+    sz_val.or(sz_cs_val)
 }
 
 fn parse_default_font_size_pt(styles_xml: &str) -> Option<f32> {

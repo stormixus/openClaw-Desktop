@@ -48,8 +48,11 @@ export const store = $state({
   forgeState: {
     activeDocId: null as string | null,
     activeDocContext: null as { name: string; type: string; excerpt: string } | null,
+    fullContent: "" as string,        // Full document content (HTML or text)
     pendingPatch: null as any | null,
     history: [] as any[],
+    autoApply: true,                  // Auto-apply agent write_document edits (no modal)
+    isAgentEditing: false,            // True while streaming + forge doc active
   }
 });
 
@@ -205,6 +208,11 @@ export function setNpcBackground(bg: string): void {
 export function setForgeDocument(id: string | null, context?: { name: string; type: string; excerpt: string }): void {
   store.forgeState.activeDocId = id;
   store.forgeState.activeDocContext = context ?? null;
+  if (!id) store.forgeState.fullContent = "";
+}
+
+export function updateForgeContent(content: string): void {
+  store.forgeState.fullContent = content;
 }
 
 export function getAssistantMeta(): { name: string; emoji: string } | null {
@@ -523,6 +531,96 @@ export function disconnectGateway(id: string): void {
 function handleToolCall(gatewayId: string, tool: any): void {
   if (gatewayId !== store.activeGatewayId) return;
 
+  // Handle agent writing back a modified document
+  if (tool.name === "write_document" || tool.name === "replace_document") {
+    const content = tool.args.content as string;
+    const format = (tool.args.format as string) || "html";
+    const slideIndex = typeof tool.args.slide_index === "number" ? tool.args.slide_index : undefined;
+
+    if (!store.forgeState.activeDocId) {
+      store.chatMessages = [...store.chatMessages, {
+        id: crypto.randomUUID(),
+        role: "system",
+        content: "No active document to write to.",
+        timestamp: new Date().toISOString(),
+      }];
+      return;
+    }
+
+    if (store.forgeState.autoApply) {
+      // Auto-apply: immediately write content to backend (no modal)
+      (async () => {
+        try {
+          const { setTextContent } = await import("$lib/stores/document.svelte");
+          const docId = store.forgeState.activeDocId!;
+          const fmt = format === "html" ? "html" : "plain";
+          await setTextContent(docId, content, fmt, slideIndex);
+
+          // Update forge context
+          store.forgeState.fullContent = content;
+
+          store.chatMessages = [...store.chatMessages, {
+            id: crypto.randomUUID(),
+            role: "system",
+            content: `✏️ AI가 문서를 수정했습니다: ${(tool.args.summary as string) || "Changes applied"}`,
+            timestamp: new Date().toISOString(),
+          }];
+        } catch (e: any) {
+          console.error("[Store] Auto-apply failed:", e);
+          store.chatMessages = [...store.chatMessages, {
+            id: crypto.randomUUID(),
+            role: "system",
+            content: `❌ Auto-apply failed: ${e.message || e}`,
+            timestamp: new Date().toISOString(),
+          }];
+        }
+      })();
+      return;
+    }
+
+    // Fallback: stage for user approval
+    store.forgeState.pendingPatch = {
+      type: "content_replace",
+      content,
+      format,
+      slideIndex,
+      summary: (tool.args.summary as string) || "Agent proposed document changes",
+    };
+
+    store.chatMessages = [...store.chatMessages, {
+      id: crypto.randomUUID(),
+      role: "system",
+      content: `📝 Document update proposed: ${(tool.args.summary as string) || "Changes ready"}. Please approve or reject in the Forge tab.`,
+      timestamp: new Date().toISOString(),
+    }];
+    return;
+  }
+
+  // Handle agent sending a file for download
+  if (tool.name === "send_file") {
+    const { fileName, content: fileContent, mimeType } = tool.args as { fileName: string; content: string; mimeType?: string };
+    try {
+      const bytes = Uint8Array.from(atob(fileContent), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: mimeType || "application/octet-stream" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: any) {
+      console.error("[Store] Failed to decode send_file content:", e);
+    }
+
+    store.chatMessages = [...store.chatMessages, {
+      id: crypto.randomUUID(),
+      role: "system",
+      content: `File received: ${fileName}`,
+      timestamp: new Date().toISOString(),
+    }];
+    return;
+  }
+
   // Intercept document editing tools
   if (tool.name === "edit_document" || tool.name === "update_spreadsheet") {
     console.log("[Store] Intercepted forge tool call:", tool);
@@ -742,6 +840,7 @@ function stopStreaming(): void {
   console.log("[Store] stopStreaming called, current isStreaming:", store.isStreaming, "streamingContent length:", store.streamingContent?.length);
   store.isStreaming = false;
   store.streamingContent = "";
+  store.forgeState.isAgentEditing = false;
   clearStreamWatchdog();
   clearStreamHardDeadline();
   currentRunId = null;
@@ -911,6 +1010,11 @@ function handleChatEvent(gatewayId: string, payload: ChatEventPayload): void {
         store.isStreaming = true;
         armStreamHardDeadline();
         currentRunId = payload.runId;
+
+        // Track agent editing state for forge overlay
+        if (store.forgeState.activeDocId) {
+          store.forgeState.isAgentEditing = true;
+        }
 
         if (!store.streamingContent || deltaText.length >= store.streamingContent.length) {
           const changed = deltaText !== store.streamingContent;
@@ -1118,16 +1222,33 @@ export async function sendMessage(content: string, files?: File[]): Promise<void
     armStreamHardDeadline();
 
     // Convert files to attachments
-    const attachments = hasFiles ? await filesToAttachments(files) : undefined;
+    let attachments = hasFiles ? await filesToAttachments(files) : undefined;
 
     // Build the actual message to send — inject NPC system prompt when entering NPC mode
     let gatewayMessage = message || "Please analyze these files.";
 
     // Inject Document Context if active
     if (store.forgeState.activeDocId && store.forgeState.activeDocContext) {
-      const { name, type, excerpt } = store.forgeState.activeDocContext;
-      const contextPreamble = `[Document Context] File: ${name} (${type})\nContent Preview:\n${excerpt}\n---\nUser message: `;
-      gatewayMessage = contextPreamble + gatewayMessage;
+      const { name, type } = store.forgeState.activeDocContext;
+      const fullContent = store.forgeState.fullContent;
+
+      // Short context preamble (keep for LLM awareness)
+      gatewayMessage = `[Document: ${name} (${type})] ${gatewayMessage}`;
+
+      // Attach full content as a file
+      if (fullContent) {
+        const isHtml = type === "text" && ["docx","doc","hwp","hwpx"].some(ext => name.toLowerCase().endsWith(ext));
+        const mimeType = isHtml ? "text/html" : "text/plain";
+        const base64Content = btoa(unescape(encodeURIComponent(fullContent)));
+
+        const docAttachment: import("./types").ChatAttachment = {
+          type: "file",
+          mimeType,
+          content: base64Content,
+          fileName: name,
+        };
+        attachments = [...(attachments || []), docAttachment];
+      }
     }
 
     if (store.chatMode === "npc") {

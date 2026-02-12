@@ -6,6 +6,7 @@ pub mod excel;
 pub mod pdf;
 pub mod docx;
 pub mod hwp;
+pub mod pptx;
 pub mod xlsx_visuals;
 
 pub trait DocumentAdapter: Send + Sync {

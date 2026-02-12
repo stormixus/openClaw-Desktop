@@ -9,7 +9,7 @@ export type RustCellValue =
   | { DateTime: string }
   | "Empty";
 
-export type RustDocumentType = "Excel" | "Pdf" | "Text";
+export type RustDocumentType = "Excel" | "Pdf" | "Text" | "Presentation";
 
 export interface RustSheetData {
   name: string;
@@ -171,7 +171,7 @@ export interface StyledCell {
 
 export interface Document {
   id: string;
-  docType: 'excel' | 'pdf' | 'text';
+  docType: 'excel' | 'pdf' | 'text' | 'presentation';
   filePath: string;
   fileName: string;
   sheets: Sheet[];
@@ -182,7 +182,7 @@ export interface Document {
 export interface SessionSummary {
   id: string;
   fileName: string;
-  docType: 'excel' | 'pdf' | 'text';
+  docType: 'excel' | 'pdf' | 'text' | 'presentation';
   modified: boolean;
 }
 
@@ -267,11 +267,12 @@ function convertToRustCellValue(cell: CellValue): RustCellValue {
   }
 }
 
-function convertDocType(rust: RustDocumentType): 'excel' | 'pdf' | 'text' {
+function convertDocType(rust: RustDocumentType): 'excel' | 'pdf' | 'text' | 'presentation' {
   switch (rust) {
     case 'Excel': return 'excel';
     case 'Pdf': return 'pdf';
     case 'Text': return 'text';
+    case 'Presentation': return 'presentation';
   }
 }
 
@@ -574,10 +575,16 @@ export async function setTextContent(
   id: string,
   content: string,
   format: 'plain' | 'html' = 'plain',
+  sheetIndex?: number,
 ): Promise<void> {
-  await invoke('doc_set_text_content', { id, content, format });
+  await invoke('doc_set_text_content', { id, content, format, sheetIndex: sheetIndex ?? null });
   if (docStore.activeDocument?.id === id) {
     docStore.activeDocument.modified = true;
+    // Update local sheet state so UI refreshes immediately
+    if (sheetIndex !== undefined && docStore.activeDocument.sheets[sheetIndex]) {
+      docStore.activeDocument.sheets[sheetIndex].rows = [[{ type: 'string', value: content }]];
+      docStore.activeDocument.sheets[sheetIndex].totalRows = 1;
+    }
   }
 }
 
