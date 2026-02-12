@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import { getSystemFonts, loadSystemFonts } from "$lib/stores/fonts.svelte";
   import { Editor, Extension, Mark, mergeAttributes } from "@tiptap/core";
   import StarterKit from "@tiptap/starter-kit";
   import Underline from "@tiptap/extension-underline";
@@ -185,18 +186,13 @@
     },
   });
 
-  const FONT_FAMILY_OPTIONS = [
+  const FONT_FAMILY_OPTIONS = $derived([
     { label: "기본", value: "" },
-    { label: "맑은 고딕", value: "'Malgun Gothic','맑은 고딕',sans-serif" },
-    { label: "나눔고딕", value: "'Nanum Gothic','나눔고딕',sans-serif" },
-    { label: "바탕", value: "Batang,'바탕',serif" },
-    { label: "돋움", value: "Dotum,'돋움',sans-serif" },
-    { label: "굴림", value: "Gulim,'굴림',sans-serif" },
-    { label: "Arial", value: "Arial,Helvetica,sans-serif" },
-    { label: "Times New Roman", value: "'Times New Roman',Times,serif" },
-    { label: "Georgia", value: "Georgia,serif" },
-    { label: "Courier New", value: "'Courier New',Courier,monospace" },
-  ];
+    ...getSystemFonts().map((f) => ({
+      label: f,
+      value: f.includes(" ") ? `'${f}'` : f,
+    })),
+  ]);
   const FONT_SIZE_OPTIONS = [10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 40];
   const DEFAULT_TEXT_COLOR = "#111827";
   const DEFAULT_HIGHLIGHT_COLOR = "#fff59d";
@@ -310,6 +306,7 @@
   }
 
   onMount(() => {
+    loadSystemFonts();
     editor = new Editor({
       element,
       extensions: [

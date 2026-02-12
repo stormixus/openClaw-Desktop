@@ -149,6 +149,58 @@ fn check_port_available(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
+/// List all installed system font family names, sorted and deduplicated.
+#[tauri::command]
+fn list_system_fonts() -> Vec<String> {
+    use font_kit::source::SystemSource;
+    use std::collections::BTreeSet;
+
+    let source = SystemSource::new();
+    let mut families = BTreeSet::new();
+
+    if let Ok(all) = source.all_families() {
+        for name in all {
+            // Skip hidden/internal fonts starting with '.' or '#'
+            if !name.starts_with('.') && !name.starts_with('#') {
+                families.insert(name);
+            }
+        }
+    }
+
+    families.into_iter().collect()
+}
+
+#[tauri::command]
+fn create_temp_document(ext: String) -> Result<String, String> {
+    let temp_dir = std::env::temp_dir().join("openclaw-forge");
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
+    let filename = format!("새 문서-{}.{}", timestamp, ext);
+    let path = temp_dir.join(&filename);
+
+    let content: &[u8] = match ext.as_str() {
+        "xlsx" => {
+            // Minimal valid xlsx: create via rust_xlsxwriter or just empty file
+            // doc_open handles empty xlsx gracefully
+            b""
+        }
+        "docx" => b"",
+        _ => b"",
+    };
+
+    std::fs::write(&path, content)
+        .map_err(|e| format!("Failed to create file: {}", e))?;
+
+    path.to_str()
+        .map(|s| s.to_string())
+        .ok_or_else(|| "Invalid path encoding".to_string())
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct AssistantMeta {
     pub name: Option<String>,
@@ -292,6 +344,8 @@ pub fn run() {
             greet,
             detect_local_openclaw,
             fetch_assistant_meta,
+            list_system_fonts,
+            create_temp_document,
             save_npc_background,
             get_npc_bg_path,
             delete_npc_background,
@@ -301,6 +355,8 @@ pub fn run() {
             document::commands::doc_set_text_content,
             document::commands::doc_get_pdf_bytes,
             document::commands::doc_pdf_ocr_extract,
+            document::commands::doc_pdf_ocr_layout,
+            document::commands::doc_pdf_export_overlay,
             document::commands::doc_save_text_as_docx,
             document::commands::doc_stage_patch,
             document::commands::doc_commit,

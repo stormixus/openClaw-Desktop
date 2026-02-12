@@ -7,6 +7,8 @@ pub mod pdf;
 pub mod docx;
 pub mod hwp;
 pub mod pptx;
+pub mod pdf_layout;
+pub mod pdf_export;
 pub mod xlsx_visuals;
 
 pub trait DocumentAdapter: Send + Sync {

@@ -17,7 +17,9 @@
     PanelRightClose,
     PanelRightOpen,
     Unplug,
-    AlertCircle
+    AlertCircle,
+    FilePlus2,
+    ChevronDown
   } from "@lucide/svelte";
   import {
     docStore,
@@ -31,7 +33,7 @@
     discardChanges,
     type PatchPreview
   } from "$lib/stores/document.svelte";
-  import { store as gatewayStore, setForgeDocument, updateForgeContent } from "$lib/gateway/store.svelte";
+  import { store as gatewayStore, setForgeDocument, updateForgeContent, sendMessage } from "$lib/gateway/store.svelte";
 
   import DocPreview from "$lib/components/Document/DocPreview.svelte";
   import WordEditor from "$lib/components/Forge/WordEditor.svelte";
@@ -42,6 +44,8 @@
   import PptxViewer from "$lib/components/Forge/PptxViewer.svelte";
   import ApprovalModal from "$lib/components/Document/ApprovalModal.svelte";
   import ChatPanel from "$lib/components/Chat/ChatPanel.svelte";
+  import { pdfEditorStore } from "$lib/stores/pdfEditor.svelte";
+  import type { PdfBlock } from "$lib/types/pdfEditor";
 
   // Derived state
   const activeDoc = $derived(docStore.activeDocument);
@@ -63,6 +67,11 @@
   let pdfOcrMode = $state(false);
   let pdfOcrText = $state("");
   let pdfOcrLoading = $state(false);
+
+  // PDF AI editing state
+  let pdfSelectedBlock = $state<PdfBlock | null>(null);
+  let pendingRewriteBlockId = $state<string | null>(null);
+  let prevIsStreaming = $state(false);
 
   const CHAT_PANE_MIN = 360;
   const CHAT_PANE_MAX_RATIO = 0.72;
@@ -259,6 +268,31 @@
     }
   }
 
+  let showNewDocMenu = $state(false);
+
+  const newDocTypes = [
+    { ext: 'txt', label: '텍스트', icon: 'txt' },
+    { ext: 'md', label: '마크다운', icon: 'md' },
+    { ext: 'docx', label: 'Word 문서', icon: 'docx' },
+    { ext: 'xlsx', label: '스프레드시트', icon: 'xlsx' },
+  ] as const;
+
+  async function handleNewDocument(ext: string) {
+    showNewDocMenu = false;
+    try {
+      openFileError = null;
+      const tempPath = await invoke<string>('create_temp_document', { ext });
+      const doc = await openDocument(tempPath);
+      if (doc) {
+        setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt: '' });
+        updateForgeContent('');
+      }
+    } catch (err: unknown) {
+      console.error("Failed to create new document:", err);
+      openFileError = err instanceof Error ? err.message : "새 문서를 만들지 못했습니다.";
+    }
+  }
+
   async function flushTextSync(): Promise<void> {
     if (!activeDoc || activeDoc.docType !== 'text' || pendingTextContent === null) return;
     if (isTextSyncing) return;
@@ -292,9 +326,10 @@
       if (activeDoc.docType === 'text') {
         await flushTextSync();
       }
-      // Reset PDF OCR state
+      // Reset PDF state
       pdfOcrMode = false;
       pdfOcrText = "";
+      pdfSelectedBlock = null;
       setForgeDocument(null);
       await closeDocument(activeDoc.id);
     }
@@ -374,6 +409,76 @@
     } catch (err: any) {
       console.error("Save as DOCX failed:", err);
       openFileError = `DOCX 저장 실패: ${err.message || err}`;
+    }
+  }
+
+  // PDF AI block selection handler
+  function handlePdfBlockSelect(block: PdfBlock | null) {
+    pdfSelectedBlock = block;
+    if (block) {
+      const blockContext = `[Selected PDF block (${block.kind}), page ${block.page}]:\n${block.text}`;
+      updateForgeContent(blockContext);
+    }
+  }
+
+  // PDF AI Rewrite handler
+  function handlePdfAiRewrite(blockId: string, text: string) {
+    if (!gatewayStore.activeGatewayId) {
+      openFileError = "AI Rewrite: 게이트웨이에 연결되어 있지 않습니다.";
+      return;
+    }
+    pendingRewriteBlockId = blockId;
+    sendMessage(`다음 텍스트를 개선해서 다시 작성해주세요. 수정된 텍스트만 답변해주세요:\n\n${text}`);
+  }
+
+  // Watch for AI response to apply rewrite
+  $effect(() => {
+    const streaming = gatewayStore.isStreaming;
+    // Detect streaming end: was streaming, now stopped, and we have a pending rewrite
+    if (prevIsStreaming && !streaming && pendingRewriteBlockId) {
+      const msgs = gatewayStore.chatMessages;
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg && lastMsg.role === "assistant" && lastMsg.content?.trim()) {
+        pdfEditorStore.pushOp({
+          t: "replaceText",
+          targetId: pendingRewriteBlockId,
+          text: lastMsg.content.trim(),
+        });
+        pendingRewriteBlockId = null;
+      }
+    }
+    prevIsStreaming = streaming;
+  });
+
+  // PDF Export handler
+  async function handlePdfExport() {
+    const state = pdfEditorStore.exportState();
+    if (!state || !activeDoc) return;
+
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const savePath = await save({
+        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+        defaultPath: activeDoc.fileName.replace(/\.pdf$/i, '-edited.pdf'),
+      });
+      if (!savePath) return;
+
+      const blocks = Object.values(state.blocks).map(b => ({
+        id: b.id,
+        page: b.page,
+        bbox: b.bbox,
+      }));
+
+      await invoke('doc_pdf_export_overlay', {
+        id: activeDoc.id,
+        ops: state.ops,
+        blocks,
+        pageHeights: state.pageHeights,
+        outputPath: savePath,
+      });
+    } catch (err: any) {
+      console.error("PDF export failed:", err);
+      openFileError = `PDF 내보내기 실패: ${err.message || err}`;
     }
   }
 
@@ -476,6 +581,16 @@
                 OCR 편집
               {/if}
             </button>
+            {#if pdfEditorStore.hasLayout}
+              <button
+                class="action-btn pdf-export-btn"
+                onclick={handlePdfExport}
+                title="편집된 PDF 내보내기"
+              >
+                <Save size={16} />
+                Export PDF
+              </button>
+            {/if}
           {/if}
         {:else}
           <button class="tool-btn" onclick={handleUndo} title="Undo">
@@ -545,7 +660,7 @@
               onchange={handlePdfOcrTextChange}
             />
           {:else}
-            <PdfViewer sessionId={activeDoc.id} />
+            <PdfViewer sessionId={activeDoc.id} onBlockSelect={handlePdfBlockSelect} onAiRewrite={handlePdfAiRewrite} />
           {/if}
         {:else if activeDoc.docType === 'presentation'}
           <PptxViewer
@@ -657,10 +772,29 @@
             <h3>Forge Document Collaboration</h3>
             <p>문서/스프레드시트를 열어 AI 제안 패치를 검토하고, 승인/반려로 협업 흐름을 관리할 수 있습니다.</p>
           </div>
-          <button class="collab-open-btn" onclick={() => handleOpenFile('document')}>
-            <Upload size={18} />
-            문서 열기
-          </button>
+          <div class="collab-hero-actions">
+            <button class="collab-open-btn" onclick={() => handleOpenFile('document')}>
+              <Upload size={18} />
+              문서 열기
+            </button>
+            <div class="new-doc-dropdown">
+              <button class="collab-new-btn" onclick={() => showNewDocMenu = !showNewDocMenu}>
+                <FilePlus2 size={18} />
+                새 문서
+                <ChevronDown size={14} />
+              </button>
+              {#if showNewDocMenu}
+                <div class="new-doc-menu">
+                  {#each newDocTypes as t}
+                    <button class="new-doc-item" onclick={() => handleNewDocument(t.ext)}>
+                      <span class="new-doc-ext">.{t.ext}</span>
+                      <span>{t.label}</span>
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+          </div>
         </div>
 
         <div class="features-grid">
@@ -712,35 +846,6 @@
         </div>
       </div>
 
-      {#if chatOpen}
-        <button
-          type="button"
-          class="pane-resizer"
-          aria-label="Resize chat panel"
-          onmousedown={startPaneResize}
-        ></button>
-        <div class="chat-side landing-chat" style:width={`${chatPaneWidth}px`}>
-          {#if isConnected}
-            <ChatPanel />
-          {:else if activeGateway}
-            <div class="chat-status">
-              <div class="chat-status-icon">
-                <Unplug size={24} />
-              </div>
-              <p>{$t("gateway.status.disconnected")}</p>
-              <span class="chat-status-hint">Connect a gateway to chat</span>
-            </div>
-          {:else}
-            <div class="chat-status">
-              <div class="chat-status-icon">
-                <MessageSquare size={24} />
-              </div>
-              <p>No gateway configured</p>
-              <a href="/settings" class="chat-status-link">Add Gateway</a>
-            </div>
-          {/if}
-        </div>
-      {/if}
     </div>
   {/if}
 
@@ -816,6 +921,16 @@
 
   .action-btn.ocr-save:hover {
     background: rgba(16, 185, 129, 0.2);
+  }
+
+  .action-btn.pdf-export-btn {
+    background: rgba(99, 102, 241, 0.1);
+    border-color: rgba(99, 102, 241, 0.3);
+    color: var(--color-primary);
+  }
+
+  .action-btn.pdf-export-btn:hover {
+    background: rgba(99, 102, 241, 0.18);
   }
 
   .tool-btn.active {
@@ -1203,6 +1318,75 @@
 
   .collab-open-btn:hover {
     background: rgba(16, 185, 129, 0.22);
+  }
+
+  .collab-hero-actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .collab-new-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    background: rgba(99, 102, 241, 0.15);
+    color: #6366f1;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  .collab-new-btn:hover {
+    background: rgba(99, 102, 241, 0.22);
+  }
+
+  .new-doc-dropdown {
+    position: relative;
+  }
+
+  .new-doc-menu {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    background: var(--color-bg-secondary, #1e1e2e);
+    border: 1px solid var(--color-border, rgba(255,255,255,0.1));
+    border-radius: 8px;
+    padding: 4px;
+    min-width: 160px;
+    z-index: 10;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  }
+
+  .new-doc-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--color-text, #e0e0e0);
+    font-size: 12px;
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .new-doc-item:hover {
+    background: rgba(99, 102, 241, 0.15);
+  }
+
+  .new-doc-ext {
+    font-weight: 700;
+    font-size: 11px;
+    color: #6366f1;
+    min-width: 36px;
   }
 
   @media (max-width: 900px) {

@@ -6,6 +6,8 @@ use crate::document::formats::pdf::PdfAdapter;
 use crate::document::formats::docx::DocxAdapter;
 use crate::document::formats::hwp::HwpAdapter;
 use crate::document::formats::pptx::PptxAdapter;
+use crate::document::formats::pdf_layout;
+use crate::document::formats::pdf_export;
 use crate::document::formats::DocumentAdapter;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -153,6 +155,112 @@ pub async fn doc_pdf_ocr_extract(
     }
 
     Ok(fallback)
+}
+
+#[tauri::command]
+pub async fn doc_pdf_ocr_layout(
+    app: tauri::AppHandle,
+    id: String,
+    lang: Option<String>,
+    tessdata_dir: Option<String>,
+    page_heights: Vec<f64>,
+    page_images: Vec<String>,
+    state: State<'_, SessionManager>,
+) -> Result<PdfLayoutResult, String> {
+    // Validate the session is a PDF document
+    state
+        .get_session(&id, |session| -> Result<(), String> {
+            if !matches!(session.state.doc_type, DocumentType::Pdf) {
+                return Err("Document is not a PDF session".to_string());
+            }
+            Ok(())
+        })
+        .map_err(|e| e.to_string())??;
+
+    let binary_path = resolve_tesseract_bin(&app, None);
+    let lang_value = lang
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .unwrap_or("kor+eng");
+
+    // Validate lang to prevent argument injection (allow alphanumeric, +, -, _)
+    if !lang_value.chars().all(|c| c.is_alphanumeric() || c == '+' || c == '-' || c == '_') {
+        return Err(format!("Invalid OCR language value: {}", lang_value));
+    }
+
+    if page_images.is_empty() {
+        return Err("No page images provided".to_string());
+    }
+
+    // Create temp directory for page images
+    let temp_dir = std::env::temp_dir().join(format!("openclaw-ocr-{}", id));
+    std::fs::create_dir_all(&temp_dir)
+        .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+
+    let mut all_words = Vec::new();
+    let mut all_lines = Vec::new();
+    let mut all_blocks = Vec::new();
+
+    for (i, img_base64) in page_images.iter().enumerate() {
+        let page_num = (i + 1) as u32;
+        let page_height = page_heights.get(i).copied().unwrap_or(792.0);
+
+        // Decode base64 image data (strip data URL prefix if present)
+        let raw_b64 = if let Some(pos) = img_base64.find(",") {
+            &img_base64[pos + 1..]
+        } else {
+            img_base64.as_str()
+        };
+
+        use base64::Engine;
+        let img_bytes = base64::engine::general_purpose::STANDARD
+            .decode(raw_b64)
+            .map_err(|e| format!("Failed to decode page {} image: {}", page_num, e))?;
+
+        // Save to temp PNG
+        let img_path = temp_dir.join(format!("page_{}.png", page_num));
+        std::fs::write(&img_path, &img_bytes)
+            .map_err(|e| format!("Failed to write page {} image: {}", page_num, e))?;
+
+        // Run tesseract on this page image
+        let mut cmd = Command::new(&binary_path);
+        cmd.arg(&img_path).arg("stdout").arg("-l").arg(lang_value).arg("tsv");
+
+        if let Some(dir) = resolve_tessdata_dir(&app, tessdata_dir.clone()) {
+            cmd.arg("--tessdata-dir").arg(dir);
+        }
+
+        let output = cmd
+            .output()
+            .map_err(|e| format!("Failed to execute tesseract on page {}: {}", page_num, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            // Clean up temp files
+            let _ = std::fs::remove_dir_all(&temp_dir);
+            return Err(format!(
+                "OCR failed on page {}. tesseract stderr: {}",
+                page_num,
+                stderr.trim()
+            ));
+        }
+
+        let tsv_output = String::from_utf8_lossy(&output.stdout);
+        let layout = pdf_layout::build_layout(&tsv_output, page_num, page_height);
+        all_words.extend(layout.words);
+        all_lines.extend(layout.lines);
+        all_blocks.extend(layout.blocks);
+    }
+
+    // Clean up temp files
+    let _ = std::fs::remove_dir_all(&temp_dir);
+
+    Ok(PdfLayoutResult {
+        words: all_words,
+        lines: all_lines,
+        blocks: all_blocks,
+    })
 }
 
 fn resolve_tesseract_bin(app: &tauri::AppHandle, configured: Option<String>) -> PathBuf {
@@ -613,4 +721,31 @@ pub async fn doc_list_sessions(
     state: State<'_, SessionManager>,
 ) -> Result<Vec<SessionSummary>, String> {
     state.list_sessions().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn doc_pdf_export_overlay(
+    id: String,
+    ops: Vec<pdf_export::ExportOp>,
+    blocks: Vec<pdf_export::ExportBlock>,
+    page_heights: Vec<f64>,
+    output_path: String,
+    state: State<'_, SessionManager>,
+) -> Result<(), String> {
+    let file_path = state
+        .get_session(&id, |session| -> Result<String, String> {
+            if !matches!(session.state.doc_type, DocumentType::Pdf) {
+                return Err("Document is not a PDF session".to_string());
+            }
+            Ok(session.state.file_path.clone())
+        })
+        .map_err(|e| e.to_string())??;
+
+    let pdf_path = Path::new(&file_path);
+    let pdf_bytes = pdf_export::export_overlay_pdf(pdf_path, &ops, &blocks, &page_heights)?;
+
+    std::fs::write(&output_path, &pdf_bytes)
+        .map_err(|e| format!("Failed to write PDF: {}", e))?;
+
+    Ok(())
 }

@@ -44,6 +44,67 @@ export interface NpcPartOrigin {
   y: number;  // vertical origin in % (0-100)
 }
 
+export type NpcAnimEasing = "linear" | "easeInOutSine" | "easeOutCubic" | "easeInOutQuad";
+
+/** One keyframe sampled on a normalized timeline (0..1) */
+export interface NpcAnimationKeyframe {
+  t: number;
+  x?: number;
+  y?: number;
+  rotate?: number; // degrees
+  scaleX?: number;
+  scaleY?: number;
+  opacity?: number;
+}
+
+/** Per-part animation track */
+export interface NpcAnimationTrack {
+  enabled?: boolean;
+  easing?: NpcAnimEasing;
+  keyframes: NpcAnimationKeyframe[];
+}
+
+/** A named motion clip (idle/talk/wave/etc.) */
+export interface NpcMotionDefinition {
+  durationMs?: number;
+  tracks: Record<string, NpcAnimationTrack>;
+}
+
+export interface NpcMeshPointOffset {
+  x: number; // percentage of part width
+  y: number; // percentage of part height
+}
+
+/** Mesh-based per-part warp deformation */
+export interface NpcMeshDeformer {
+  cols: number; // control points in x-axis (>= 2)
+  rows: number; // control points in y-axis (>= 2)
+  points?: Record<string, NpcMeshPointOffset>; // key: "col,row"
+}
+
+export type NpcSpringAxis = "x" | "y" | "rotate";
+
+/** Damped spring config applied after keyframe sampling */
+export interface NpcSpringConfig {
+  enabled?: boolean;
+  follow?: NpcSpringAxis[]; // defaults to ["x", "y", "rotate"]
+  stiffness?: number; // defaults to 170
+  damping?: number; // defaults to 24
+  mass?: number; // defaults to 1
+  maxOffsetX?: number; // clamp around target
+  maxOffsetY?: number; // clamp around target
+  maxRotate?: number; // degrees clamp around target
+}
+
+/** Character rig animation definition */
+export interface NpcAnimationRig {
+  version: number;
+  baseDurationMs?: number;
+  motions: Record<string, NpcMotionDefinition>;
+  deformers?: Record<string, NpcMeshDeformer>;
+  springs?: Record<string, NpcSpringConfig>;
+}
+
 /** Complete NPC theme definition */
 export interface NpcTheme {
   id: string;              // unique key, e.g. "cyberpunk_butler"
@@ -57,6 +118,8 @@ export interface NpcTheme {
   characterParts?: NpcCharacterParts; // layered character parts for VN display
   partOffsets?: Record<string, NpcPartOffset>; // per-part position offsets
   partOrigins?: Record<string, NpcPartOrigin>; // per-part rotation pivot points
+  partZIndex?: Record<string, number>; // per-part draw order
+  animationRig?: NpcAnimationRig; // keyframe rig for canvas animation
   imageFormat?: "svg" | "png";  // format for expression images (default: svg)
   systemPrompt?: string;   // optional personality prompt
   builtIn?: boolean;       // true for default themes (can't delete)

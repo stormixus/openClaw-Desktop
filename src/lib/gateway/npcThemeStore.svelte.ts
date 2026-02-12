@@ -6,7 +6,15 @@
 import { browser } from "$app/environment";
 import { db } from "$lib/db";
 import type { NpcThemeRow } from "$lib/db";
-import type { NpcTheme, NpcThemeAvatar, NpcCharacterParts } from "./npcThemeTypes";
+import type {
+  NpcTheme,
+  NpcThemeAvatar,
+  NpcCharacterParts,
+  NpcAnimationRig,
+  NpcMotionDefinition,
+  NpcPartOrigin,
+  NpcSpringConfig,
+} from "./npcThemeTypes";
 
 // ============================================================================
 // Built-in Default Themes (emoji-only, no character folder)
@@ -260,6 +268,129 @@ function buildCharacterParts(folder: string, manifest: AvatarManifest): NpcChara
   return parts as unknown as NpcCharacterParts;
 }
 
+function parseOrigin(raw?: string): NpcPartOrigin | null {
+  if (!raw) return null;
+  const [sx, sy] = raw.split(/\s+/);
+  if (!sx || !sy) return null;
+  const x = Number(sx.replace("%", ""));
+  const y = Number(sy.replace("%", ""));
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  return { x, y };
+}
+
+function buildPartOrigins(manifest: AvatarManifest): Record<string, NpcPartOrigin> | undefined {
+  const origins: Record<string, NpcPartOrigin> = {};
+  for (const [key, part] of Object.entries(manifest.parts)) {
+    const parsed = parseOrigin(part.origin);
+    if (parsed) origins[key] = parsed;
+  }
+  return Object.keys(origins).length > 0 ? origins : undefined;
+}
+
+function buildPartZIndex(manifest: AvatarManifest): Record<string, number> | undefined {
+  const zIndex: Record<string, number> = {};
+  for (const [key, part] of Object.entries(manifest.parts)) {
+    if (Number.isFinite(part.zIndex)) zIndex[key] = part.zIndex;
+  }
+  return Object.keys(zIndex).length > 0 ? zIndex : undefined;
+}
+
+function normalizeManifestAnimations(animations?: Record<string, unknown>): NpcAnimationRig | undefined {
+  if (!animations) return undefined;
+
+  // Already in advanced rig format.
+  if (
+    "version" in animations &&
+    typeof (animations as { version?: unknown }).version === "number" &&
+    "motions" in animations &&
+    typeof (animations as { motions?: unknown }).motions === "object"
+  ) {
+    return animations as unknown as NpcAnimationRig;
+  }
+
+  // Legacy manifest format -> convert to keyframe rig.
+  const motions: Record<string, NpcMotionDefinition> = {};
+  const springs: Record<string, NpcSpringConfig> = {};
+  const deformers: NonNullable<NpcAnimationRig["deformers"]> = {};
+
+  const idle = animations.idle as { type?: string; duration?: string; distance?: string } | undefined;
+  if (idle?.type === "bob") {
+    const distance = Number.parseFloat((idle.distance ?? "4").replace("px", "")) || 4;
+    const duration = Number.parseFloat((idle.duration ?? "3").replace("s", "")) * 1000 || 3000;
+    motions.idle = {
+      durationMs: duration,
+      tracks: {
+        body: {
+          easing: "easeInOutSine",
+          keyframes: [
+            { t: 0, y: 0 },
+            { t: 0.5, y: -distance },
+            { t: 1, y: 0 },
+          ],
+        },
+      },
+    };
+    springs.body = {
+      enabled: true,
+      follow: ["y", "rotate"],
+      stiffness: 170,
+      damping: 23,
+      maxOffsetY: Math.max(4, distance * 1.2),
+      maxRotate: 2.2,
+    };
+    deformers.body = {
+      cols: 4,
+      rows: 4,
+      points: {
+        "1,0": { x: 0, y: -1.1 },
+        "2,0": { x: 0, y: -1.1 },
+        "1,3": { x: 0, y: 0.7 },
+        "2,3": { x: 0, y: 0.7 },
+      },
+    };
+  }
+
+  const armSwing = animations.armSwing as { targets?: string[]; duration?: string; angle?: number } | undefined;
+  if (armSwing?.targets?.length) {
+    const duration = Number.parseFloat((armSwing.duration ?? "4").replace("s", "")) * 1000 || 4000;
+    const angle = armSwing.angle ?? 4;
+    const tracks: NpcMotionDefinition["tracks"] = {};
+    for (const part of armSwing.targets) {
+      tracks[part] = {
+        easing: "easeInOutSine",
+        keyframes: [
+          { t: 0, rotate: -angle },
+          { t: 0.5, rotate: angle },
+          { t: 1, rotate: -angle },
+        ],
+      };
+      springs[part] = {
+        enabled: true,
+        follow: ["rotate"],
+        stiffness: 220,
+        damping: 26,
+        maxRotate: Math.max(8, angle * 2),
+      };
+    }
+    motions.idle = {
+      durationMs: duration,
+      tracks: {
+        ...(motions.idle?.tracks ?? {}),
+        ...tracks,
+      },
+    };
+  }
+
+  if (Object.keys(motions).length === 0) return undefined;
+  return {
+    version: 1,
+    baseDurationMs: 3000,
+    motions,
+    deformers: Object.keys(deformers).length > 0 ? deformers : undefined,
+    springs: Object.keys(springs).length > 0 ? springs : undefined,
+  };
+}
+
 /**
  * Build a full NpcTheme from a manifest and its folder path.
  */
@@ -286,6 +417,9 @@ function buildThemeFromManifest(folder: string, manifest: AvatarManifest): NpcTh
     background: manifest.background,
     characterFolder: folder,
     characterParts: buildCharacterParts(folder, manifest),
+    partOrigins: buildPartOrigins(manifest),
+    partZIndex: buildPartZIndex(manifest),
+    animationRig: normalizeManifestAnimations(manifest.animations),
     backgroundImage: manifest.backgroundImage ? `${folder}/${manifest.backgroundImage}` : resolvedBgs["default"] ?? undefined,
     backgrounds: Object.keys(resolvedBgs).length > 0 ? resolvedBgs : undefined,
     systemPrompt: manifest.systemPrompt,

@@ -1,9 +1,0 @@
-<svg viewBox="0 0 120 160" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Nose (subtle anime style) -->
-  <path d="M59.5 57 Q60 59.5 60.5 57" fill="none" stroke="#E0B09A" stroke-width="0.9" stroke-linecap="round"/>
-  <!-- Mouth (small, neutral) -->
-  <path d="M56 66 Q58 67 60 67 Q62 67 64 66" fill="none" stroke="#D0857A" stroke-width="1.2" stroke-linecap="round"/>
-  <!-- Subtle cheek blush -->
-  <ellipse cx="39" cy="58" rx="6" ry="3" fill="#F0A0B8" opacity="0.15"/>
-  <ellipse cx="81" cy="58" rx="6" ry="3" fill="#F0A0B8" opacity="0.15"/>
-</svg>

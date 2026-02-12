@@ -170,3 +170,48 @@ pub struct SessionSummary {
     pub doc_type: DocumentType,
     pub modified: bool,
 }
+
+// ── PDF Layout / bbox OCR types ──────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BBox {
+    pub x: f64,
+    pub y: f64,
+    pub w: f64,
+    pub h: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PdfWord {
+    pub id: String,
+    pub page: u32,
+    pub text: String,
+    pub bbox: BBox,
+    pub conf: f64,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PdfLine {
+    pub id: String,
+    pub page: u32,
+    pub word_ids: Vec<String>,
+    pub bbox: BBox,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PdfBlock {
+    pub id: String,
+    pub page: u32,
+    pub kind: String,
+    pub line_ids: Vec<String>,
+    pub bbox: BBox,
+    pub text: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct PdfLayoutResult {
+    pub words: Vec<PdfWord>,
+    pub lines: Vec<PdfLine>,
+    pub blocks: Vec<PdfBlock>,
+}

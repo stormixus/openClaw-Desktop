@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { t } from "$lib/i18n";
+  import { onDestroy, onMount } from "svelte";
   import {
-    npcThemeState,
     getAllThemes,
     addCustomTheme,
     removeCustomTheme,
@@ -10,8 +9,18 @@
     getCharacterFaceLayer,
     getThemeBackground,
   } from "$lib/gateway/npcThemeStore.svelte";
-  import type { NpcTheme, NpcThemeAvatar, NpcCharacterParts, NpcPartOffset, NpcPartOrigin } from "$lib/gateway/npcThemeTypes";
-  import { Plus, Trash2, Save, Image as ImageIcon, MessageSquare, Monitor, Smile, Eye, Upload, RotateCcw, X } from "@lucide/svelte";
+  import type {
+    NpcTheme,
+    NpcCharacterParts,
+    NpcPartOffset,
+    NpcPartOrigin,
+    NpcAnimationRig,
+    NpcAnimationTrack,
+    NpcMeshDeformer,
+    NpcSpringConfig,
+    NpcSpringAxis,
+  } from "$lib/gateway/npcThemeTypes";
+  import { Plus, Trash2, Save, Image as ImageIcon, MessageSquare, Monitor, Smile, Eye, Upload, RotateCcw, X, Play, Pause, Sparkles, Code2, WandSparkles } from "@lucide/svelte";
 
   // State
   let editingTheme = $state<NpcTheme | null>(null);
@@ -19,6 +28,52 @@
   let originalBgs = $state<Record<string, string> | null>(null);
   let previewEmotion = $state("neutral");
   let savedToast = $state(false);
+  let previewMotion = $state("idle");
+  let previewSpeed = $state(1);
+  let animationPlaying = $state(true);
+  let useCanvasRenderer = $state(true);
+  let rigJsonText = $state("");
+  let rigJsonError = $state<string | null>(null);
+
+  let selectedPart = $state<string | null>(null);
+  let previewCanvasEl = $state<HTMLCanvasElement | null>(null);
+  let stageHostEl = $state<HTMLDivElement | null>(null);
+
+  let animationFrameHandle: number | null = null;
+  let resizeObserver: ResizeObserver | null = null;
+  let loadedImageSources = "";
+  let playbackTimeMs = 0;
+  let lastFrameTs = 0;
+
+  type AnimPose = {
+    x: number;
+    y: number;
+    rotate: number;
+    scaleX: number;
+    scaleY: number;
+    opacity: number;
+  };
+
+  type RenderPart = {
+    key: string;
+    src: string;
+    zIndex: number;
+  };
+
+  type Point = { x: number; y: number };
+
+  type SpringRuntimeState = {
+    x: number;
+    y: number;
+    rotate: number;
+    vx: number;
+    vy: number;
+    vr: number;
+  };
+
+  const imageCache = new Map<string, HTMLImageElement>();
+  const partLoadErrors = new Set<string>();
+  const springStateMap = new Map<string, SpringRuntimeState>();
 
   // All expression keys
   const EXPRESSIONS = ["neutral", "happy", "thinking", "excited", "sad", "surprised", "angry", "calm"] as const;
@@ -41,6 +96,341 @@
     { id: "ocean", label: "Ocean", gradient: "linear-gradient(135deg, #001020, #005a7a)" },
     { id: "sunset", label: "Sunset", gradient: "linear-gradient(135deg, #6a2050, #f0a050)" },
   ];
+
+  function clone<T>(v: T): T {
+    return JSON.parse(JSON.stringify(v)) as T;
+  }
+
+  function createDefaultAnimationRig(): NpcAnimationRig {
+    return {
+      version: 1,
+      baseDurationMs: 3000,
+      deformers: {
+        body: {
+          cols: 3,
+          rows: 3,
+          points: {
+            "1,0": { x: 0, y: -0.8 },
+            "1,2": { x: 0, y: 0.8 },
+          },
+        },
+      },
+      springs: {
+        body: {
+          enabled: true,
+          follow: ["y", "rotate"],
+          stiffness: 165,
+          damping: 23,
+          maxOffsetY: 5,
+          maxRotate: 2.2,
+        },
+        arm_left: {
+          enabled: true,
+          follow: ["rotate"],
+          stiffness: 220,
+          damping: 26,
+          maxRotate: 10,
+        },
+        arm_right: {
+          enabled: true,
+          follow: ["rotate"],
+          stiffness: 220,
+          damping: 26,
+          maxRotate: 10,
+        },
+      },
+      motions: {
+        idle: {
+          durationMs: 3200,
+          tracks: {
+            body: {
+              easing: "easeInOutSine",
+              keyframes: [
+                { t: 0, y: 0, rotate: 0, scaleX: 1, scaleY: 1 },
+                { t: 0.5, y: -6, rotate: 0.3, scaleX: 1.002, scaleY: 1.008 },
+                { t: 1, y: 0, rotate: 0, scaleX: 1, scaleY: 1 },
+              ],
+            },
+            arm_left: {
+              easing: "easeInOutSine",
+              keyframes: [
+                { t: 0, rotate: -1.2 },
+                { t: 0.5, rotate: 1.6 },
+                { t: 1, rotate: -1.2 },
+              ],
+            },
+            arm_right: {
+              easing: "easeInOutSine",
+              keyframes: [
+                { t: 0, rotate: 1.2 },
+                { t: 0.5, rotate: -1.6 },
+                { t: 1, rotate: 1.2 },
+              ],
+            },
+          },
+        },
+        talk: {
+          durationMs: 900,
+          tracks: {
+            body: {
+              easing: "easeInOutQuad",
+              keyframes: [
+                { t: 0, y: -1, rotate: 0 },
+                { t: 0.5, y: -3, rotate: 0.6 },
+                { t: 1, y: -1, rotate: 0 },
+              ],
+            },
+            face_neutral: {
+              easing: "easeInOutSine",
+              keyframes: [
+                { t: 0, scaleY: 1 },
+                { t: 0.5, scaleY: 1.02 },
+                { t: 1, scaleY: 1 },
+              ],
+            },
+          },
+        },
+      },
+    };
+  }
+
+  function ensureAnimationRig(theme: NpcTheme, persist = false): NpcAnimationRig {
+    if (!theme.animationRig || typeof theme.animationRig !== "object") {
+      const fallback = createDefaultAnimationRig();
+      if (persist) theme.animationRig = clone(fallback);
+      return fallback;
+    }
+
+    const motions = theme.animationRig.motions && Object.keys(theme.animationRig.motions).length > 0
+      ? theme.animationRig.motions
+      : createDefaultAnimationRig().motions;
+
+    const normalized: NpcAnimationRig = {
+      version: theme.animationRig.version || 1,
+      baseDurationMs: theme.animationRig.baseDurationMs ?? 3000,
+      motions,
+      deformers: theme.animationRig.deformers,
+      springs: theme.animationRig.springs,
+    };
+
+    if (persist) theme.animationRig = clone(normalized);
+    return normalized;
+  }
+
+  function detectTuneProfile(theme: NpcTheme): "anime" | "ghost" | "robot" | "default" {
+    const id = `${theme.id} ${theme.name} ${theme.description}`.toLowerCase();
+    if (id.includes("anime") || id.includes("muse")) return "anime";
+    if (id.includes("ghost") || id.includes("spirit")) return "ghost";
+    if (id.includes("robot") || id.includes("default")) return "robot";
+    return "default";
+  }
+
+  function retuneMotionTracks(rig: NpcAnimationRig, profile: "anime" | "ghost" | "robot" | "default") {
+    const bodyY = profile === "ghost" ? 10 : profile === "anime" ? 7 : profile === "robot" ? 4 : 6;
+    const bodyR = profile === "ghost" ? 0.9 : profile === "anime" ? 0.45 : profile === "robot" ? 0.2 : 0.35;
+    const armR = profile === "robot" ? 1.4 : profile === "ghost" ? 3.6 : 2.6;
+
+    if (!rig.motions.idle) {
+      rig.motions.idle = { durationMs: 3200, tracks: {} };
+    }
+    if (!rig.motions.talk) {
+      rig.motions.talk = { durationMs: 900, tracks: {} };
+    }
+
+    rig.motions.idle.durationMs = profile === "ghost" ? 3600 : profile === "anime" ? 3000 : 3200;
+    rig.motions.idle.tracks.body = {
+      easing: "easeInOutSine",
+      keyframes: [
+        { t: 0, y: 0, rotate: -bodyR, scaleX: 1, scaleY: 1 },
+        { t: 0.5, y: -bodyY, rotate: bodyR, scaleX: 1.004, scaleY: 1.012 },
+        { t: 1, y: 0, rotate: -bodyR, scaleX: 1, scaleY: 1 },
+      ],
+    };
+
+    const armLeft = rig.motions.idle.tracks.arm_left;
+    if (armLeft) {
+      rig.motions.idle.tracks.arm_left = {
+        ...(armLeft ?? {}),
+        easing: "easeInOutSine",
+        keyframes: [
+          { t: 0, rotate: -armR },
+          { t: 0.5, rotate: armR },
+          { t: 1, rotate: -armR },
+        ],
+      };
+    }
+    const armRight = rig.motions.idle.tracks.arm_right;
+    if (armRight) {
+      rig.motions.idle.tracks.arm_right = {
+        ...(armRight ?? {}),
+        easing: "easeInOutSine",
+        keyframes: [
+          { t: 0, rotate: armR },
+          { t: 0.5, rotate: -armR },
+          { t: 1, rotate: armR },
+        ],
+      };
+    }
+
+    const talkHeight = profile === "ghost" ? -5 : profile === "anime" ? -3.2 : -2.4;
+    rig.motions.talk.durationMs = 840;
+    rig.motions.talk.tracks.body = {
+      easing: "easeInOutQuad",
+      keyframes: [
+        { t: 0, y: talkHeight * 0.4, rotate: 0 },
+        { t: 0.5, y: talkHeight, rotate: 0.8 },
+        { t: 1, y: talkHeight * 0.4, rotate: 0 },
+      ],
+    };
+  }
+
+  function createAutoTunedRig(theme: NpcTheme): NpcAnimationRig {
+    const base = clone(ensureAnimationRig(theme));
+    const profile = detectTuneProfile(theme);
+    const parts = theme.characterParts ? Object.keys(theme.characterParts as unknown as Record<string, unknown>) : [];
+
+    if (!base.springs) base.springs = {};
+    if (!base.deformers) base.deformers = {};
+    retuneMotionTracks(base, profile);
+
+    const bodyStiffness = profile === "ghost" ? 130 : profile === "anime" ? 150 : profile === "robot" ? 200 : 170;
+    const bodyDamping = profile === "ghost" ? 16 : profile === "anime" ? 20 : profile === "robot" ? 28 : 24;
+    const bodyYOffset = profile === "ghost" ? 14 : profile === "anime" ? 9 : profile === "robot" ? 5 : 7;
+    const bodyRotate = profile === "ghost" ? 4 : profile === "anime" ? 2.8 : profile === "robot" ? 1.8 : 2.3;
+
+    if (parts.includes("body")) {
+      base.springs.body = {
+        enabled: true,
+        follow: ["y", "rotate"],
+        stiffness: bodyStiffness,
+        damping: bodyDamping,
+        mass: 1.25,
+        maxOffsetY: bodyYOffset,
+        maxRotate: bodyRotate,
+      };
+
+      base.deformers.body = {
+        cols: 4,
+        rows: 4,
+        points: {
+          "1,0": { x: 0, y: profile === "ghost" ? -2.2 : -1.1 },
+          "2,0": { x: 0, y: profile === "ghost" ? -2.2 : -1.1 },
+          "0,1": { x: -0.4, y: 0 },
+          "3,1": { x: 0.4, y: 0 },
+          "1,3": { x: 0, y: profile === "ghost" ? 1.2 : 0.7 },
+          "2,3": { x: 0, y: profile === "ghost" ? 1.2 : 0.7 },
+        },
+      };
+    }
+
+    for (const key of parts) {
+      if (key.startsWith("arm_")) {
+        base.springs[key] = {
+          enabled: true,
+          follow: ["rotate", "x", "y"],
+          stiffness: profile === "robot" ? 250 : 210,
+          damping: profile === "ghost" ? 19 : 24,
+          mass: 0.9,
+          maxOffsetX: profile === "ghost" ? 18 : 10,
+          maxOffsetY: profile === "ghost" ? 14 : 9,
+          maxRotate: profile === "ghost" ? 18 : 13,
+        };
+      }
+      if (key.startsWith("face_")) {
+        base.springs[key] = {
+          enabled: true,
+          follow: ["y", "rotate"],
+          stiffness: profile === "robot" ? 220 : 185,
+          damping: 25,
+          mass: 0.8,
+          maxOffsetY: profile === "ghost" ? 3.2 : 2.2,
+          maxRotate: profile === "ghost" ? 1.8 : 1.2,
+        };
+      }
+      if (key.startsWith("eyes_")) {
+        base.springs[key] = {
+          enabled: true,
+          follow: ["y"],
+          stiffness: 210,
+          damping: 27,
+          mass: 0.7,
+          maxOffsetY: 1.4,
+        };
+      }
+      if (key.includes("hair") || key.includes("ribbon") || key.includes("tail")) {
+        base.springs[key] = {
+          enabled: true,
+          follow: ["x", "y", "rotate"],
+          stiffness: 120,
+          damping: 13,
+          mass: 1.5,
+          maxOffsetX: 22,
+          maxOffsetY: 22,
+          maxRotate: 26,
+        };
+      }
+    }
+
+    return base;
+  }
+
+  function getOrderedPartKeys(theme: NpcTheme, emotion: string): string[] {
+    if (!theme.characterParts) return [];
+    const parts = theme.characterParts as unknown as Record<string, string | undefined>;
+    const keys = new Set<string>();
+    for (const [key, src] of Object.entries(parts)) {
+      if (src) keys.add(key);
+    }
+    const faceKey = `face_${emotion === "neutral" ? "neutral" : emotion}`;
+    if (parts[faceKey]) keys.add(faceKey);
+
+    if (parts.eyes_open) {
+      keys.delete("eyes_closed");
+      keys.add("eyes_open");
+    }
+
+    return [...keys].sort((a, b) => {
+      const za = theme.partZIndex?.[a] ?? defaultZIndex(a);
+      const zb = theme.partZIndex?.[b] ?? defaultZIndex(b);
+      if (za !== zb) return za - zb;
+      return a.localeCompare(b);
+    });
+  }
+
+  function defaultZIndex(key: string): number {
+    if (key.startsWith("arm_")) return 10;
+    if (key === "body") return 20;
+    if (key.startsWith("eyes_")) return 30;
+    if (key.startsWith("face_")) return 40;
+    return 20;
+  }
+
+  function getVisibleRenderParts(theme: NpcTheme, emotion: string): RenderPart[] {
+    if (!theme.characterParts) return [];
+    const parts = theme.characterParts as unknown as Record<string, string | undefined>;
+    const keys = getOrderedPartKeys(theme, emotion);
+    const blinkClosed = shouldBlink() && !!parts.eyes_closed;
+    const result: RenderPart[] = [];
+
+    for (const key of keys) {
+      if (key === "eyes_open" && blinkClosed) continue;
+      if (key === "eyes_closed" && !blinkClosed) continue;
+      if (key.startsWith("face_") && key !== `face_${emotion === "neutral" ? "neutral" : emotion}`) continue;
+      const src = parts[key];
+      if (!src) continue;
+      result.push({
+        key,
+        src,
+        zIndex: theme.partZIndex?.[key] ?? defaultZIndex(key),
+      });
+    }
+    return result.sort((a, b) => a.zIndex - b.zIndex);
+  }
+
+  function shouldBlink(): boolean {
+    const ms = playbackTimeMs % 4200;
+    return ms > 3000 && ms < 3140;
+  }
 
   // Derived values
   const themes = $derived(getAllThemes());
@@ -75,6 +465,13 @@
     return `background: ${BG_PRESETS[0].gradient}`;
   });
 
+  const motionOptions = $derived.by(() => {
+    if (!editingTheme) return ["idle"];
+    const rig = ensureAnimationRig(editingTheme);
+    const keys = Object.keys(rig.motions);
+    return keys.length > 0 ? keys : ["idle"];
+  });
+
   function createNewTheme() {
     editingTheme = {
       id: `custom_${Date.now()}`,
@@ -84,20 +481,29 @@
       background: "default",
       characterFolder: "",
       systemPrompt: "You are a helpful assistant.",
+      animationRig: createDefaultAnimationRig(),
       builtIn: false,
     };
+    syncRigEditorFromTheme();
+    resetPlayback();
     previewEmotion = "neutral";
+    previewMotion = "idle";
   }
 
   function selectForEdit(theme: NpcTheme) {
-    editingTheme = JSON.parse(JSON.stringify(theme));
-    originalParts = theme.characterParts ? JSON.parse(JSON.stringify(theme.characterParts)) : null;
-    originalBgs = theme.backgrounds ? JSON.parse(JSON.stringify(theme.backgrounds)) : null;
+    editingTheme = clone(theme);
+    if (editingTheme) ensureAnimationRig(editingTheme, true);
+    originalParts = theme.characterParts ? clone(theme.characterParts) : null;
+    originalBgs = theme.backgrounds ? clone(theme.backgrounds) : null;
+    syncRigEditorFromTheme();
+    resetPlayback();
     previewEmotion = "neutral";
+    previewMotion = "idle";
   }
 
   function handleSave() {
     if (!editingTheme) return;
+    ensureAnimationRig(editingTheme, true);
     addCustomTheme(editingTheme);
     savedToast = true;
     setTimeout(() => { savedToast = false; }, 2000);
@@ -108,6 +514,7 @@
     if (editingTheme.builtIn) return;
     removeCustomTheme(editingTheme.id);
     editingTheme = null;
+    syncRigEditorFromTheme();
   }
 
   // Character part keys
@@ -175,7 +582,6 @@
   }
 
   // Part offset editing
-  let selectedPart = $state<string | null>(null);
 
   function getPartOffset(key: string): NpcPartOffset {
     return editingTheme?.partOffsets?.[key] ?? { x: 0, y: 0 };
@@ -304,6 +710,743 @@
     const orig = originalBgs?.[bgKey];
     return current !== orig;
   }
+
+  function syncRigEditorFromTheme() {
+    if (!editingTheme) {
+      rigJsonText = "";
+      rigJsonError = null;
+      return;
+    }
+    const rig = ensureAnimationRig(editingTheme, true);
+    rigJsonText = JSON.stringify(rig, null, 2);
+    rigJsonError = null;
+  }
+
+  function resetPlayback() {
+    playbackTimeMs = 0;
+    lastFrameTs = 0;
+    springStateMap.clear();
+  }
+
+  function getMotionDuration(theme: NpcTheme, motionName: string): number {
+    const rig = ensureAnimationRig(theme);
+    const motion = rig.motions[motionName] ?? rig.motions.idle;
+    const duration = motion?.durationMs ?? rig.baseDurationMs ?? 3000;
+    return Math.max(200, duration);
+  }
+
+  function clamp(value: number, min: number, max: number): number {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function easeValue(mode: string | undefined, t: number): number {
+    const x = clamp(t, 0, 1);
+    switch (mode) {
+      case "easeOutCubic":
+        return 1 - (1 - x) ** 3;
+      case "easeInOutQuad":
+        return x < 0.5 ? 2 * x * x : 1 - ((-2 * x + 2) ** 2) / 2;
+      case "easeInOutSine":
+        return -(Math.cos(Math.PI * x) - 1) / 2;
+      default:
+        return x;
+    }
+  }
+
+  function interpolate(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+  }
+
+  function toRadians(deg: number): number {
+    return (deg * Math.PI) / 180;
+  }
+
+  function springStateKey(theme: NpcTheme, partKey: string): string {
+    return `${theme.id}:${previewMotion}:${partKey}`;
+  }
+
+  function getSpringAxes(config: NpcSpringConfig): NpcSpringAxis[] {
+    const raw = config.follow ?? ["x", "y", "rotate"];
+    const filtered = raw.filter((axis): axis is NpcSpringAxis => axis === "x" || axis === "y" || axis === "rotate");
+    return filtered.length > 0 ? filtered : ["x", "y", "rotate"];
+  }
+
+  function getPartSpringConfig(theme: NpcTheme, partKey: string): NpcSpringConfig | null {
+    const rig = ensureAnimationRig(theme);
+    const cfg = rig.springs?.[partKey];
+    if (!cfg || cfg.enabled === false) return null;
+    return {
+      enabled: true,
+      follow: getSpringAxes(cfg),
+      stiffness: Number.isFinite(cfg.stiffness) ? cfg.stiffness : 170,
+      damping: Number.isFinite(cfg.damping) ? cfg.damping : 24,
+      mass: Number.isFinite(cfg.mass) ? Math.max(0.1, Number(cfg.mass)) : 1,
+      maxOffsetX: Number.isFinite(cfg.maxOffsetX) ? Math.max(0, Number(cfg.maxOffsetX)) : 60,
+      maxOffsetY: Number.isFinite(cfg.maxOffsetY) ? Math.max(0, Number(cfg.maxOffsetY)) : 60,
+      maxRotate: Number.isFinite(cfg.maxRotate) ? Math.max(0, Number(cfg.maxRotate)) : 30,
+    };
+  }
+
+  function applySpringPose(theme: NpcTheme, partKey: string, target: AnimPose, dtMs: number): AnimPose {
+    const spring = getPartSpringConfig(theme, partKey);
+    if (!spring) return target;
+
+    const key = springStateKey(theme, partKey);
+    let state = springStateMap.get(key);
+    if (!state) {
+      state = {
+        x: target.x,
+        y: target.y,
+        rotate: target.rotate,
+        vx: 0,
+        vy: 0,
+        vr: 0,
+      };
+      springStateMap.set(key, state);
+      return target;
+    }
+
+    if (dtMs <= 0) {
+      return {
+        ...target,
+        x: state.x,
+        y: state.y,
+        rotate: state.rotate,
+      };
+    }
+
+    const dt = clamp(dtMs / 1000, 1 / 240, 1 / 24);
+    const stiffness = spring.stiffness ?? 170;
+    const damping = spring.damping ?? 24;
+    const invMass = 1 / (spring.mass ?? 1);
+    const follow = getSpringAxes(spring);
+
+    const step = (pos: number, vel: number, targetValue: number) => {
+      const force = stiffness * (targetValue - pos) - damping * vel;
+      const acc = force * invMass;
+      const nextVel = vel + acc * dt;
+      const nextPos = pos + nextVel * dt;
+      return { pos: nextPos, vel: nextVel };
+    };
+
+    if (follow.includes("x")) {
+      const next = step(state.x, state.vx, target.x);
+      state.x = clamp(next.pos, target.x - (spring.maxOffsetX ?? 60), target.x + (spring.maxOffsetX ?? 60));
+      state.vx = next.vel;
+    } else {
+      state.x = target.x;
+      state.vx = 0;
+    }
+
+    if (follow.includes("y")) {
+      const next = step(state.y, state.vy, target.y);
+      state.y = clamp(next.pos, target.y - (spring.maxOffsetY ?? 60), target.y + (spring.maxOffsetY ?? 60));
+      state.vy = next.vel;
+    } else {
+      state.y = target.y;
+      state.vy = 0;
+    }
+
+    if (follow.includes("rotate")) {
+      const next = step(state.rotate, state.vr, target.rotate);
+      state.rotate = clamp(next.pos, target.rotate - (spring.maxRotate ?? 30), target.rotate + (spring.maxRotate ?? 30));
+      state.vr = next.vel;
+    } else {
+      state.rotate = target.rotate;
+      state.vr = 0;
+    }
+
+    return {
+      ...target,
+      x: state.x,
+      y: state.y,
+      rotate: state.rotate,
+    };
+  }
+
+  function getPartMeshDeformer(theme: NpcTheme, partKey: string): NpcMeshDeformer | null {
+    const rig = ensureAnimationRig(theme);
+    const deformer = rig.deformers?.[partKey];
+    if (!deformer) return null;
+    const cols = Math.floor(Number(deformer.cols));
+    const rows = Math.floor(Number(deformer.rows));
+    if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2) return null;
+    return {
+      cols: clamp(cols, 2, 8),
+      rows: clamp(rows, 2, 8),
+      points: deformer.points ?? {},
+    };
+  }
+
+  function hasMeshWarp(deformer: NpcMeshDeformer | null): boolean {
+    if (!deformer?.points) return false;
+    return Object.values(deformer.points).some((pt) =>
+      Number.isFinite(pt?.x) && Number.isFinite(pt?.y) && (Math.abs(pt.x) > 0.001 || Math.abs(pt.y) > 0.001));
+  }
+
+  function applyPoseToPoint(point: Point, pivotX: number, pivotY: number, pose: AnimPose): Point {
+    const tx = point.x - pivotX;
+    const ty = point.y - pivotY;
+    const sx = tx * pose.scaleX;
+    const sy = ty * pose.scaleY;
+    const sin = Math.sin(toRadians(pose.rotate));
+    const cos = Math.cos(toRadians(pose.rotate));
+    const rx = sx * cos - sy * sin;
+    const ry = sx * sin + sy * cos;
+    return {
+      x: rx + pivotX + pose.x,
+      y: ry + pivotY + pose.y,
+    };
+  }
+
+  function triangleTransform(src0: Point, src1: Point, src2: Point, dst0: Point, dst1: Point, dst2: Point) {
+    const det = src0.x * (src1.y - src2.y) + src1.x * (src2.y - src0.y) + src2.x * (src0.y - src1.y);
+    if (Math.abs(det) < 1e-5) return null;
+
+    const a = (dst0.x * (src1.y - src2.y) + dst1.x * (src2.y - src0.y) + dst2.x * (src0.y - src1.y)) / det;
+    const c = (dst0.x * (src2.x - src1.x) + dst1.x * (src0.x - src2.x) + dst2.x * (src1.x - src0.x)) / det;
+    const e = (
+      dst0.x * (src1.x * src2.y - src2.x * src1.y) +
+      dst1.x * (src2.x * src0.y - src0.x * src2.y) +
+      dst2.x * (src0.x * src1.y - src1.x * src0.y)
+    ) / det;
+
+    const b = (dst0.y * (src1.y - src2.y) + dst1.y * (src2.y - src0.y) + dst2.y * (src0.y - src1.y)) / det;
+    const d = (dst0.y * (src2.x - src1.x) + dst1.y * (src0.x - src2.x) + dst2.y * (src1.x - src0.x)) / det;
+    const f = (
+      dst0.y * (src1.x * src2.y - src2.x * src1.y) +
+      dst1.y * (src2.x * src0.y - src0.x * src2.y) +
+      dst2.y * (src0.x * src1.y - src1.x * src0.y)
+    ) / det;
+
+    return { a, b, c, d, e, f };
+  }
+
+  function drawImageTriangle(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    srcRect: { x: number; y: number; w: number; h: number },
+    src0: Point,
+    src1: Point,
+    src2: Point,
+    dst0: Point,
+    dst1: Point,
+    dst2: Point,
+  ) {
+    const matrix = triangleTransform(src0, src1, src2, dst0, dst1, dst2);
+    if (!matrix) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(dst0.x, dst0.y);
+    ctx.lineTo(dst1.x, dst1.y);
+    ctx.lineTo(dst2.x, dst2.y);
+    ctx.closePath();
+    ctx.clip();
+    ctx.transform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+    ctx.drawImage(img, srcRect.x, srcRect.y, srcRect.w, srcRect.h);
+    ctx.restore();
+  }
+
+  function drawMeshWarpedPart(
+    ctx: CanvasRenderingContext2D,
+    img: HTMLImageElement,
+    rect: { x: number; y: number; w: number; h: number },
+    pivotX: number,
+    pivotY: number,
+    pose: AnimPose,
+    deformer: NpcMeshDeformer,
+  ): Point[] {
+    const cols = clamp(Math.floor(deformer.cols), 2, 8);
+    const rows = clamp(Math.floor(deformer.rows), 2, 8);
+    const sourcePoints: Point[] = [];
+    const destinationPoints: Point[] = [];
+
+    const pointOffset = (cx: number, cy: number): Point => {
+      const raw = deformer.points?.[`${cx},${cy}`];
+      if (!raw) return { x: 0, y: 0 };
+      const ox = Number.isFinite(raw.x) ? raw.x : 0;
+      const oy = Number.isFinite(raw.y) ? raw.y : 0;
+      return { x: (ox / 100) * rect.w, y: (oy / 100) * rect.h };
+    };
+
+    for (let cy = 0; cy < rows; cy += 1) {
+      for (let cx = 0; cx < cols; cx += 1) {
+        const nx = cx / (cols - 1);
+        const ny = cy / (rows - 1);
+        const sx = rect.x + nx * rect.w;
+        const sy = rect.y + ny * rect.h;
+        const offset = pointOffset(cx, cy);
+        const warped = { x: sx + offset.x, y: sy + offset.y };
+        sourcePoints.push({ x: sx, y: sy });
+        destinationPoints.push(applyPoseToPoint(warped, pivotX, pivotY, pose));
+      }
+    }
+
+    const idx = (cx: number, cy: number) => cy * cols + cx;
+    for (let cy = 0; cy < rows - 1; cy += 1) {
+      for (let cx = 0; cx < cols - 1; cx += 1) {
+        const i00 = idx(cx, cy);
+        const i10 = idx(cx + 1, cy);
+        const i01 = idx(cx, cy + 1);
+        const i11 = idx(cx + 1, cy + 1);
+
+        drawImageTriangle(
+          ctx,
+          img,
+          rect,
+          sourcePoints[i00],
+          sourcePoints[i10],
+          sourcePoints[i11],
+          destinationPoints[i00],
+          destinationPoints[i10],
+          destinationPoints[i11],
+        );
+        drawImageTriangle(
+          ctx,
+          img,
+          rect,
+          sourcePoints[i00],
+          sourcePoints[i11],
+          sourcePoints[i01],
+          destinationPoints[i00],
+          destinationPoints[i11],
+          destinationPoints[i01],
+        );
+      }
+    }
+
+    return destinationPoints;
+  }
+
+  function evaluateTrackPose(track: NpcAnimationTrack | undefined, timeline: number): AnimPose {
+    const defaults: AnimPose = { x: 0, y: 0, rotate: 0, scaleX: 1, scaleY: 1, opacity: 1 };
+    if (!track || track.keyframes.length === 0) return defaults;
+    const keyframes = [...track.keyframes].sort((a, b) => a.t - b.t);
+    if (keyframes.length === 1) {
+      const [frame] = keyframes;
+      return {
+        x: frame.x ?? 0,
+        y: frame.y ?? 0,
+        rotate: frame.rotate ?? 0,
+        scaleX: frame.scaleX ?? 1,
+        scaleY: frame.scaleY ?? 1,
+        opacity: frame.opacity ?? 1,
+      };
+    }
+
+    let left = keyframes[0];
+    let right = keyframes[keyframes.length - 1];
+    for (let i = 0; i < keyframes.length - 1; i += 1) {
+      const a = keyframes[i];
+      const b = keyframes[i + 1];
+      if (timeline >= a.t && timeline <= b.t) {
+        left = a;
+        right = b;
+        break;
+      }
+    }
+
+    const span = Math.max(0.0001, right.t - left.t);
+    const local = easeValue(track.easing, (timeline - left.t) / span);
+    const x = interpolate(left.x ?? 0, right.x ?? left.x ?? 0, local);
+    const y = interpolate(left.y ?? 0, right.y ?? left.y ?? 0, local);
+    const rotate = interpolate(left.rotate ?? 0, right.rotate ?? left.rotate ?? 0, local);
+    const scaleX = interpolate(left.scaleX ?? 1, right.scaleX ?? left.scaleX ?? 1, local);
+    const scaleY = interpolate(left.scaleY ?? 1, right.scaleY ?? left.scaleY ?? 1, local);
+    const opacity = interpolate(left.opacity ?? 1, right.opacity ?? left.opacity ?? 1, local);
+    return { x, y, rotate, scaleX, scaleY, opacity };
+  }
+
+  function getPartPose(theme: NpcTheme, partKey: string, timeline: number, dtMs: number): AnimPose {
+    const rig = ensureAnimationRig(theme);
+    const motion = rig.motions[previewMotion] ?? rig.motions.idle;
+    const track = motion?.tracks?.[partKey];
+    const animated = evaluateTrackPose(track, timeline);
+    const offset = getPartOffset(partKey);
+    const posed = {
+      ...animated,
+      x: animated.x + offset.x,
+      y: animated.y + offset.y,
+    };
+    return applySpringPose(theme, partKey, posed, dtMs);
+  }
+
+  function normalizeRigCandidate(input: unknown): NpcAnimationRig {
+    if (!input || typeof input !== "object") {
+      throw new Error("JSON root must be an object.");
+    }
+    const raw = input as Record<string, unknown>;
+    const rawMotions = raw.motions;
+    if (!rawMotions || typeof rawMotions !== "object") {
+      throw new Error("`motions` object is required.");
+    }
+
+    const motions: NpcAnimationRig["motions"] = {};
+    for (const [motionName, motionValue] of Object.entries(rawMotions as Record<string, unknown>)) {
+      if (!motionValue || typeof motionValue !== "object") continue;
+      const rawMotion = motionValue as Record<string, unknown>;
+      const rawTracks = rawMotion.tracks;
+      if (!rawTracks || typeof rawTracks !== "object") continue;
+      const tracks: Record<string, NpcAnimationTrack> = {};
+
+      for (const [partKey, trackValue] of Object.entries(rawTracks as Record<string, unknown>)) {
+        if (!trackValue || typeof trackValue !== "object") continue;
+        const rawTrack = trackValue as Record<string, unknown>;
+        const rawFrames = Array.isArray(rawTrack.keyframes) ? rawTrack.keyframes : [];
+        const keyframes = rawFrames
+          .map((entry) => {
+            if (!entry || typeof entry !== "object") return null;
+            const frame = entry as Record<string, unknown>;
+            const t = Number(frame.t);
+            if (!Number.isFinite(t)) return null;
+            const v = {
+              t: clamp(t, 0, 1),
+              x: Number.isFinite(Number(frame.x)) ? Number(frame.x) : undefined,
+              y: Number.isFinite(Number(frame.y)) ? Number(frame.y) : undefined,
+              rotate: Number.isFinite(Number(frame.rotate)) ? Number(frame.rotate) : undefined,
+              scaleX: Number.isFinite(Number(frame.scaleX)) ? Number(frame.scaleX) : undefined,
+              scaleY: Number.isFinite(Number(frame.scaleY)) ? Number(frame.scaleY) : undefined,
+              opacity: Number.isFinite(Number(frame.opacity)) ? Number(frame.opacity) : undefined,
+            };
+            return v;
+          })
+          .filter((frame): frame is NonNullable<typeof frame> => frame != null)
+          .sort((a, b) => a.t - b.t);
+
+        if (keyframes.length === 0) continue;
+        tracks[partKey] = {
+          enabled: rawTrack.enabled === false ? false : true,
+          easing: typeof rawTrack.easing === "string" ? rawTrack.easing as NpcAnimationTrack["easing"] : "linear",
+          keyframes,
+        };
+      }
+
+      if (Object.keys(tracks).length > 0) {
+        const duration = Number(rawMotion.durationMs);
+        motions[motionName] = {
+          durationMs: Number.isFinite(duration) ? Math.max(200, duration) : undefined,
+          tracks,
+        };
+      }
+    }
+
+    const deformers: NonNullable<NpcAnimationRig["deformers"]> = {};
+    const rawDeformers = raw.deformers;
+    if (rawDeformers && typeof rawDeformers === "object") {
+      for (const [partKey, rawDefValue] of Object.entries(rawDeformers as Record<string, unknown>)) {
+        if (!rawDefValue || typeof rawDefValue !== "object") continue;
+        const rawDef = rawDefValue as Record<string, unknown>;
+        const cols = Math.floor(Number(rawDef.cols));
+        const rows = Math.floor(Number(rawDef.rows));
+        if (!Number.isFinite(cols) || !Number.isFinite(rows) || cols < 2 || rows < 2) continue;
+
+        const points: NonNullable<NpcMeshDeformer["points"]> = {};
+        const rawPoints = rawDef.points;
+        if (rawPoints && typeof rawPoints === "object") {
+          for (const [pointKey, rawPoint] of Object.entries(rawPoints as Record<string, unknown>)) {
+            if (!rawPoint || typeof rawPoint !== "object") continue;
+            const pointObj = rawPoint as Record<string, unknown>;
+            const x = Number(pointObj.x);
+            const y = Number(pointObj.y);
+            if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+            points[pointKey] = { x, y };
+          }
+        }
+
+        deformers[partKey] = {
+          cols: clamp(cols, 2, 8),
+          rows: clamp(rows, 2, 8),
+          points,
+        };
+      }
+    }
+
+    const springs: NonNullable<NpcAnimationRig["springs"]> = {};
+    const rawSprings = raw.springs;
+    if (rawSprings && typeof rawSprings === "object") {
+      for (const [partKey, rawSpringValue] of Object.entries(rawSprings as Record<string, unknown>)) {
+        if (!rawSpringValue || typeof rawSpringValue !== "object") continue;
+        const rawSpring = rawSpringValue as Record<string, unknown>;
+        const followRaw = Array.isArray(rawSpring.follow) ? rawSpring.follow : ["x", "y", "rotate"];
+        const follow = followRaw
+          .map((axis) => String(axis))
+          .filter((axis): axis is NpcSpringAxis => axis === "x" || axis === "y" || axis === "rotate");
+
+        springs[partKey] = {
+          enabled: rawSpring.enabled === false ? false : true,
+          follow: follow.length > 0 ? follow : ["x", "y", "rotate"],
+          stiffness: Number.isFinite(Number(rawSpring.stiffness)) ? Number(rawSpring.stiffness) : 170,
+          damping: Number.isFinite(Number(rawSpring.damping)) ? Number(rawSpring.damping) : 24,
+          mass: Number.isFinite(Number(rawSpring.mass)) ? Math.max(0.1, Number(rawSpring.mass)) : 1,
+          maxOffsetX: Number.isFinite(Number(rawSpring.maxOffsetX)) ? Math.max(0, Number(rawSpring.maxOffsetX)) : 60,
+          maxOffsetY: Number.isFinite(Number(rawSpring.maxOffsetY)) ? Math.max(0, Number(rawSpring.maxOffsetY)) : 60,
+          maxRotate: Number.isFinite(Number(rawSpring.maxRotate)) ? Math.max(0, Number(rawSpring.maxRotate)) : 30,
+        };
+      }
+    }
+
+    if (Object.keys(motions).length === 0) {
+      throw new Error("At least one motion with keyframes is required.");
+    }
+
+    const version = Number(raw.version);
+    const baseDuration = Number(raw.baseDurationMs);
+    return {
+      version: Number.isFinite(version) ? version : 1,
+      baseDurationMs: Number.isFinite(baseDuration) ? Math.max(200, baseDuration) : 3000,
+      motions,
+      deformers: Object.keys(deformers).length > 0 ? deformers : undefined,
+      springs: Object.keys(springs).length > 0 ? springs : undefined,
+    };
+  }
+
+  function applyRigJson() {
+    if (!editingTheme || editingTheme.builtIn) return;
+    try {
+      const parsed = JSON.parse(rigJsonText);
+      const normalized = normalizeRigCandidate(parsed);
+      editingTheme.animationRig = normalized;
+      editingTheme = { ...editingTheme };
+      rigJsonText = JSON.stringify(normalized, null, 2);
+      rigJsonError = null;
+      const options = Object.keys(normalized.motions);
+      if (!options.includes(previewMotion)) previewMotion = options[0] ?? "idle";
+      resetPlayback();
+    } catch (err) {
+      rigJsonError = err instanceof Error ? err.message : "Failed to parse animation JSON.";
+    }
+  }
+
+  function autoTuneRig() {
+    if (!editingTheme) return;
+    editingTheme.animationRig = createAutoTunedRig(editingTheme);
+    editingTheme = { ...editingTheme };
+    syncRigEditorFromTheme();
+    resetPlayback();
+  }
+
+  function formatRigJson() {
+    try {
+      const parsed = JSON.parse(rigJsonText);
+      rigJsonText = JSON.stringify(parsed, null, 2);
+      rigJsonError = null;
+    } catch (err) {
+      rigJsonError = err instanceof Error ? err.message : "Invalid JSON.";
+    }
+  }
+
+  function resetRigJson() {
+    if (!editingTheme || editingTheme.builtIn) return;
+    editingTheme.animationRig = createDefaultAnimationRig();
+    editingTheme = { ...editingTheme };
+    previewMotion = "idle";
+    syncRigEditorFromTheme();
+    resetPlayback();
+  }
+
+  function togglePlayback() {
+    animationPlaying = !animationPlaying;
+    lastFrameTs = 0;
+  }
+
+  function imageDestinationRect(img: HTMLImageElement, canvasW: number, canvasH: number) {
+    const scale = Math.min(canvasW / img.naturalWidth, canvasH / img.naturalHeight);
+    const w = img.naturalWidth * scale;
+    const h = img.naturalHeight * scale;
+    const x = (canvasW - w) / 2;
+    const y = canvasH - h;
+    return { x, y, w, h };
+  }
+
+  function resizeCanvasToContainer() {
+    if (!previewCanvasEl || !stageHostEl) return;
+    const rect = stageHostEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.max(1, Math.round(rect.width * dpr));
+    const height = Math.max(1, Math.round(rect.height * dpr));
+    if (previewCanvasEl.width !== width || previewCanvasEl.height !== height) {
+      previewCanvasEl.width = width;
+      previewCanvasEl.height = height;
+      previewCanvasEl.style.width = `${rect.width}px`;
+      previewCanvasEl.style.height = `${rect.height}px`;
+    }
+  }
+
+  function ensureImage(src: string): Promise<void> {
+    if (imageCache.has(src) || partLoadErrors.has(src)) return Promise.resolve();
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        imageCache.set(src, img);
+        resolve();
+      };
+      img.onerror = () => {
+        partLoadErrors.add(src);
+        resolve();
+      };
+      img.src = src;
+    });
+  }
+
+  async function preloadCanvasImages(theme: NpcTheme) {
+    if (!theme.characterParts) return;
+    const parts = theme.characterParts as unknown as Record<string, string | undefined>;
+    const allSources = Object.values(parts).filter((value): value is string => !!value).sort();
+    const signature = allSources.join("|");
+    if (signature === loadedImageSources) return;
+    loadedImageSources = signature;
+    await Promise.all(allSources.map((src) => ensureImage(src)));
+  }
+
+  function drawCanvasFrame(ts: number) {
+    if (!useCanvasRenderer || !previewCanvasEl || !editingTheme?.characterParts) return;
+    const ctx = previewCanvasEl.getContext("2d");
+    if (!ctx) return;
+
+    if (previewCanvasEl.width < 2 || previewCanvasEl.height < 2) {
+      resizeCanvasToContainer();
+      return;
+    }
+
+    if (lastFrameTs === 0) {
+      lastFrameTs = ts;
+    }
+    const dt = ts - lastFrameTs;
+    lastFrameTs = ts;
+    if (animationPlaying) {
+      playbackTimeMs += dt * clamp(previewSpeed, 0.2, 3);
+    }
+    const physicsDt = animationPlaying ? dt : 0;
+
+    const duration = getMotionDuration(editingTheme, previewMotion);
+    const timeline = ((playbackTimeMs % duration) + duration) % duration / duration;
+    ctx.clearRect(0, 0, previewCanvasEl.width, previewCanvasEl.height);
+
+    const parts = getVisibleRenderParts(editingTheme, previewEmotion);
+    for (const part of parts) {
+      const img = imageCache.get(part.src);
+      if (!img || !img.complete || img.naturalWidth === 0 || img.naturalHeight === 0) continue;
+
+      const pose = getPartPose(editingTheme, part.key, timeline, physicsDt);
+      const origin = getPartOrigin(part.key);
+      const rect = imageDestinationRect(img, previewCanvasEl.width, previewCanvasEl.height);
+      const pivotX = rect.x + (rect.w * origin.x) / 100;
+      const pivotY = rect.y + (rect.h * origin.y) / 100;
+
+      const deformer = getPartMeshDeformer(editingTheme, part.key);
+      const meshEnabled = hasMeshWarp(deformer);
+      if (meshEnabled && deformer) {
+        ctx.save();
+        ctx.globalAlpha = clamp(pose.opacity, 0, 1);
+        const destPoints = drawMeshWarpedPart(ctx, img, rect, pivotX, pivotY, pose, deformer);
+        ctx.restore();
+
+        if (selectedPart === part.key && destPoints.length > 0) {
+          const cols = deformer.cols;
+          const rows = deformer.rows;
+          const idx = (cx: number, cy: number) => cy * cols + cx;
+          const border: Point[] = [];
+          for (let cx = 0; cx < cols; cx += 1) border.push(destPoints[idx(cx, 0)]);
+          for (let cy = 1; cy < rows; cy += 1) border.push(destPoints[idx(cols - 1, cy)]);
+          for (let cx = cols - 2; cx >= 0; cx -= 1) border.push(destPoints[idx(cx, rows - 1)]);
+          for (let cy = rows - 2; cy >= 1; cy -= 1) border.push(destPoints[idx(0, cy)]);
+
+          ctx.save();
+          ctx.strokeStyle = "rgba(129, 140, 248, 0.92)";
+          ctx.lineWidth = Math.max(2, Math.round((window.devicePixelRatio || 1) * 1.1));
+          ctx.beginPath();
+          ctx.moveTo(border[0].x, border[0].y);
+          for (let i = 1; i < border.length; i += 1) ctx.lineTo(border[i].x, border[i].y);
+          ctx.closePath();
+          ctx.stroke();
+          ctx.restore();
+        }
+        continue;
+      }
+
+      const corners = [
+        applyPoseToPoint({ x: rect.x, y: rect.y }, pivotX, pivotY, pose),
+        applyPoseToPoint({ x: rect.x + rect.w, y: rect.y }, pivotX, pivotY, pose),
+        applyPoseToPoint({ x: rect.x + rect.w, y: rect.y + rect.h }, pivotX, pivotY, pose),
+        applyPoseToPoint({ x: rect.x, y: rect.y + rect.h }, pivotX, pivotY, pose),
+      ];
+
+      ctx.save();
+      ctx.globalAlpha = clamp(pose.opacity, 0, 1);
+      ctx.translate(pivotX + pose.x, pivotY + pose.y);
+      ctx.rotate(toRadians(pose.rotate));
+      ctx.scale(pose.scaleX, pose.scaleY);
+      ctx.translate(-pivotX, -pivotY);
+      ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h);
+      ctx.restore();
+
+      if (selectedPart === part.key) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(129, 140, 248, 0.92)";
+        ctx.lineWidth = Math.max(2, Math.round((window.devicePixelRatio || 1) * 1.1));
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x, corners[0].y);
+        ctx.lineTo(corners[1].x, corners[1].y);
+        ctx.lineTo(corners[2].x, corners[2].y);
+        ctx.lineTo(corners[3].x, corners[3].y);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  function canvasLoop(ts: number) {
+    drawCanvasFrame(ts);
+    animationFrameHandle = requestAnimationFrame(canvasLoop);
+  }
+
+  $effect(() => {
+    const options = motionOptions;
+    if (!options.includes(previewMotion)) {
+      previewMotion = options[0] ?? "idle";
+    }
+  });
+
+  $effect(() => {
+    const theme = editingTheme;
+    if (!theme || !theme.characterParts || !useCanvasRenderer) return;
+    void preloadCanvasImages(theme);
+  });
+
+  $effect(() => {
+    previewMotion;
+    resetPlayback();
+  });
+
+  onMount(() => {
+    if (typeof window === "undefined") return;
+    resizeCanvasToContainer();
+    animationFrameHandle = requestAnimationFrame(canvasLoop);
+    resizeObserver = new ResizeObserver(() => {
+      resizeCanvasToContainer();
+    });
+    if (stageHostEl) resizeObserver.observe(stageHostEl);
+    window.addEventListener("resize", resizeCanvasToContainer);
+  });
+
+  $effect(() => {
+    if (!resizeObserver || !stageHostEl) return;
+    const host = stageHostEl;
+    resizeObserver.observe(host);
+    resizeCanvasToContainer();
+    return () => {
+      resizeObserver?.unobserve(host);
+    };
+  });
+
+  onDestroy(() => {
+    if (animationFrameHandle != null) cancelAnimationFrame(animationFrameHandle);
+    if (resizeObserver) resizeObserver.disconnect();
+    if (typeof window !== "undefined") window.removeEventListener("resize", resizeCanvasToContainer);
+  });
 </script>
 
 <svelte:head>
@@ -601,6 +1744,70 @@
             </section>
           {/if}
 
+          <!-- Animation Rig Section -->
+          <section class="config-section">
+            <div class="section-header-row">
+              <h3><Sparkles size={16} /> Motion Rig</h3>
+              <div class="rig-actions">
+                <button class="offset-reset" onclick={autoTuneRig} title={editingTheme.builtIn ? "Auto tune preview (built-in)" : "Auto tune spring + mesh"}>
+                  <Sparkles size={12} />
+                  Auto Tune
+                </button>
+                <button class="offset-reset" onclick={formatRigJson} title="Prettify JSON">
+                  <Code2 size={12} />
+                  Format
+                </button>
+                {#if !editingTheme.builtIn}
+                  <button class="offset-reset" onclick={applyRigJson} title="Apply to preview">
+                    <WandSparkles size={12} />
+                    Apply
+                  </button>
+                  <button class="offset-reset" onclick={resetRigJson} title="Reset to default rig">
+                    <RotateCcw size={12} />
+                    Reset
+                  </button>
+                {/if}
+              </div>
+            </div>
+
+            <div class="motion-toolbar">
+              <div class="motion-item">
+                <!-- svelte-ignore a11y_label_has_associated_control -->
+                <label>Motion</label>
+                <select bind:value={previewMotion}>
+                  {#each motionOptions as motionName}
+                    <option value={motionName}>{motionName}</option>
+                  {/each}
+                </select>
+              </div>
+              <div class="motion-item">
+                <!-- svelte-ignore a11y_label_has_associated_control -->
+                <label>Speed</label>
+                <input type="range" min="0.2" max="2.5" step="0.1" bind:value={previewSpeed} />
+                <span class="offset-value">{previewSpeed.toFixed(1)}x</span>
+              </div>
+              <button class="play-toggle" onclick={togglePlayback} title={animationPlaying ? "Pause" : "Play"}>
+                {#if animationPlaying}
+                  <Pause size={14} />
+                {:else}
+                  <Play size={14} />
+                {/if}
+              </button>
+            </div>
+
+            <textarea
+              class="rig-editor"
+              bind:value={rigJsonText}
+              rows="14"
+              placeholder={"{\"version\":1,\"motions\":{\"idle\":{\"tracks\":{}}},\"deformers\":{},\"springs\":{}}"}
+              disabled={editingTheme.builtIn}
+            ></textarea>
+            {#if rigJsonError}
+              <p class="rig-error">{rigJsonError}</p>
+            {/if}
+            <p class="hint">`Auto Tune`은 항상 보입니다. built-in에서는 프리뷰 튜닝만, custom에서는 저장 가능한 rig 튜닝입니다.</p>
+          </section>
+
           <!-- Expression Avatars Section -->
           <section class="config-section">
             <h3><Smile size={16} /> Expression Avatars</h3>
@@ -643,7 +1850,17 @@
         <!-- Preview Panel -->
         <div class="preview-panel">
           <div class="preview-header">
-            <span class="preview-label"><Eye size={14} /> Preview</span>
+            <div class="preview-header-main">
+              <span class="preview-label"><Eye size={14} /> Preview</span>
+              <div class="renderer-switch">
+                <button class="renderer-tab" class:active={useCanvasRenderer} onclick={() => { useCanvasRenderer = true; }}>
+                  Canvas
+                </button>
+                <button class="renderer-tab" class:active={!useCanvasRenderer} onclick={() => { useCanvasRenderer = false; }}>
+                  DOM
+                </button>
+              </div>
+            </div>
             <div class="emotion-tabs">
               {#each EXPRESSIONS as expr}
                 <button
@@ -658,7 +1875,7 @@
             </div>
           </div>
 
-          <div class="stage-wrapper">
+          <div class="stage-wrapper" bind:this={stageHostEl}>
             <div class="preview-stage" style={previewBgStyle}>
               {#if previewBgImage}
                 <img src={previewBgImage} alt="" class="preview-bg-img" />
@@ -666,8 +1883,10 @@
               <div class="preview-overlay"></div>
 
               <!-- Character -->
-              <div class="preview-character">
-                {#if editingTheme.characterParts}
+              <div class="preview-character" class:canvas-render={useCanvasRenderer && !!editingTheme.characterParts}>
+                {#if editingTheme.characterParts && useCanvasRenderer}
+                  <canvas bind:this={previewCanvasEl} class="preview-canvas"></canvas>
+                {:else if editingTheme.characterParts}
                   <div class="preview-parts">
                     <img src={editingTheme.characterParts.body} alt="" class="preview-part"
                       class:part-highlight={selectedPart === "body"}
@@ -1117,6 +2336,12 @@
     margin: 0;
   }
 
+  .rig-actions {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
   .rollback-btn {
     display: flex;
     align-items: center;
@@ -1347,6 +2572,73 @@
     color: var(--color-text);
   }
 
+  .motion-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr auto;
+    gap: 8px;
+    margin-bottom: 10px;
+    align-items: center;
+  }
+
+  .motion-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .motion-item label {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    font-weight: 600;
+  }
+
+  .motion-item select {
+    background: var(--color-surface-elevated);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 12px;
+    outline: none;
+  }
+
+  .motion-item select:focus {
+    border-color: var(--color-primary);
+  }
+
+  .play-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: 7px;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+    background: var(--color-surface-elevated);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 16px;
+  }
+
+  .play-toggle:hover {
+    border-color: var(--color-primary);
+    background: rgba(129, 140, 248, 0.18);
+  }
+
+  .rig-editor {
+    min-height: 220px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    line-height: 1.35;
+    tab-size: 2;
+  }
+
+  .rig-error {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: #f87171;
+  }
+
   .offset-row {
     display: flex;
     align-items: center;
@@ -1433,6 +2725,13 @@
     justify-content: space-between;
     margin-bottom: 12px;
     flex-shrink: 0;
+    gap: 10px;
+  }
+
+  .preview-header-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .preview-label {
@@ -1449,6 +2748,32 @@
   .emotion-tabs {
     display: flex;
     gap: 2px;
+  }
+
+  .renderer-switch {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--color-border);
+    border-radius: 7px;
+    padding: 2px;
+  }
+
+  .renderer-tab {
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .renderer-tab.active {
+    background: rgba(129, 140, 248, 0.2);
+    color: var(--color-text);
   }
 
   .emotion-tab {
@@ -1521,6 +2846,14 @@
     object-position: center bottom;
   }
 
+  .preview-canvas {
+    width: 100%;
+    height: 100%;
+    border-radius: 8px;
+    display: block;
+    image-rendering: auto;
+  }
+
   .preview-character {
     position: absolute;
     bottom: 100px;
@@ -1533,6 +2866,13 @@
     align-items: flex-end;
     justify-content: center;
     animation: char-breathe 4s ease-in-out infinite;
+  }
+
+  .preview-character.canvas-render {
+    width: 72%;
+    height: 68%;
+    bottom: 72px;
+    animation: none;
   }
 
   @keyframes char-breathe {
