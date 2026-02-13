@@ -1,7 +1,12 @@
 {
   "version": "1.0.0",
+<<<<<<< Updated upstream
   "lastScanned": 1770905795538,
   "projectRoot": "/Volumes/MacExt/Projects/openClaw Desktop",
+=======
+  "lastScanned": 1770870032936,
+  "projectRoot": "/Volumes/MacExt/Projects/openClaw-Desktop",
+>>>>>>> Stashed changes
   "techStack": {
     "languages": [
       {
@@ -77,11 +82,31 @@
   },
   "customNotes": [],
   "directoryMap": {
+<<<<<<< Updated upstream
+=======
+    "build": {
+      "path": "build",
+      "purpose": "Build output",
+      "fileCount": 6,
+      "lastAccessed": 1770870032920,
+      "keyFiles": [
+        "favicon.png",
+        "index.html",
+        "svelte.svg",
+        "tauri.svg",
+        "vite.svg"
+      ]
+    },
+>>>>>>> Stashed changes
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 1,
+<<<<<<< Updated upstream
       "lastAccessed": 1770905795510,
+=======
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "app.html"
       ]
@@ -89,8 +114,13 @@
     "src-tauri": {
       "path": "src-tauri",
       "purpose": null,
+<<<<<<< Updated upstream
       "fileCount": 5,
       "lastAccessed": 1770905795510,
+=======
+      "fileCount": 6,
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "Cargo.lock",
         "Cargo.toml",
@@ -101,8 +131,13 @@
     "static": {
       "path": "static",
       "purpose": "Static files",
+<<<<<<< Updated upstream
       "fileCount": 6,
       "lastAccessed": 1770905795513,
+=======
+      "fileCount": 5,
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "favicon-dark.png",
         "favicon-light.png",
@@ -115,7 +150,11 @@
       "path": "src/lib",
       "purpose": "Library code",
       "fileCount": 6,
+<<<<<<< Updated upstream
       "lastAccessed": 1770905795513,
+=======
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "db.ts",
         "i18n.ts",
@@ -126,7 +165,11 @@
       "path": "src/routes",
       "purpose": "Route handlers",
       "fileCount": 3,
+<<<<<<< Updated upstream
       "lastAccessed": 1770905795513,
+=======
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "+layout.svelte",
         "+layout.ts",
@@ -137,7 +180,11 @@
       "path": "src-tauri/src",
       "purpose": "Source code",
       "fileCount": 2,
+<<<<<<< Updated upstream
       "lastAccessed": 1770905795513,
+=======
+      "lastAccessed": 1770870032926,
+>>>>>>> Stashed changes
       "keyFiles": [
         "lib.rs",
         "main.rs"
@@ -146,13 +193,20 @@
   },
   "hotPaths": [
     {
+<<<<<<< Updated upstream
       "path": "src/lib/components/Document/ExcelGrid.svelte",
       "accessCount": 137,
       "lastAccessed": 1770912494653,
+=======
+      "path": "src-tauri/src/document/formats/hwp.rs",
+      "accessCount": 33,
+      "lastAccessed": 1770876254604,
+>>>>>>> Stashed changes
       "type": "file"
     },
     {
       "path": "src/routes/forge/+page.svelte",
+<<<<<<< Updated upstream
       "accessCount": 60,
       "lastAccessed": 1770938766252,
       "type": "file"
@@ -173,11 +227,16 @@
       "path": "src-tauri/src/lib.rs",
       "accessCount": 20,
       "lastAccessed": 1770914083605,
+=======
+      "accessCount": 31,
+      "lastAccessed": 1770884675120,
+>>>>>>> Stashed changes
       "type": "file"
     },
     {
       "path": "src/lib/components/Forge/WordEditor.svelte",
       "accessCount": 17,
+<<<<<<< Updated upstream
       "lastAccessed": 1770912493610,
       "type": "file"
     },
@@ -209,10 +268,26 @@
       "path": "src-tauri/src/document/formats/pdf_export.rs",
       "accessCount": 7,
       "lastAccessed": 1770938563358,
+=======
+      "lastAccessed": 1770877413137,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/commands.rs",
+      "accessCount": 14,
+      "lastAccessed": 1770884595500,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/gateway/store.svelte.ts",
+      "accessCount": 13,
+      "lastAccessed": 1770884190394,
+>>>>>>> Stashed changes
       "type": "file"
     },
     {
       "path": "src/lib/stores/document.svelte.ts",
+<<<<<<< Updated upstream
       "accessCount": 6,
       "lastAccessed": 1770912776961,
       "type": "file"
@@ -257,16 +332,74 @@
       "path": "src/lib/components/Document/DocPreview.svelte",
       "accessCount": 3,
       "lastAccessed": 1770906792873,
+=======
+      "accessCount": 8,
+      "lastAccessed": 1770884150928,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/docx.rs",
+      "accessCount": 8,
+      "lastAccessed": 1770884584862,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/gateway/client.ts",
+      "accessCount": 7,
+      "lastAccessed": 1770877459984,
+>>>>>>> Stashed changes
       "type": "file"
     },
     {
       "path": "src/lib/components/Forge/PptxViewer.svelte",
+<<<<<<< Updated upstream
       "accessCount": 3,
       "lastAccessed": 1770910475432,
+=======
+      "accessCount": 5,
+      "lastAccessed": 1770884231225,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/types.rs",
+      "accessCount": 4,
+      "lastAccessed": 1770879868525,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/pptx.rs",
+      "accessCount": 4,
+      "lastAccessed": 1770880644576,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/formats/mod.rs",
+      "accessCount": 3,
+      "lastAccessed": 1770879873400,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document",
+      "accessCount": 2,
+      "lastAccessed": 1770871384305,
+      "type": "directory"
+    },
+    {
+      "path": "src/lib/components/Forge",
+      "accessCount": 2,
+      "lastAccessed": 1770871410836,
+      "type": "directory"
+    },
+    {
+      "path": "src/lib/components/Chat/ChatPanel.svelte",
+      "accessCount": 2,
+      "lastAccessed": 1770877674350,
+>>>>>>> Stashed changes
       "type": "file"
     },
     {
       "path": "src",
+<<<<<<< Updated upstream
       "accessCount": 3,
       "lastAccessed": 1770910721829,
       "type": "directory"
@@ -413,11 +546,34 @@
       "path": "tsconfig.json",
       "accessCount": 1,
       "lastAccessed": 1770911614031,
+=======
+      "accessCount": 2,
+      "lastAccessed": 1770877675436,
+      "type": "directory"
+    },
+    {
+      "path": "src/lib/gateway/types.ts",
+      "accessCount": 2,
+      "lastAccessed": 1770877765182,
       "type": "file"
     },
     {
-      "path": "src/lib/stores",
+      "path": "src-tauri/src/document/error.rs",
+      "accessCount": 2,
+      "lastAccessed": 1770879858393,
+>>>>>>> Stashed changes
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "accessCount": 2,
+      "lastAccessed": 1770884600687,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Document/ExcelGrid.svelte",
       "accessCount": 1,
+<<<<<<< Updated upstream
       "lastAccessed": 1770912769580,
       "type": "directory"
     },
@@ -425,6 +581,39 @@
       "path": "src/lib/gateway",
       "accessCount": 1,
       "lastAccessed": 1770938611223,
+=======
+      "lastAccessed": 1770872193493,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/database/gateways.rs",
+      "accessCount": 1,
+      "lastAccessed": 1770877459365,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src/document/manager.rs",
+      "accessCount": 1,
+      "lastAccessed": 1770877460737,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/components/Chat",
+      "accessCount": 1,
+      "lastAccessed": 1770877668081,
+      "type": "directory"
+    },
+    {
+      "path": "src-tauri/Cargo.toml",
+      "accessCount": 1,
+      "lastAccessed": 1770879682380,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/src",
+      "accessCount": 1,
+      "lastAccessed": 1770884583744,
+>>>>>>> Stashed changes
       "type": "directory"
     }
   ],

@@ -1,0 +1,128 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1770874755637,
+  "projectRoot": "/Volumes/MacExt/Projects/openClaw-Desktop/src-tauri",
+  "techStack": {
+    "languages": [
+      {
+        "name": "Rust",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "Cargo.toml"
+        ]
+      }
+    ],
+    "frameworks": [],
+    "packageManager": "cargo",
+    "runtime": null
+  },
+  "build": {
+    "buildCommand": "cargo build",
+    "testCommand": "cargo test",
+    "lintCommand": "cargo clippy",
+    "devCommand": "cargo run",
+    "scripts": {}
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "capabilities": {
+      "path": "capabilities",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1770874755622,
+      "keyFiles": [
+        "default.json"
+      ]
+    },
+    "gen": {
+      "path": "gen",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1770874755622,
+      "keyFiles": []
+    },
+    "icons": {
+      "path": "icons",
+      "purpose": null,
+      "fileCount": 20,
+      "lastAccessed": 1770874755622,
+      "keyFiles": [
+        "128x128.png",
+        "128x128@2x.png",
+        "32x32.png",
+        "64x64.png",
+        "Square107x107Logo.png"
+      ]
+    },
+    "resources": {
+      "path": "resources",
+      "purpose": null,
+      "fileCount": 0,
+      "lastAccessed": 1770874755622,
+      "keyFiles": []
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 2,
+      "lastAccessed": 1770874755622,
+      "keyFiles": [
+        "lib.rs",
+        "main.rs"
+      ]
+    },
+    "target": {
+      "path": "target",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1770874755623,
+      "keyFiles": [
+        "CACHEDIR.TAG"
+      ]
+    },
+    "gen/schemas": {
+      "path": "gen/schemas",
+      "purpose": "Schema definitions",
+      "fileCount": 4,
+      "lastAccessed": 1770874755623,
+      "keyFiles": [
+        "acl-manifests.json",
+        "capabilities.json",
+        "desktop-schema.json"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/document/formats/docx.rs",
+      "accessCount": 3,
+      "lastAccessed": 1770875145181,
+      "type": "file"
+    },
+    {
+      "path": "src/document/commands.rs",
+      "accessCount": 1,
+      "lastAccessed": 1770883999978,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}
