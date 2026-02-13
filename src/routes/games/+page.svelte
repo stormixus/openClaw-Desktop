@@ -1,7 +1,7 @@
 <script lang="ts">
   import { t } from "$lib/i18n";
-  import { ct as chessT } from "$lib/games/chess/i18n";
-  import { Gamepad2, Crown, Store, Sparkles, ArrowRight } from "@lucide/svelte";
+  import { GAME_MODULES } from "$lib/games/registry";
+  import { Gamepad2, Store, Sparkles, ArrowRight } from "@lucide/svelte";
 </script>
 
 <svelte:head>
@@ -19,41 +19,34 @@
     </div>
 
     <div class="games-grid">
-      <a href="/games/chess" class="game-card featured">
-        <div class="game-card-visual">
-          <span class="game-emoji">♟</span>
-          <div class="game-glow"></div>
-        </div>
-        <div class="game-card-info">
-          <div class="game-card-header">
-            <h3>{$chessT("title")}</h3>
-            <span class="badge ready">
-              <Sparkles size={10} />
-              {$t("games.badge.playable")}
-            </span>
+      {#each GAME_MODULES as game}
+        <a href={game.route} class="game-card featured">
+          <div class="game-card-visual">
+            <span class="game-emoji">{game.emoji}</span>
+            <div class="game-glow"></div>
           </div>
-          <p>{$chessT("desc")}</p>
-          <div class="game-card-footer">
-            <span class="play-btn">
-              {$t("games.play")}
-              <ArrowRight size={14} />
-            </span>
+          <div class="game-card-info">
+            <div class="game-card-header">
+              <h3>{$t(game.titleKey)}</h3>
+              {#if game.status === 'playable'}
+                <span class="badge ready">
+                  <Sparkles size={10} />
+                  {$t("games.badge.playable")}
+                </span>
+              {:else}
+                <span class="badge soon">{$t("games.badge.soon")}</span>
+              {/if}
+            </div>
+            <p>{$t(game.descKey)}</p>
+            <div class="game-card-footer">
+              <span class="play-btn">
+                {$t("games.play")}
+                <ArrowRight size={14} />
+              </span>
+            </div>
           </div>
-        </div>
-      </a>
-
-      <div class="game-card coming-soon">
-        <div class="game-card-visual">
-          <span class="game-emoji">🎯</span>
-        </div>
-        <div class="game-card-info">
-          <div class="game-card-header">
-            <h3>{$t("games.more.title")}</h3>
-            <span class="badge soon">{$t("games.badge.soon")}</span>
-          </div>
-          <p>{$t("games.more.desc")}</p>
-        </div>
-      </div>
+        </a>
+      {/each}
     </div>
 
     <div class="store-teaser">
@@ -158,10 +151,6 @@
     box-shadow: var(--shadow-lg), 0 0 24px rgba(99, 102, 241, 0.1);
   }
 
-  .game-card.coming-soon {
-    opacity: 0.6;
-    cursor: default;
-  }
 
   .game-card-visual {
     position: relative;
