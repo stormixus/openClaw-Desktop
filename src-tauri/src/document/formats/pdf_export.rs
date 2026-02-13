@@ -1,9 +1,9 @@
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use lopdf::content::{Content, Operation};
-use lopdf::{dictionary, Document, Object, ObjectId};
+use lopdf::{dictionary, text_string, Dictionary, Document, Object, ObjectId};
 
 use crate::document::types::BBox;
 
@@ -29,6 +29,14 @@ pub enum ExportOp {
         #[serde(rename = "targetId")]
         target_id: String,
         text: String,
+        #[serde(rename = "fontSize")]
+        font_size: Option<f64>,
+        #[serde(rename = "rasterJpeg")]
+        raster_jpeg: Option<String>,
+        #[serde(rename = "rasterWidth")]
+        raster_width: Option<u32>,
+        #[serde(rename = "rasterHeight")]
+        raster_height: Option<u32>,
     },
     #[serde(rename = "insertText")]
     InsertText {
@@ -51,6 +59,13 @@ pub enum ExportOp {
         dx: f64,
         dy: f64,
     },
+    #[serde(rename = "resize")]
+    Resize {
+        #[serde(rename = "targetId")]
+        target_id: String,
+        dw: f64,
+        dh: f64,
+    },
     #[serde(rename = "comment")]
     Comment {
         page: u32,
@@ -64,6 +79,12 @@ pub struct ExportBlock {
     pub id: String,
     pub page: u32,
     pub bbox: BBox,
+    #[serde(rename = "fontSize")]
+    pub font_size: Option<f64>,
+    #[serde(rename = "bgColor")]
+    pub bg_color: Option<String>,
+    #[serde(rename = "fontName")]
+    pub font_name: Option<String>,
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -118,12 +139,13 @@ fn get_number(obj: &Object) -> Option<f64> {
     }
 }
 
-/// Build PDF content operations to draw a white rectangle covering a bbox area.
+/// Build PDF content operations to draw a colored rectangle covering a bbox area.
 /// Coordinates are in PDF space (origin bottom-left).
-fn white_rect_ops(pdf_x: f64, pdf_y: f64, w: f64, h: f64) -> Vec<Operation> {
+/// `r`, `g`, `b` are in 0.0..1.0 range.
+fn bg_rect_ops(pdf_x: f64, pdf_y: f64, w: f64, h: f64, r: f64, g: f64, b: f64) -> Vec<Operation> {
     vec![
-        Operation::new("q", vec![]),                                     // save graphics state
-        Operation::new("rg", vec![1.0.into(), 1.0.into(), 1.0.into()]), // fill white
+        Operation::new("q", vec![]),                          // save graphics state
+        Operation::new("rg", vec![r.into(), g.into(), b.into()]), // fill color
         Operation::new(
             "re",
             vec![pdf_x.into(), pdf_y.into(), w.into(), h.into()],
@@ -133,15 +155,27 @@ fn white_rect_ops(pdf_x: f64, pdf_y: f64, w: f64, h: f64) -> Vec<Operation> {
     ]
 }
 
+/// Parse an optional hex color string into (r, g, b) in 0.0..1.0, defaulting to white.
+fn bg_color_rgb(hex: Option<&str>) -> (f64, f64, f64) {
+    match hex {
+        Some(h) => {
+            let h = h.trim_start_matches('#');
+            if h.len() >= 6 {
+                let r = u8::from_str_radix(&h[0..2], 16).unwrap_or(255) as f64 / 255.0;
+                let g = u8::from_str_radix(&h[2..4], 16).unwrap_or(255) as f64 / 255.0;
+                let b = u8::from_str_radix(&h[4..6], 16).unwrap_or(255) as f64 / 255.0;
+                (r, g, b)
+            } else {
+                (1.0, 1.0, 1.0)
+            }
+        }
+        None => (1.0, 1.0, 1.0),
+    }
+}
+
 /// Build PDF content operations to draw text at a given position.
 /// `pdf_x`, `pdf_y` are in PDF coordinate space.
 fn text_ops(pdf_x: f64, pdf_y: f64, text: &str, font_size: f64, font_name: &[u8]) -> Vec<Operation> {
-    // Escape special PDF string characters
-    let escaped = text
-        .replace('\\', "\\\\")
-        .replace('(', "\\(")
-        .replace(')', "\\)");
-
     vec![
         Operation::new("q", vec![]),
         Operation::new("BT", vec![]),
@@ -151,7 +185,7 @@ fn text_ops(pdf_x: f64, pdf_y: f64, text: &str, font_size: f64, font_name: &[u8]
         ),
         Operation::new("rg", vec![0.0.into(), 0.0.into(), 0.0.into()]), // fill black
         Operation::new("Td", vec![pdf_x.into(), pdf_y.into()]),
-        Operation::new("Tj", vec![Object::string_literal(escaped)]),
+        Operation::new("Tj", vec![text_string(text)]),
         Operation::new("ET", vec![]),
         Operation::new("Q", vec![]),
     ]
@@ -179,21 +213,147 @@ fn highlight_rect_ops(pdf_x: f64, pdf_y: f64, w: f64, h: f64, r: f64, g: f64, b:
     ]
 }
 
-/// Ensure the page has a /Helvetica font resource available. Returns the name
-/// bytes used (e.g. b"F1" or b"Helv"). If a built-in font already exists we
-/// try to reuse it; otherwise we add one.
-fn ensure_font_resource(doc: &mut Document, page_id: ObjectId) -> Vec<u8> {
-    // Try to find an existing Type1 font on the page
-    if let Ok(page_obj) = doc.get_object(page_id) {
-        if let Ok(dict) = page_obj.as_dict() {
-            if let Ok(resources) = dict.get(b"Resources") {
-                if let Ok(res_dict) = resources.as_dict() {
-                    if let Ok(fonts) = res_dict.get(b"Font") {
-                        if let Ok(font_dict) = fonts.as_dict() {
-                            // Return the first font name we find
-                            if let Some((name, _)) = font_dict.iter().next() {
-                                return name.clone();
-                            }
+fn resolve_dict_ref<'a>(doc: &'a Document, obj: &'a Object) -> Option<&'a lopdf::Dictionary> {
+    match obj {
+        Object::Dictionary(dict) => Some(dict),
+        Object::Reference(id) => doc.get_object(*id).ok()?.as_dict().ok(),
+        _ => None,
+    }
+}
+
+#[derive(Clone, Debug)]
+struct FontCandidate {
+    key: Vec<u8>,
+    aliases: HashSet<String>,
+    score: i32,
+}
+
+fn normalize_font_token(token: &str) -> String {
+    token
+        .to_ascii_lowercase()
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn push_alias(aliases: &mut HashSet<String>, raw: &str) {
+    let normalized = normalize_font_token(raw);
+    if !normalized.is_empty() {
+        aliases.insert(normalized);
+    }
+}
+
+fn score_font_name(name: &str) -> i32 {
+    let token = name.to_ascii_lowercase();
+    let is_korean = [
+        "korea",
+        "hangul",
+        "nanum",
+        "malgun",
+        "gulim",
+        "dotum",
+        "batang",
+        "gothickr",
+        "myungjo",
+        "notosanscjkkr",
+        "notoserifcjkkr",
+        "sourcehansansk",
+        "sourcehanserifk",
+    ]
+    .iter()
+    .any(|k| token.contains(k));
+    if is_korean {
+        return 90;
+    }
+
+    let is_cjk = [
+        "cjk",
+        "heiti",
+        "songti",
+        "simsun",
+        "simhei",
+        "fangsong",
+        "kaiti",
+        "hiragino",
+        "kozuka",
+    ]
+    .iter()
+    .any(|k| token.contains(k));
+    if is_cjk {
+        return 45;
+    }
+
+    let is_latin = ["helvetica", "times", "courier", "arial"]
+        .iter()
+        .any(|k| token.contains(k));
+    if is_latin {
+        return 10;
+    }
+
+    0
+}
+
+fn collect_font_aliases_and_score(
+    doc: &Document,
+    font_dict: &Dictionary,
+    aliases: &mut HashSet<String>,
+) -> i32 {
+    let mut score = 0;
+
+    if let Ok(subtype) = font_dict.get(b"Subtype").and_then(Object::as_name_str) {
+        if subtype == "Type0" {
+            score += 40;
+        } else if subtype == "CIDFontType0" || subtype == "CIDFontType2" {
+            score += 25;
+        }
+    }
+
+    if let Ok(encoding) = font_dict.get(b"Encoding").and_then(Object::as_name_str) {
+        let enc = encoding.to_ascii_lowercase();
+        if enc.contains("identity-h") || enc.contains("identity-v") {
+            score += 30;
+        } else if enc.contains("uni") || enc.contains("ucs") {
+            score += 18;
+        }
+    }
+
+    if let Ok(base_font) = font_dict.get(b"BaseFont").and_then(Object::as_name) {
+        let raw = String::from_utf8_lossy(base_font);
+        push_alias(aliases, &raw);
+        if let Some((_, suffix)) = raw.split_once('+') {
+            push_alias(aliases, suffix);
+            score += score_font_name(suffix);
+        } else {
+            score += score_font_name(&raw);
+        }
+    }
+
+    if let Ok(desc_fonts) = font_dict.get(b"DescendantFonts").and_then(Object::as_array) {
+        for desc in desc_fonts {
+            let Some(desc_dict) = resolve_dict_ref(doc, desc) else {
+                continue;
+            };
+
+            if let Ok(desc_base) = desc_dict.get(b"BaseFont").and_then(Object::as_name) {
+                let raw = String::from_utf8_lossy(desc_base);
+                push_alias(aliases, &raw);
+                if let Some((_, suffix)) = raw.split_once('+') {
+                    push_alias(aliases, suffix);
+                    score += score_font_name(suffix);
+                } else {
+                    score += score_font_name(&raw);
+                }
+            }
+
+            if let Ok(cid_info_obj) = desc_dict.get(b"CIDSystemInfo") {
+                if let Some(cid_info) = resolve_dict_ref(doc, cid_info_obj) {
+                    if let Ok(ordering) = cid_info.get(b"Ordering").and_then(Object::as_str) {
+                        let ord = String::from_utf8_lossy(ordering).to_ascii_lowercase();
+                        push_alias(aliases, &ord);
+                        if ord.contains("korea") {
+                            score += 100;
+                        } else if ord.contains("japan") || ord.contains("gb") || ord.contains("cns") {
+                            score += 40;
                         }
                     }
                 }
@@ -201,40 +361,247 @@ fn ensure_font_resource(doc: &mut Document, page_id: ObjectId) -> Vec<u8> {
         }
     }
 
-    // No font found -- add Helvetica as /F1
-    let font_id = doc.add_object(dictionary! {
+    score
+}
+
+/// Resolve page resources, following inherited /Parent dictionaries when needed.
+fn get_page_resources_dict<'a>(doc: &'a Document, page_id: ObjectId) -> Option<&'a lopdf::Dictionary> {
+    let mut current_id = page_id;
+    loop {
+        let page_obj = doc.get_object(current_id).ok()?;
+        let dict = page_obj.as_dict().ok()?;
+
+        if let Ok(resources_obj) = dict.get(b"Resources") {
+            if let Some(resources_dict) = resolve_dict_ref(doc, resources_obj) {
+                return Some(resources_dict);
+            }
+        }
+
+        let parent = match dict.get(b"Parent").ok()? {
+            Object::Reference(pid) => *pid,
+            _ => return None,
+        };
+        current_id = parent;
+    }
+}
+
+fn list_page_font_candidates(doc: &Document, page_id: ObjectId) -> Vec<FontCandidate> {
+    let Some(resources) = get_page_resources_dict(doc, page_id) else {
+        return Vec::new();
+    };
+    let Ok(fonts_obj) = resources.get(b"Font") else {
+        return Vec::new();
+    };
+    let Some(font_dict) = resolve_dict_ref(doc, fonts_obj) else {
+        return Vec::new();
+    };
+
+    let mut candidates: Vec<FontCandidate> = Vec::new();
+    for (name, font_obj) in font_dict.iter() {
+        let mut aliases = HashSet::new();
+        let key_name = String::from_utf8_lossy(name);
+        push_alias(&mut aliases, &key_name);
+
+        let mut score = 0;
+        if let Some(font_entry) = resolve_dict_ref(doc, font_obj) {
+            score += collect_font_aliases_and_score(doc, font_entry, &mut aliases);
+        }
+
+        candidates.push(FontCandidate {
+            key: name.clone(),
+            aliases,
+            score,
+        });
+    }
+    candidates.sort_by(|a, b| b.score.cmp(&a.score));
+    candidates
+}
+
+/// Ensure a fallback font exists on the page resources and return its resource key.
+/// We clone the effective (possibly inherited) resource dictionary onto the page to avoid
+/// breaking existing XObject/color resources while adding the fallback font.
+fn ensure_fallback_font_resource(doc: &mut Document, page_id: ObjectId) -> Vec<u8> {
+    let fallback_name = b"OCF1".to_vec();
+    let fallback_font_id = doc.add_object(dictionary! {
         "Type" => "Font",
         "Subtype" => "Type1",
         "BaseFont" => "Helvetica",
     });
 
-    // We need to add this font to the page's Resources/Font dict.
-    // Since borrowing is tricky, we collect what we need, then mutate.
-    let font_name = b"F1".to_vec();
+    let mut resources = get_page_resources_dict(doc, page_id)
+        .cloned()
+        .unwrap_or_else(Dictionary::new);
+
+    let mut font_dict = resources
+        .get(b"Font")
+        .ok()
+        .and_then(|font_obj| resolve_dict_ref(doc, font_obj))
+        .cloned()
+        .unwrap_or_else(Dictionary::new);
+
+    font_dict.set(fallback_name.clone(), Object::Reference(fallback_font_id));
+    resources.set("Font", Object::Dictionary(font_dict));
 
     if let Ok(page_obj) = doc.get_object_mut(page_id) {
-        if let Ok(dict) = page_obj.as_dict_mut() {
-            // Ensure Resources dict exists
-            if dict.get(b"Resources").is_err() {
-                dict.set("Resources", dictionary! {});
-            }
-            if let Ok(resources) = dict.get_mut(b"Resources") {
-                if let Ok(res_dict) = resources.as_dict_mut() {
-                    // Ensure Font sub-dict exists
-                    if res_dict.get(b"Font").is_err() {
-                        res_dict.set("Font", dictionary! {});
-                    }
-                    if let Ok(fonts) = res_dict.get_mut(b"Font") {
-                        if let Ok(font_dict) = fonts.as_dict_mut() {
-                            font_dict.set("F1", Object::Reference(font_id));
-                        }
-                    }
-                }
-            }
+        if let Ok(page_dict) = page_obj.as_dict_mut() {
+            page_dict.set("Resources", Object::Dictionary(resources));
         }
     }
 
-    font_name
+    fallback_name
+}
+
+fn decode_base64_data_url(input: &str) -> Result<Vec<u8>, String> {
+    let raw = if let Some(idx) = input.find(',') {
+        &input[idx + 1..]
+    } else {
+        input
+    };
+    use base64::Engine;
+    base64::engine::general_purpose::STANDARD
+        .decode(raw.trim())
+        .map_err(|e| format!("Failed to decode text raster image: {}", e))
+}
+
+fn image_ops(
+    pdf_x: f64,
+    pdf_y: f64,
+    pdf_w: f64,
+    pdf_h: f64,
+    image_name: &[u8],
+) -> Vec<Operation> {
+    vec![
+        Operation::new("q", vec![]),
+        Operation::new(
+            "cm",
+            vec![
+                pdf_w.into(),
+                0.0.into(),
+                0.0.into(),
+                pdf_h.into(),
+                pdf_x.into(),
+                pdf_y.into(),
+            ],
+        ),
+        Operation::new("Do", vec![Object::Name(image_name.to_vec())]),
+        Operation::new("Q", vec![]),
+    ]
+}
+
+type Matrix = [f64; 6];
+
+fn matrix_identity() -> Matrix {
+    [1.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+}
+
+fn matrix_is_identity(m: Matrix) -> bool {
+    (m[0] - 1.0).abs() < 1e-8
+        && m[1].abs() < 1e-8
+        && m[2].abs() < 1e-8
+        && (m[3] - 1.0).abs() < 1e-8
+        && m[4].abs() < 1e-6
+        && m[5].abs() < 1e-6
+}
+
+/// Row-vector affine concatenation: CTM' = CTM * M.
+fn matrix_concat(ctm: Matrix, m: Matrix) -> Matrix {
+    [
+        ctm[0] * m[0] + ctm[1] * m[2],
+        ctm[0] * m[1] + ctm[1] * m[3],
+        ctm[2] * m[0] + ctm[3] * m[2],
+        ctm[2] * m[1] + ctm[3] * m[3],
+        ctm[4] * m[0] + ctm[5] * m[2] + m[4],
+        ctm[4] * m[1] + ctm[5] * m[3] + m[5],
+    ]
+}
+
+fn matrix_inverse(m: Matrix) -> Option<Matrix> {
+    let det = m[0] * m[3] - m[1] * m[2];
+    if det.abs() < 1e-12 {
+        return None;
+    }
+    let inv_a = m[3] / det;
+    let inv_b = -m[1] / det;
+    let inv_c = -m[2] / det;
+    let inv_d = m[0] / det;
+    let inv_e = (m[2] * m[5] - m[3] * m[4]) / det;
+    let inv_f = (m[4] * m[1] - m[5] * m[0]) / det;
+    Some([inv_a, inv_b, inv_c, inv_d, inv_e, inv_f])
+}
+
+fn final_page_ctm(content: &Content) -> Matrix {
+    let mut ctm = matrix_identity();
+    let mut stack: Vec<Matrix> = Vec::new();
+
+    for op in &content.operations {
+        match op.operator.as_str() {
+            "q" => stack.push(ctm),
+            "Q" => {
+                if let Some(prev) = stack.pop() {
+                    ctm = prev;
+                } else {
+                    ctm = matrix_identity();
+                }
+            }
+            "cm" => {
+                if op.operands.len() >= 6 {
+                    let a = get_number(&op.operands[0]).unwrap_or(1.0);
+                    let b = get_number(&op.operands[1]).unwrap_or(0.0);
+                    let c = get_number(&op.operands[2]).unwrap_or(0.0);
+                    let d = get_number(&op.operands[3]).unwrap_or(1.0);
+                    let e = get_number(&op.operands[4]).unwrap_or(0.0);
+                    let f = get_number(&op.operands[5]).unwrap_or(0.0);
+                    ctm = matrix_concat(ctm, [a, b, c, d, e, f]);
+                }
+            }
+            _ => {}
+        }
+    }
+
+    ctm
+}
+
+fn add_jpeg_overlay_xobject(
+    doc: &mut Document,
+    page_id: ObjectId,
+    image_name: &[u8],
+    jpeg_bytes: Vec<u8>,
+    image_width: u32,
+    image_height: u32,
+) -> Result<(), String> {
+    let image_stream = lopdf::Stream::new(
+        dictionary! {
+            "Type" => "XObject",
+            "Subtype" => "Image",
+            "Width" => i64::from(image_width),
+            "Height" => i64::from(image_height),
+            "ColorSpace" => "DeviceRGB",
+            "BitsPerComponent" => 8,
+            "Filter" => "DCTDecode",
+        },
+        jpeg_bytes,
+    );
+    let image_id = doc.add_object(Object::Stream(image_stream));
+
+    let mut resources = get_page_resources_dict(doc, page_id)
+        .cloned()
+        .unwrap_or_else(Dictionary::new);
+    let mut xobject_dict = resources
+        .get(b"XObject")
+        .ok()
+        .and_then(|obj| resolve_dict_ref(doc, obj))
+        .cloned()
+        .unwrap_or_else(Dictionary::new);
+    xobject_dict.set(image_name.to_vec(), Object::Reference(image_id));
+    resources.set("XObject", Object::Dictionary(xobject_dict));
+
+    if let Ok(page_obj) = doc.get_object_mut(page_id) {
+        if let Ok(page_dict) = page_obj.as_dict_mut() {
+            page_dict.set("Resources", Object::Dictionary(resources));
+            return Ok(());
+        }
+    }
+    Err("Failed to attach image XObject to page resources".to_string())
 }
 
 // ── Main export function ─────────────────────────────────────────────
@@ -263,34 +630,40 @@ pub fn export_overlay_pdf(
     let page_ids: Vec<ObjectId> = doc.page_iter().collect();
     let num_pages = page_ids.len();
 
-    // Pre-compute PDF page dimensions and ensure font resources.
-    // We clone page_ids so we can mutate doc in ensure_font_resource.
+    // Pre-compute PDF page dimensions and available font candidates.
     let mut page_dims: Vec<(f64, f64)> = Vec::with_capacity(num_pages);
-    let mut page_fonts: Vec<Vec<u8>> = Vec::with_capacity(num_pages);
+    let mut page_font_lists: Vec<Vec<FontCandidate>> = Vec::with_capacity(num_pages);
 
     for &pid in &page_ids {
         page_dims.push(get_page_media_box(&doc, pid));
-    }
-    for &pid in &page_ids {
-        page_fonts.push(ensure_font_resource(&mut doc, pid));
+        let mut fonts = list_page_font_candidates(&doc, pid);
+        if fonts.is_empty() {
+            let fallback = ensure_fallback_font_resource(&mut doc, pid);
+            let mut aliases = HashSet::new();
+            let fallback_name = String::from_utf8_lossy(&fallback).to_string();
+            push_alias(&mut aliases, &fallback_name);
+            fonts.push(FontCandidate {
+                key: fallback,
+                aliases,
+                score: 0,
+            });
+        }
+        page_font_lists.push(fonts);
     }
 
     // Per-page extra operations to append
     let mut extra_ops: Vec<Vec<Operation>> = vec![Vec::new(); num_pages];
+    let mut image_counter: u32 = 0;
 
     // Helper: convert frontend bbox (top-left origin, viewport units) to
     // PDF coordinates (bottom-left origin, PDF points).
     let convert_bbox =
         |bbox: &BBox, page_idx: usize| -> (f64, f64, f64, f64) {
-            let (pdf_w, pdf_h) = page_dims[page_idx];
+            let (_, pdf_h) = page_dims[page_idx];
             let vp_h = page_heights
                 .get(page_idx)
                 .copied()
                 .unwrap_or(pdf_h);
-            let scale_x = pdf_w / vp_h * (vp_h / vp_h); // simplified: pdf_w / vp_w but we assume aspect preserving, so use height ratio
-            // The frontend renders the PDF scaled so that the viewport height matches
-            // the rendered page height. Width scales proportionally. We assume
-            // viewport width == pdf_w * (vp_h / pdf_h).
             let scale = pdf_h / vp_h;
             let sx = bbox.x * scale;
             let sy = bbox.y * scale;
@@ -298,9 +671,41 @@ pub fn export_overlay_pdf(
             let sh = bbox.h * scale;
             // Flip y: PDF origin is bottom-left
             let pdf_y = pdf_h - sy - sh;
-            let _ = scale_x; // suppress unused
             (sx, pdf_y, sw, sh)
         };
+
+    let pick_font_name = |page_idx: usize, preferred: Option<&str>, text: &str| -> Option<Vec<u8>> {
+        let page_fonts = page_font_lists.get(page_idx)?;
+        if let Some(pref) = preferred {
+            let pref_norm = normalize_font_token(pref);
+            if !pref_norm.is_empty() {
+                if let Some(candidate) = page_fonts
+                    .iter()
+                    .find(|candidate| candidate.aliases.contains(&pref_norm))
+                {
+                    return Some(candidate.key.clone());
+                }
+            }
+            let pref_bytes = pref.as_bytes();
+            if let Some(candidate) = page_fonts
+                .iter()
+                .find(|candidate| candidate.key.as_slice() == pref_bytes)
+            {
+                return Some(candidate.key.clone());
+            }
+        }
+
+        if !text.is_ascii() {
+            if let Some(candidate) = page_fonts
+                .iter()
+                .max_by_key(|candidate| candidate.score)
+            {
+                return Some(candidate.key.clone());
+            }
+        }
+
+        page_fonts.first().map(|candidate| candidate.key.clone())
+    };
 
     for op in ops {
         match op {
@@ -309,23 +714,70 @@ pub fn export_overlay_pdf(
                     let page_idx = (block.page as usize).saturating_sub(1);
                     if page_idx < num_pages {
                         let (px, py, pw, ph) = convert_bbox(&block.bbox, page_idx);
-                        extra_ops[page_idx].extend(white_rect_ops(px, py, pw, ph));
+                        let (r, g, b) = bg_color_rgb(block.bg_color.as_deref());
+                        extra_ops[page_idx].extend(bg_rect_ops(px, py, pw, ph, r, g, b));
                     }
                 }
             }
-            ExportOp::ReplaceText { target_id, text } => {
+            ExportOp::ReplaceText {
+                target_id,
+                text,
+                font_size,
+                raster_jpeg,
+                raster_width,
+                raster_height,
+            } => {
                 if let Some(block) = block_map.get(target_id.as_str()) {
                     let page_idx = (block.page as usize).saturating_sub(1);
                     if page_idx < num_pages {
                         let (px, py, pw, ph) = convert_bbox(&block.bbox, page_idx);
-                        // White-out the original
-                        extra_ops[page_idx].extend(white_rect_ops(px, py, pw, ph));
-                        // Draw replacement text at the top-left of the block area
-                        let font_size = (ph * 0.7).min(14.0).max(6.0);
+                        // Cover the original with detected background color
+                        let (r, g, b) = bg_color_rgb(block.bg_color.as_deref());
+                        extra_ops[page_idx].extend(bg_rect_ops(px, py, pw, ph, r, g, b));
+
+                        // Preferred path: draw browser-rasterized text image so Unicode output
+                        // does not depend on source PDF font cmap quirks.
+                        if let (Some(raster), Some(img_w), Some(img_h)) =
+                            (raster_jpeg.as_deref(), *raster_width, *raster_height)
+                        {
+                            if !raster.trim().is_empty() && img_w > 0 && img_h > 0 {
+                                if let Ok(jpeg_bytes) = decode_base64_data_url(raster) {
+                                    let image_name = format!("OCIMG{}", image_counter).into_bytes();
+                                    image_counter = image_counter.saturating_add(1);
+                                    let page_id = page_ids[page_idx];
+                                    if add_jpeg_overlay_xobject(
+                                        &mut doc,
+                                        page_id,
+                                        &image_name,
+                                        jpeg_bytes,
+                                        img_w,
+                                        img_h,
+                                    )
+                                    .is_ok()
+                                    {
+                                        extra_ops[page_idx]
+                                            .extend(image_ops(px, py, pw, ph, &image_name));
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Use detected font_size from OCR, fallback to bbox-based estimate
+                        let (pdf_w, pdf_h) = page_dims[page_idx];
+                        let vp_h = page_heights.get(page_idx).copied().unwrap_or(pdf_h);
+                        let scale = pdf_h / vp_h;
+                        let font_size = font_size
+                            .map(|fs| (fs * scale).max(6.0))
+                            .or_else(|| block.font_size.map(|fs| (fs * scale).max(6.0)))
+                            .unwrap_or_else(|| (ph * 0.7).min(14.0).max(6.0));
                         let text_y = py + ph - font_size; // top of rect in PDF coords
-                        let font_name = &page_fonts[page_idx];
-                        extra_ops[page_idx]
-                            .extend(text_ops(px + 2.0, text_y, text, font_size, font_name));
+                        let _ = pw; // suppress unused
+                        let _ = pdf_w;
+                        if let Some(font_name) = pick_font_name(page_idx, block.font_name.as_deref(), text) {
+                            extra_ops[page_idx]
+                                .extend(text_ops(px + 2.0, text_y, text, font_size, &font_name));
+                        }
                     }
                 }
             }
@@ -343,8 +795,9 @@ pub fn export_overlay_pdf(
                     let px = at.x * scale;
                     let py = pdf_h - at.y * scale; // flip y
                     let fs = font_size.unwrap_or(12.0);
-                    let font_name = &page_fonts[page_idx];
-                    extra_ops[page_idx].extend(text_ops(px, py, text, fs, font_name));
+                    if let Some(font_name) = pick_font_name(page_idx, None, text) {
+                        extra_ops[page_idx].extend(text_ops(px, py, text, fs, &font_name));
+                    }
                     let _ = pdf_w; // suppress unused
                 }
             }
@@ -364,6 +817,9 @@ pub fn export_overlay_pdf(
             }
             ExportOp::Move { .. } => {
                 // Visual-only overlay; skip for V1 PDF export
+            }
+            ExportOp::Resize { .. } => {
+                // Resizing is already reflected by adjusted block bboxes from frontend.
             }
             ExportOp::Comment { .. } => {
                 // Comments are UI-only; skip for PDF export
@@ -387,8 +843,32 @@ pub fn export_overlay_pdf(
         let mut content = Content::decode(&existing_content)
             .map_err(|e| format!("Failed to decode page {} content: {}", page_idx + 1, e))?;
 
-        // Append our overlay operations
-        content.operations.extend(page_extra);
+        // Some PDFs leave a non-identity CTM at the end of their content stream.
+        // Neutralize it so overlay coordinates stay in page user space.
+        let final_ctm = final_page_ctm(&content);
+        if let Some(inv) = matrix_inverse(final_ctm) {
+            if matrix_is_identity(final_ctm) {
+                content.operations.extend(page_extra);
+            } else {
+                content.operations.push(Operation::new("q", vec![]));
+                content.operations.push(Operation::new(
+                    "cm",
+                    vec![
+                        inv[0].into(),
+                        inv[1].into(),
+                        inv[2].into(),
+                        inv[3].into(),
+                        inv[4].into(),
+                        inv[5].into(),
+                    ],
+                ));
+                content.operations.extend(page_extra);
+                content.operations.push(Operation::new("Q", vec![]));
+            }
+        } else {
+            // If CTM is singular, fall back to appending directly.
+            content.operations.extend(page_extra);
+        }
 
         // Encode back and replace the page content
         let encoded = content.encode()

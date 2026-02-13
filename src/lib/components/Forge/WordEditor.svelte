@@ -201,9 +201,10 @@
     content?: string; // HTML or Markdown content
     editable?: boolean;
     onchange?: (content: string) => void;
+    onInlinePrompt?: (selectedText: string, instruction: string) => Promise<string>;
   }
 
-  const { content = "", editable = true, onchange }: Props = $props();
+  const { content = "", editable = true, onchange, onInlinePrompt }: Props = $props();
 
   let element: HTMLElement;
   let editor: Editor | null = $state(null);
@@ -229,6 +230,20 @@
   let activeHighlight = $state(false);
   let currentTextColor = $state(DEFAULT_TEXT_COLOR);
   let currentHighlightColor = $state(DEFAULT_HIGHLIGHT_COLOR);
+  let inlinePromptOpen = $state(false);
+  let inlinePromptX = $state(0);
+  let inlinePromptY = $state(0);
+  let inlinePromptInstruction = $state("");
+  let inlinePromptError = $state<string | null>(null);
+  let inlinePromptBusy = $state(false);
+  let inlineSelectionFrom = $state(0);
+  let inlineSelectionTo = $state(0);
+  let inlineSelectedText = $state("");
+  let inlinePromptEl = $state<HTMLDivElement | null>(null);
+  let inlinePromptInputEl = $state<HTMLTextAreaElement | null>(null);
+
+  const INLINE_PROMPT_WIDTH = 360;
+  const INLINE_PROMPT_MIN_HEIGHT = 180;
 
   function normalizeFontSize(raw: string | null | undefined): string {
     if (!raw) return "14";
@@ -305,8 +320,128 @@
     activeSubscript = editor.isActive("subscript");
   }
 
+  function closeInlinePrompt(): void {
+    inlinePromptOpen = false;
+    inlinePromptInstruction = "";
+    inlinePromptError = null;
+    inlinePromptBusy = false;
+  }
+
+  function positionInlinePrompt(clientX: number, clientY: number): void {
+    if (typeof window === "undefined") {
+      inlinePromptX = clientX;
+      inlinePromptY = clientY;
+      return;
+    }
+    const margin = 12;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const preferredX = clientX + 10;
+    const preferredY = clientY + 10;
+    const openAbove = preferredY + INLINE_PROMPT_MIN_HEIGHT > viewportH - margin;
+
+    inlinePromptX = Math.max(
+      margin,
+      Math.min(preferredX, viewportW - INLINE_PROMPT_WIDTH - margin),
+    );
+    inlinePromptY = Math.max(
+      margin,
+      Math.min(
+        openAbove ? clientY - INLINE_PROMPT_MIN_HEIGHT - 10 : preferredY,
+        viewportH - INLINE_PROMPT_MIN_HEIGHT - margin,
+      ),
+    );
+  }
+
+  function selectedPreviewText(): string {
+    const trimmed = inlineSelectedText.trim();
+    if (trimmed.length <= 120) return trimmed;
+    return `${trimmed.slice(0, 120)}...`;
+  }
+
+  function handleEditorContextMenu(event: MouseEvent): void {
+    if (!editable || !onInlinePrompt || !editor) return;
+    const selection = editor.state.selection;
+    if (!selection || selection.empty || selection.to <= selection.from) return;
+    const selected = editor.state.doc.textBetween(selection.from, selection.to, "\n", "\n").trim();
+    if (!selected) return;
+
+    event.preventDefault();
+    inlineSelectionFrom = selection.from;
+    inlineSelectionTo = selection.to;
+    inlineSelectedText = selected;
+    inlinePromptInstruction = "";
+    inlinePromptError = null;
+    inlinePromptBusy = false;
+    positionInlinePrompt(event.clientX, event.clientY);
+    inlinePromptOpen = true;
+    requestAnimationFrame(() => {
+      inlinePromptInputEl?.focus();
+    });
+  }
+
+  async function submitInlinePrompt(): Promise<void> {
+    if (!editor || !onInlinePrompt || inlinePromptBusy) return;
+    const instruction = inlinePromptInstruction.trim();
+    if (!instruction) {
+      inlinePromptError = "명령을 입력해주세요.";
+      return;
+    }
+
+    inlinePromptBusy = true;
+    inlinePromptError = null;
+    try {
+      const rewritten = (await onInlinePrompt(inlineSelectedText, instruction)).trim();
+      if (!rewritten) {
+        throw new Error("AI 응답이 비어 있습니다.");
+      }
+
+      const from = inlineSelectionFrom;
+      const to = inlineSelectionTo;
+      editor
+        .chain()
+        .focus()
+        .command(({ tr, dispatch }) => {
+          if (dispatch) {
+            dispatch(tr.insertText(rewritten, from, to));
+          }
+          return true;
+        })
+        .run();
+      closeInlinePrompt();
+    } catch (err: unknown) {
+      inlinePromptError = err instanceof Error ? err.message : "AI 수정 요청에 실패했습니다.";
+    } finally {
+      inlinePromptBusy = false;
+    }
+  }
+
+  function handleInlinePromptKeydown(event: KeyboardEvent): void {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      void submitInlinePrompt();
+    }
+  }
+
+  function handleWindowPointerDown(event: MouseEvent): void {
+    if (!inlinePromptOpen) return;
+    const target = event.target as Node | null;
+    if (target && inlinePromptEl?.contains(target)) return;
+    closeInlinePrompt();
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if (!inlinePromptOpen) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeInlinePrompt();
+    }
+  }
+
   onMount(() => {
     loadSystemFonts();
+    window.addEventListener("mousedown", handleWindowPointerDown, true);
+    window.addEventListener("keydown", handleWindowKeydown);
     editor = new Editor({
       element,
       extensions: [
@@ -348,6 +483,8 @@
   });
 
   onDestroy(() => {
+    window.removeEventListener("mousedown", handleWindowPointerDown, true);
+    window.removeEventListener("keydown", handleWindowKeydown);
     if (editor) {
       editor.destroy();
     }
@@ -601,7 +738,39 @@
     </div>
   {/if}
 
-  <div class="editor-content" bind:this={element}></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div class="editor-content" bind:this={element} oncontextmenu={handleEditorContextMenu}></div>
+
+  {#if inlinePromptOpen}
+    <div
+      class="inline-agent-prompt"
+      bind:this={inlinePromptEl}
+      style={`left:${inlinePromptX}px; top:${inlinePromptY}px;`}
+    >
+      <div class="inline-agent-head">
+        <strong>선택 텍스트 AI 수정</strong>
+        <span>{selectedPreviewText()}</span>
+      </div>
+      <textarea
+        class="inline-agent-input"
+        bind:this={inlinePromptInputEl}
+        bind:value={inlinePromptInstruction}
+        placeholder='예: "좀 더 길게", "좀 더 구체적으로"'
+        onkeydown={handleInlinePromptKeydown}
+      ></textarea>
+      {#if inlinePromptError}
+        <div class="inline-agent-error">{inlinePromptError}</div>
+      {/if}
+      <div class="inline-agent-actions">
+        <button type="button" class="inline-btn secondary" onclick={closeInlinePrompt} disabled={inlinePromptBusy}>
+          취소
+        </button>
+        <button type="button" class="inline-btn primary" onclick={submitInlinePrompt} disabled={inlinePromptBusy}>
+          {inlinePromptBusy ? "처리 중..." : "적용"}
+        </button>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -831,5 +1000,102 @@
   .word-editor :global(.ProseMirror sub) {
     vertical-align: sub;
     font-size: 0.75em;
+  }
+
+  .inline-agent-prompt {
+    position: fixed;
+    width: min(360px, calc(100vw - 24px));
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    background: color-mix(in srgb, var(--color-surface-elevated) 94%, #0f172a);
+    box-shadow: 0 18px 34px rgba(2, 6, 23, 0.28);
+    z-index: 1600;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .inline-agent-head {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+
+  .inline-agent-head strong {
+    font-size: 12px;
+    color: var(--color-text);
+  }
+
+  .inline-agent-head span {
+    font-size: 11px;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .inline-agent-input {
+    width: 100%;
+    min-height: 72px;
+    max-height: 140px;
+    resize: vertical;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-size: 12px;
+    line-height: 1.45;
+    padding: 8px 10px;
+    outline: none;
+  }
+
+  .inline-agent-input:focus {
+    border-color: color-mix(in srgb, var(--color-primary) 65%, var(--color-border));
+  }
+
+  .inline-agent-error {
+    font-size: 11px;
+    color: #ef4444;
+  }
+
+  .inline-agent-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  .inline-btn {
+    border-radius: 7px;
+    border: 1px solid transparent;
+    padding: 6px 10px;
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .inline-btn.secondary {
+    border-color: var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .inline-btn.secondary:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+  }
+
+  .inline-btn.primary {
+    background: var(--color-primary);
+    color: #ffffff;
+  }
+
+  .inline-btn.primary:hover:not(:disabled) {
+    background: var(--color-primary-hover);
+  }
+
+  .inline-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
   }
 </style>

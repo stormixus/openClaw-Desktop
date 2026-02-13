@@ -11,6 +11,7 @@ export default {
   "nav.home": "Home",
   "nav.chat": "Chat",
   "nav.forge": "Forge",
+  "nav.games": "Games",
   "nav.settings": "Settings",
   "nav.onboarding": "Onboarding",
 
@@ -150,6 +151,17 @@ export default {
   "forge.ai_suggestions": "AI Suggestions",
   "forge.change_history": "Change History",
   "forge.session_active": "Forge Session Active",
+
+  // Games
+  "games.title": "Games",
+  "games.slogan": "Play games with AI agents and waste your tokens",
+  "games.play": "Play Now",
+  "games.badge.playable": "Playable",
+  "games.badge.soon": "Coming Soon",
+  "games.more.title": "More Games",
+  "games.more.desc": "New games are being developed. Stay tuned!",
+  "games.store.title": "Game Store",
+  "games.store.desc": "Download and install community games. Coming in a future update.",
 
   // Tool Output
   "tool.expand": "Expand",

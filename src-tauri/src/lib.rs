@@ -356,6 +356,8 @@ pub fn run() {
             document::commands::doc_get_pdf_bytes,
             document::commands::doc_pdf_ocr_extract,
             document::commands::doc_pdf_ocr_layout,
+            document::commands::doc_ocr_list_langs,
+            document::commands::doc_ocr_ensure_langs,
             document::commands::doc_pdf_export_overlay,
             document::commands::doc_save_text_as_docx,
             document::commands::doc_stage_patch,

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy, onMount } from "svelte";
   import { t } from "$lib/i18n";
   import { invoke } from '@tauri-apps/api/core';
   import {
@@ -45,7 +46,7 @@
   import ApprovalModal from "$lib/components/Document/ApprovalModal.svelte";
   import ChatPanel from "$lib/components/Chat/ChatPanel.svelte";
   import { pdfEditorStore } from "$lib/stores/pdfEditor.svelte";
-  import type { PdfBlock } from "$lib/types/pdfEditor";
+  import type { PdfLayoutResultRaw } from "$lib/types/pdfEditor";
 
   // Derived state
   const activeDoc = $derived(docStore.activeDocument);
@@ -62,6 +63,8 @@
   let pendingTextContent = $state<string | null>(null);
   let textSyncTimer = $state<ReturnType<typeof setTimeout> | null>(null);
   let isTextSyncing = $state(false);
+  let isFileDragOver = $state(false);
+  let fileDragDepth = $state(0);
 
   // PDF OCR editing state
   let pdfOcrMode = $state(false);
@@ -69,15 +72,64 @@
   let pdfOcrLoading = $state(false);
 
   // PDF AI editing state
-  let pdfSelectedBlock = $state<PdfBlock | null>(null);
   let pendingRewriteBlockId = $state<string | null>(null);
+  type InlineRewritePending = {
+    requestId: string;
+    baseAssistantCount: number;
+    timeoutId: ReturnType<typeof setTimeout>;
+    resolve: (value: string) => void;
+    reject: (error: Error) => void;
+  };
+  let pendingInlineRewrite = $state<InlineRewritePending | null>(null);
   let prevIsStreaming = $state(false);
 
   const CHAT_PANE_MIN = 360;
-  const CHAT_PANE_MAX_RATIO = 0.72;
+  const CHAT_PANE_MAX_RATIO = 0.52;
   const MOBILE_BREAKPOINT = 980;
   const WORD_RICH_MAX_HTML = 1_500_000;
   const OPEN_DOC_TIMEOUT_MS = 15_000;
+  const INLINE_REWRITE_TIMEOUT_MS = 90_000;
+  const DOC_WINDOW_TARGET_WIDTH = 1720;
+  const DOC_WINDOW_TARGET_HEIGHT = 1040;
+  const DOC_WINDOW_EDGE_MARGIN = 64;
+  const WINDOW_RESIZE_ANIM_MS = 240;
+  const WINDOW_RESIZE_FRAME_MS = 16;
+  const SUPPORTED_DROP_EXTENSIONS = new Set([
+    "xlsx",
+    "xls",
+    "csv",
+    "ods",
+    "txt",
+    "md",
+    "markdown",
+    "json",
+    "pdf",
+    "docx",
+    "doc",
+    "hwp",
+    "hwpx",
+    "pptx",
+    "ppt",
+  ]);
+
+  type WindowApiRef = {
+    appWindow: any;
+    LogicalSize: new (width: number, height: number) => any;
+    currentMonitor: () => Promise<any>;
+  };
+
+  type WindowSnapshot = {
+    width: number;
+    height: number;
+    maximized: boolean;
+  };
+
+  let windowApi = $state<WindowApiRef | null>(null);
+  let windowBeforeDoc = $state<WindowSnapshot | null>(null);
+  let didAutoResizeWindow = $state(false);
+  let windowResizeSeq = 0;
+  let prevDocIdForWindow = $state<string | null>(null);
+  let unlistenNativeFileDrop: (() => void) | null = null;
 
   function htmlToPlainText(input: string): string {
     if (!input) return "";
@@ -98,6 +150,244 @@
       .trim();
   }
 
+  function normalizeDroppedPath(raw: string | null | undefined): string | null {
+    if (!raw) return null;
+    const trimmed = raw.trim().replace(/^"+|"+$/g, "");
+    if (!trimmed) return null;
+
+    if (trimmed.startsWith("file://")) {
+      try {
+        const url = new URL(trimmed);
+        let path = decodeURIComponent(url.pathname);
+        if (/^\/[a-zA-Z]:\//.test(path)) {
+          path = path.slice(1); // Windows drive letter path
+        }
+        return path || null;
+      } catch {
+        return null;
+      }
+    }
+
+    return trimmed;
+  }
+
+  function isSupportedDroppedPath(path: string): boolean {
+    const ext = path.split(".").pop()?.toLowerCase() ?? "";
+    return SUPPORTED_DROP_EXTENSIONS.has(ext);
+  }
+
+  function extractDroppedPaths(e: DragEvent): string[] {
+    const paths = new Set<string>();
+    const dt = e.dataTransfer;
+    if (!dt) return [];
+
+    // 1) Native dropped files
+    if (dt.files && dt.files.length > 0) {
+      for (const file of Array.from(dt.files)) {
+        const fromPath = normalizeDroppedPath((file as File & { path?: string }).path);
+        if (fromPath) paths.add(fromPath);
+      }
+    }
+
+    // 2) URI list (file://...)
+    const uriList = dt.getData("text/uri-list");
+    if (uriList) {
+      for (const line of uriList.split(/\r?\n/)) {
+        if (!line || line.startsWith("#")) continue;
+        const path = normalizeDroppedPath(line);
+        if (path) paths.add(path);
+      }
+    }
+
+    // 3) Plain text path fallback
+    const plainText = dt.getData("text/plain");
+    if (plainText) {
+      for (const line of plainText.split(/\r?\n/)) {
+        const path = normalizeDroppedPath(line);
+        if (path) paths.add(path);
+      }
+    }
+
+    return [...paths];
+  }
+
+  function dragContainsFiles(dt: DataTransfer | null | undefined): boolean {
+    if (!dt) return false;
+    if (dt.files?.length) return true;
+    if (dt.items?.length > 0 && Array.from(dt.items).some((item) => item.kind === "file")) return true;
+
+    const types = dt.types;
+    if (!types) return false;
+
+    const maybeDomStringList = types as unknown as { contains?: (value: string) => boolean };
+    if (typeof maybeDomStringList.contains === "function") {
+      return maybeDomStringList.contains("Files");
+    }
+    return Array.from(types).includes("Files");
+  }
+
+  function toLogicalSize(width: number, height: number): { width: number; height: number } {
+    return {
+      width: Math.max(1, Math.round(width)),
+      height: Math.max(1, Math.round(height)),
+    };
+  }
+
+  function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  function nowMs(): number {
+    return typeof performance !== "undefined" ? performance.now() : Date.now();
+  }
+
+  function easeOutCubic(t: number): number {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  async function animateWindowSize(
+    api: WindowApiRef,
+    from: { width: number; height: number },
+    to: { width: number; height: number },
+    seq: number,
+  ): Promise<boolean> {
+    const start = toLogicalSize(from.width, from.height);
+    const end = toLogicalSize(to.width, to.height);
+
+    if (start.width === end.width && start.height === end.height) return true;
+
+    const { appWindow, LogicalSize } = api;
+    const startTime = nowMs();
+    let lastW = -1;
+    let lastH = -1;
+
+    while (true) {
+      if (seq !== windowResizeSeq) return false;
+
+      const elapsed = nowMs() - startTime;
+      const t = Math.min(1, elapsed / WINDOW_RESIZE_ANIM_MS);
+      const k = easeOutCubic(t);
+
+      const width = Math.round(start.width + (end.width - start.width) * k);
+      const height = Math.round(start.height + (end.height - start.height) * k);
+
+      if (width !== lastW || height !== lastH) {
+        await appWindow.setSize(new LogicalSize(width, height));
+        lastW = width;
+        lastH = height;
+      }
+
+      if (t >= 1) return true;
+      await sleep(WINDOW_RESIZE_FRAME_MS);
+    }
+  }
+
+  async function readWindowLogicalSize(api: WindowApiRef): Promise<{ width: number; height: number }> {
+    const scale = await api.appWindow.scaleFactor();
+    const physical = await api.appWindow.innerSize();
+    const logical = physical.toLogical(scale);
+    return toLogicalSize(logical.width, logical.height);
+  }
+
+  async function computeDocTargetSize(api: WindowApiRef): Promise<{ width: number; height: number }> {
+    let width = DOC_WINDOW_TARGET_WIDTH;
+    let height = DOC_WINDOW_TARGET_HEIGHT;
+
+    const monitor = await api.currentMonitor();
+    if (monitor?.workArea?.size && monitor.scaleFactor) {
+      const workW = monitor.workArea.size.width / monitor.scaleFactor;
+      const workH = monitor.workArea.size.height / monitor.scaleFactor;
+      const availableW = Math.max(420, workW - DOC_WINDOW_EDGE_MARGIN);
+      const availableH = Math.max(340, workH - DOC_WINDOW_EDGE_MARGIN);
+      const maxW = Math.floor(Math.min(workW, availableW));
+      const maxH = Math.floor(Math.min(workH, availableH));
+      width = Math.min(width, maxW);
+      height = Math.min(height, maxH);
+    }
+
+    return toLogicalSize(width, height);
+  }
+
+  async function resizeWindowForDocumentOpen(): Promise<void> {
+    if (!windowApi) return;
+    const seq = ++windowResizeSeq;
+
+    try {
+      const { appWindow, LogicalSize } = windowApi;
+      const isMaximized = await appWindow.isMaximized();
+      const current = await readWindowLogicalSize(windowApi);
+
+      if (!windowBeforeDoc) {
+        windowBeforeDoc = {
+          width: current.width,
+          height: current.height,
+          maximized: isMaximized,
+        };
+      }
+
+      if (isMaximized) {
+        didAutoResizeWindow = false;
+        return;
+      }
+
+      const target = await computeDocTargetSize(windowApi);
+      const next = toLogicalSize(
+        Math.max(current.width, target.width),
+        Math.max(current.height, target.height),
+      );
+
+      if (seq !== windowResizeSeq) return;
+      if (next.width === current.width && next.height === current.height) {
+        didAutoResizeWindow = false;
+        return;
+      }
+
+      const animated = await animateWindowSize(windowApi, current, next, seq);
+      if (!animated) return;
+      await appWindow.center().catch(() => {});
+      didAutoResizeWindow = true;
+    } catch {
+      // Ignore if not running in desktop shell.
+    }
+  }
+
+  async function restoreWindowAfterDocumentClose(): Promise<void> {
+    if (!windowApi || !windowBeforeDoc) return;
+    const seq = ++windowResizeSeq;
+    const snapshot = windowBeforeDoc;
+    windowBeforeDoc = null;
+
+    try {
+      const { appWindow } = windowApi;
+      const isMaximized = await appWindow.isMaximized();
+      if (seq !== windowResizeSeq) return;
+
+      if (snapshot.maximized) {
+        if (!isMaximized) {
+          await appWindow.maximize();
+        }
+        didAutoResizeWindow = false;
+        return;
+      }
+
+      if (isMaximized) {
+        await appWindow.unmaximize();
+      }
+
+      if (didAutoResizeWindow) {
+        const current = await readWindowLogicalSize(windowApi);
+        const target = toLogicalSize(snapshot.width, snapshot.height);
+        const animated = await animateWindowSize(windowApi, current, target, seq);
+        if (!animated) return;
+        await appWindow.center().catch(() => {});
+      }
+    } catch {
+      // Ignore window API failures.
+    } finally {
+      didAutoResizeWindow = false;
+    }
+  }
+
   // Gateway connection
   const activeGateway = $derived(gatewayStore.gateways.find(g => g.id === gatewayStore.activeGatewayId) ?? null);
   const activeGatewayState = $derived(gatewayStore.activeGatewayId ? gatewayStore.gatewayStates.get(gatewayStore.activeGatewayId) ?? null : null);
@@ -111,6 +401,86 @@
   const isMarkdownDoc = $derived(activeExtension === "md" || activeExtension === "markdown");
   const isJsonDoc = $derived(activeExtension === "json");
   const canSave = $derived(activeDoc ? activeDoc.docType !== "pdf" && activeDoc.docType !== "presentation" && !isLegacyDoc && !isHanwordDoc : false);
+
+  onMount(() => {
+    import("@tauri-apps/api/window").then((mod) => {
+      const appWindow = mod.getCurrentWindow();
+      windowApi = {
+        appWindow,
+        LogicalSize: mod.LogicalSize,
+        currentMonitor: mod.currentMonitor,
+      };
+
+      void appWindow.onDragDropEvent((event) => {
+        const payload = event.payload;
+        if (payload.type === "leave") {
+          fileDragDepth = 0;
+          isFileDragOver = false;
+          return;
+        }
+
+        const inChat = "position" in payload && isDropInsideChatAtPhysicalPosition(payload.position);
+        if (payload.type === "enter" || payload.type === "over") {
+          isFileDragOver = !inChat;
+          return;
+        }
+
+        if (payload.type === "drop") {
+          fileDragDepth = 0;
+          isFileDragOver = false;
+          if (!inChat) {
+            void handleDroppedPaths(payload.paths);
+          }
+        }
+      }).then((unlisten) => {
+        unlistenNativeFileDrop = unlisten;
+      }).catch(() => {
+        // If native drop listener is unavailable, HTML5 drag-drop handlers still apply.
+      });
+
+      if (activeDoc) {
+        void resizeWindowForDocumentOpen();
+      }
+    }).catch(() => {
+      // Running in browser preview / non-tauri environment.
+    });
+  });
+
+  onDestroy(() => {
+    if (unlistenNativeFileDrop) {
+      unlistenNativeFileDrop();
+      unlistenNativeFileDrop = null;
+    }
+    if (pendingInlineRewrite) {
+      clearTimeout(pendingInlineRewrite.timeoutId);
+      pendingInlineRewrite = null;
+    }
+    if (textSyncTimer) {
+      clearTimeout(textSyncTimer);
+      textSyncTimer = null;
+    }
+    if (windowBeforeDoc) {
+      void restoreWindowAfterDocumentClose();
+    }
+  });
+
+  $effect(() => {
+    const nextDocId = activeDoc?.id ?? null;
+    const prevDocId = prevDocIdForWindow;
+    prevDocIdForWindow = nextDocId;
+
+    if (nextDocId && !prevDocId) {
+      void resizeWindowForDocumentOpen();
+      return;
+    }
+    if (!nextDocId && prevDocId) {
+      void restoreWindowAfterDocumentClose();
+      return;
+    }
+    if (nextDocId && prevDocId && nextDocId !== prevDocId) {
+      void resizeWindowForDocumentOpen();
+    }
+  });
 
   function rowsToPlainText(rows: Array<Array<{ value: unknown }>> | undefined): string {
     if (!rows || rows.length === 0) return "";
@@ -203,6 +573,111 @@
     }
   }
 
+  type ForgeOpenedDocument = Awaited<ReturnType<typeof openDocument>>;
+
+  function applyForgeDocumentContext(doc: ForgeOpenedDocument): void {
+    if (doc.docType === "presentation") {
+      const fullContent = doc.sheets
+        .map((s) => (s.rows[0]?.[0]?.value as string) ?? "")
+        .join("\n---\n");
+      const excerpt = fullContent.slice(0, 2000);
+      setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
+      updateForgeContent(fullContent);
+      return;
+    }
+
+    const isWord = ["docx", "doc", "hwp", "hwpx"].some((ext) => doc.fileName.toLowerCase().endsWith(ext));
+    const fullContent = isWord
+      ? (doc.sheets[0]?.rows?.[0]?.[0]?.value as string) ?? ""
+      : doc.sheets[0]?.rows?.map((r) => r.map((c) => c.value ?? "").join("\t")).join("\n") ?? "";
+    const excerpt = fullContent.slice(0, 2000);
+    setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
+    updateForgeContent(fullContent);
+  }
+
+  async function openDocumentByPath(path: string): Promise<void> {
+    const doc = await Promise.race([
+      openDocument(path),
+      new Promise<null>((resolve) => {
+        setTimeout(() => resolve(null), OPEN_DOC_TIMEOUT_MS);
+      }),
+    ]);
+
+    if (!doc) {
+      docStore.isLoading = false;
+      openFileError = `문서 열기 시간이 초과되었습니다 (${Math.round(OPEN_DOC_TIMEOUT_MS / 1000)}초). 파일이 너무 복잡하거나 변환이 지연되고 있습니다.`;
+      return;
+    }
+
+    applyForgeDocumentContext(doc);
+  }
+
+  async function handleDroppedPaths(paths: string[]): Promise<void> {
+    openFileError = null;
+
+    const droppedPaths = paths
+      .map((path) => normalizeDroppedPath(path))
+      .filter((path): path is string => !!path)
+      .filter((path) => isSupportedDroppedPath(path));
+
+    if (droppedPaths.length === 0) {
+      openFileError = "지원되는 문서 파일이 아닙니다. (pdf/docx/hwp/xlsx/pptx/txt/md/json 등)";
+      return;
+    }
+
+    try {
+      await openDocumentByPath(droppedPaths[0]);
+    } catch (err: unknown) {
+      console.error("Failed to open dropped file:", err);
+      openFileError = err instanceof Error ? err.message : "드롭한 파일을 열지 못했습니다.";
+    }
+  }
+
+  function isDropInsideChatAtPhysicalPosition(position: { x: number; y: number } | null | undefined): boolean {
+    if (!position || typeof window === "undefined") return false;
+    const dpr = window.devicePixelRatio || 1;
+    const target = document.elementFromPoint(position.x / dpr, position.y / dpr) as HTMLElement | null;
+    return !!target?.closest(".chat-side");
+  }
+
+  function shouldHandleForgeDrop(e: DragEvent): boolean {
+    if (e.defaultPrevented) return false;
+    const target = e.target as HTMLElement | null;
+    if (target?.closest(".chat-side")) return false;
+    return dragContainsFiles(e.dataTransfer);
+  }
+
+  function handleForgeDragEnter(e: DragEvent): void {
+    if (!shouldHandleForgeDrop(e)) return;
+    e.preventDefault();
+    fileDragDepth += 1;
+    isFileDragOver = true;
+  }
+
+  function handleForgeDragOver(e: DragEvent): void {
+    if (!shouldHandleForgeDrop(e)) return;
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    isFileDragOver = true;
+  }
+
+  function handleForgeDragLeave(e: DragEvent): void {
+    if (!isFileDragOver) return;
+    e.preventDefault();
+    fileDragDepth = Math.max(0, fileDragDepth - 1);
+    if (fileDragDepth === 0) {
+      isFileDragOver = false;
+    }
+  }
+
+  async function handleForgeDrop(e: DragEvent): Promise<void> {
+    if (!shouldHandleForgeDrop(e)) return;
+    e.preventDefault();
+    fileDragDepth = 0;
+    isFileDragOver = false;
+    await handleDroppedPaths(extractDroppedPaths(e));
+  }
+
   // File opening logic
   async function handleOpenFile(filterType?: 'spreadsheet' | 'document' | 'presentation') {
     try {
@@ -232,35 +707,7 @@
       const selected = await open({ filters });
 
       if (selected && typeof selected === 'string') {
-        const doc = await Promise.race([
-          openDocument(selected),
-          new Promise<null>((resolve) => {
-            setTimeout(() => resolve(null), OPEN_DOC_TIMEOUT_MS);
-          })
-        ]);
-        if (!doc) {
-          docStore.isLoading = false;
-          openFileError = `문서 열기 시간이 초과되었습니다 (${Math.round(OPEN_DOC_TIMEOUT_MS / 1000)}초). 파일이 너무 복잡하거나 변환이 지연되고 있습니다.`;
-          return;
-        }
-        if (doc) {
-          if (doc.docType === 'presentation') {
-            const fullContent = doc.sheets.map(s =>
-              (s.rows[0]?.[0]?.value as string) ?? ""
-            ).join('\n---\n');
-            const excerpt = fullContent.slice(0, 2000);
-            setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
-            updateForgeContent(fullContent);
-          } else {
-            const isWord = ["docx","doc","hwp","hwpx"].some(ext => doc.fileName.toLowerCase().endsWith(ext));
-            const fullContent = isWord
-              ? (doc.sheets[0]?.rows?.[0]?.[0]?.value as string) ?? ""
-              : doc.sheets[0]?.rows?.map(r => r.map(c => c.value ?? '').join('\t')).join('\n') ?? "";
-            const excerpt = fullContent.slice(0, 2000);
-            setForgeDocument(doc.id, { name: doc.fileName, type: doc.docType, excerpt });
-            updateForgeContent(fullContent);
-          }
-        }
+        await openDocumentByPath(selected);
       }
     } catch (err: unknown) {
       console.error("Failed to open file dialog:", err);
@@ -329,7 +776,6 @@
       // Reset PDF state
       pdfOcrMode = false;
       pdfOcrText = "";
-      pdfSelectedBlock = null;
       setForgeDocument(null);
       await closeDocument(activeDoc.id);
     }
@@ -364,16 +810,165 @@
     }, 350);
   }
 
+  function assistantMessageCount(): number {
+    return gatewayStore.chatMessages.filter((msg) => msg.role === "assistant" && msg.content?.trim()).length;
+  }
+
+  function buildInlineRewritePrompt(instruction: string, selectedText: string): string {
+    return [
+      "아래 [선택 텍스트]를 [사용자 지시]대로 수정하세요.",
+      "반드시 수정된 최종 텍스트만 출력하세요.",
+      "설명, 따옴표, 코드블록 마크다운은 절대 포함하지 마세요.",
+      "",
+      "[사용자 지시]",
+      instruction,
+      "",
+      "[선택 텍스트]",
+      selectedText,
+    ].join("\n");
+  }
+
+  async function handleInlineRewrite(selectedText: string, instruction: string): Promise<string> {
+    const cleanText = selectedText.trim();
+    const cleanInstruction = instruction.trim();
+    if (!cleanText) throw new Error("선택된 텍스트가 없습니다.");
+    if (!cleanInstruction) throw new Error("명령을 입력해주세요.");
+    if (!gatewayStore.activeGatewayId) throw new Error("게이트웨이에 연결되어 있지 않습니다.");
+    if (gatewayStore.isStreaming || pendingRewriteBlockId || pendingInlineRewrite) {
+      throw new Error("다른 AI 작업이 진행 중입니다. 잠시 후 다시 시도해주세요.");
+    }
+
+    const prompt = buildInlineRewritePrompt(cleanInstruction, cleanText);
+    const requestId = crypto.randomUUID();
+    const baseAssistantCount = assistantMessageCount();
+
+    return await new Promise<string>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        if (!pendingInlineRewrite || pendingInlineRewrite.requestId !== requestId) return;
+        pendingInlineRewrite = null;
+        reject(new Error("AI 응답 시간이 초과되었습니다. 다시 시도해주세요."));
+      }, INLINE_REWRITE_TIMEOUT_MS);
+
+      pendingInlineRewrite = {
+        requestId,
+        baseAssistantCount,
+        timeoutId,
+        resolve,
+        reject,
+      };
+
+      sendMessage(prompt).catch((err: unknown) => {
+        if (pendingInlineRewrite?.requestId === requestId) {
+          clearTimeout(timeoutId);
+          pendingInlineRewrite = null;
+        }
+        reject(err instanceof Error ? err : new Error("AI 요청 전송에 실패했습니다."));
+      });
+    });
+  }
+
+  function collectOcrLayoutText(layout: PdfLayoutResultRaw): string {
+    const sorted = [...layout.lines].sort((a, b) => {
+      if (a.page !== b.page) return a.page - b.page;
+      if (Math.abs(a.bbox.y - b.bbox.y) > 1) return a.bbox.y - b.bbox.y;
+      return a.bbox.x - b.bbox.x;
+    });
+    const byPage = new Map<number, string[]>();
+    for (const line of sorted) {
+      const text = (line.text ?? "").trim();
+      if (!text) continue;
+      if (!byPage.has(line.page)) byPage.set(line.page, []);
+      byPage.get(line.page)!.push(text);
+    }
+    return [...byPage.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([, lines]) => lines.join("\n"))
+      .join("\n\n")
+      .trim();
+  }
+
+  async function extractPdfTextViaRasterOcr(
+    sessionId: string,
+    lang: string,
+    tessdataDir: string | null,
+  ): Promise<string> {
+    const [{ default: workerSrc }, pdfjs] = await Promise.all([
+      import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+      import("pdfjs-dist"),
+    ]);
+    (pdfjs as any).GlobalWorkerOptions.workerSrc = workerSrc;
+
+    const bytes = await invoke<number[] | Uint8Array>("doc_get_pdf_bytes", { id: sessionId });
+    const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    const loadingTask = (pdfjs as any).getDocument({ data });
+    const pdfDoc = await loadingTask.promise;
+
+    try {
+      const OCR_SCALE = 300 / 72;
+      const pageImages: string[] = [];
+      const pageHeights: number[] = [];
+
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const page = await pdfDoc.getPage(i);
+        const viewport = page.getViewport({ scale: OCR_SCALE });
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        const ctx = canvas.getContext("2d");
+        if (!ctx) continue;
+        await page.render({ canvasContext: ctx, viewport }).promise;
+        pageImages.push(canvas.toDataURL("image/png"));
+        pageHeights.push(canvas.height);
+      }
+
+      if (pageImages.length === 0) return "";
+
+      const layout = await invoke<PdfLayoutResultRaw>("doc_pdf_ocr_layout", {
+        id: sessionId,
+        lang,
+        tessdataDir,
+        pageHeights,
+        pageImages,
+      });
+      return collectOcrLayoutText(layout);
+    } finally {
+      if (pdfDoc?.destroy) await pdfDoc.destroy();
+    }
+  }
+
   // PDF OCR editing
   async function handlePdfOcrEdit() {
     if (!activeDoc || activeDoc.docType !== 'pdf') return;
     pdfOcrLoading = true;
     try {
-      const text = await invoke<string>('doc_pdf_ocr_extract', {
-        id: activeDoc.id,
-        lang: null,
-        tessdataDir: null,
-      });
+      const langs = ["kor", "eng"];
+      const lang = langs.join("+");
+
+      let effectiveTessdataDir: string | null = null;
+      try {
+        effectiveTessdataDir = await invoke<string>("doc_ocr_ensure_langs", { langs });
+      } catch (e) {
+        console.warn("Failed to auto-prepare OCR language data:", e);
+      }
+
+      let text = "";
+      try {
+        text = await invoke<string>("doc_pdf_ocr_extract", {
+          id: activeDoc.id,
+          lang,
+          tessdataDir: effectiveTessdataDir,
+        });
+      } catch (directErr) {
+        console.warn("Direct PDF OCR extract failed, falling back to page-image OCR:", directErr);
+      }
+
+      if (!text.trim()) {
+        text = await extractPdfTextViaRasterOcr(activeDoc.id, lang, effectiveTessdataDir);
+      }
+      if (!text.trim()) {
+        throw new Error("OCR 결과가 비어 있습니다. 언어 데이터/스캔 품질을 확인해주세요.");
+      }
+
       pdfOcrText = text;
       pdfOcrMode = true;
       // Update forge context with OCR text for agent awareness
@@ -412,15 +1007,6 @@
     }
   }
 
-  // PDF AI block selection handler
-  function handlePdfBlockSelect(block: PdfBlock | null) {
-    pdfSelectedBlock = block;
-    if (block) {
-      const blockContext = `[Selected PDF block (${block.kind}), page ${block.page}]:\n${block.text}`;
-      updateForgeContent(blockContext);
-    }
-  }
-
   // PDF AI Rewrite handler
   function handlePdfAiRewrite(blockId: string, text: string) {
     if (!gatewayStore.activeGatewayId) {
@@ -450,6 +1036,27 @@
     prevIsStreaming = streaming;
   });
 
+  $effect(() => {
+    const pending = pendingInlineRewrite;
+    const streaming = gatewayStore.isStreaming;
+    const messages = gatewayStore.chatMessages;
+    if (!pending || streaming) return;
+
+    const assistants = messages.filter((msg) => msg.role === "assistant" && msg.content?.trim());
+    if (assistants.length <= pending.baseAssistantCount) return;
+
+    const latest = assistants[assistants.length - 1];
+    clearTimeout(pending.timeoutId);
+    pendingInlineRewrite = null;
+
+    const rewritten = latest.content?.trim();
+    if (!rewritten) {
+      pending.reject(new Error("AI 응답이 비어 있습니다. 다시 시도해주세요."));
+      return;
+    }
+    pending.resolve(rewritten);
+  });
+
   // PDF Export handler
   async function handlePdfExport() {
     const state = pdfEditorStore.exportState();
@@ -463,15 +1070,147 @@
       });
       if (!savePath) return;
 
-      const blocks = Object.values(state.blocks).map(b => ({
-        id: b.id,
-        page: b.page,
-        bbox: b.bbox,
-      }));
+      const adjustmentById = new Map<string, { dx: number; dy: number; dw: number; dh: number }>();
+      for (const op of state.ops) {
+        if (!("targetId" in op)) continue;
+        const prev = adjustmentById.get(op.targetId) ?? { dx: 0, dy: 0, dw: 0, dh: 0 };
+        if (op.t === "move") {
+          prev.dx += op.dx;
+          prev.dy += op.dy;
+        } else if (op.t === "resize") {
+          prev.dw += op.dw;
+          prev.dh += op.dh;
+        }
+        adjustmentById.set(op.targetId, prev);
+      }
+
+      const blocks = Object.values(state.blocks).map((b) => {
+        const adj = adjustmentById.get(b.id) ?? { dx: 0, dy: 0, dw: 0, dh: 0 };
+        return {
+          id: b.id,
+          page: b.page,
+          bbox: {
+            x: b.bbox.x + adj.dx,
+            y: b.bbox.y + adj.dy,
+            w: Math.max(8, b.bbox.w + adj.dw),
+            h: Math.max(8, b.bbox.h + adj.dh),
+          },
+          fontSize: b.fontSize,
+          bgColor: b.bgColor,
+          fontName: b.fontName,
+        };
+      });
+      const blockById = new Map(blocks.map((block) => [block.id, block]));
+
+      const wrapMeasuredText = (
+        ctx: CanvasRenderingContext2D,
+        text: string,
+        maxWidth: number,
+      ): string[] => {
+        if (maxWidth <= 1) return text.split(/\r?\n/);
+        const wrapped: string[] = [];
+        for (const paragraph of text.split(/\r?\n/)) {
+          if (paragraph.length === 0) {
+            wrapped.push("");
+            continue;
+          }
+          let line = "";
+          for (const ch of Array.from(paragraph)) {
+            const next = line + ch;
+            if (line && ctx.measureText(next).width > maxWidth) {
+              wrapped.push(line);
+              line = ch;
+            } else {
+              line = next;
+            }
+          }
+          wrapped.push(line);
+        }
+        return wrapped.length > 0 ? wrapped : [text];
+      };
+
+      const createTextRasterJpeg = (
+        text: string,
+        width: number,
+        height: number,
+        bgColor?: string,
+        preferredFontSize?: number,
+      ): { dataUrl: string; width: number; height: number } | null => {
+        if (!text.trim()) return null;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(8, Math.ceil(width));
+        canvas.height = Math.max(8, Math.ceil(height));
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return null;
+
+        const padding = 1;
+        const maxW = Math.max(1, canvas.width - padding * 2);
+        const maxH = Math.max(1, canvas.height - padding * 2);
+        const lineHeightFactor = 1.1;
+
+        ctx.fillStyle = bgColor ?? "#ffffff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const preferred = typeof preferredFontSize === "number" && Number.isFinite(preferredFontSize)
+          ? preferredFontSize
+          : null;
+        let fontSize = preferred
+          ? Math.max(6, Math.min(72, preferred))
+          : Math.max(8, Math.min(46, canvas.height * 0.9));
+        let lines: string[] = [];
+        const recompute = () => {
+          ctx.font = `${fontSize}px system-ui, -apple-system, sans-serif`;
+          lines = wrapMeasuredText(ctx, text, maxW);
+        };
+        const fits = (): boolean => lines.length * fontSize * lineHeightFactor <= maxH + 0.5;
+        recompute();
+        while (fontSize > 6 && !fits()) {
+          fontSize -= 0.5;
+          recompute();
+        }
+
+        ctx.font = `${fontSize}px system-ui, -apple-system, sans-serif`;
+        ctx.fillStyle = "#111827";
+        ctx.textBaseline = "top";
+        const lineHeight = fontSize * lineHeightFactor;
+        let y = padding;
+        for (const line of lines) {
+          if (y + lineHeight > canvas.height + 0.5) break;
+          ctx.fillText(line, padding, y);
+          y += lineHeight;
+        }
+
+        return {
+          dataUrl: canvas.toDataURL("image/jpeg", 0.94),
+          width: canvas.width,
+          height: canvas.height,
+        };
+      };
+
+      const exportOps: any[] = state.ops.map((op) => {
+        if (op.t !== "replaceText") return op;
+        const block = blockById.get(op.targetId);
+        const source = state.blocks[op.targetId];
+        if (!block || !source) return op;
+        const raster = createTextRasterJpeg(
+          op.text,
+          block.bbox.w,
+          block.bbox.h,
+          source.bgColor,
+          op.fontSize,
+        );
+        if (!raster) return op;
+        return {
+          ...op,
+          rasterJpeg: raster.dataUrl,
+          rasterWidth: raster.width,
+          rasterHeight: raster.height,
+        };
+      });
 
       await invoke('doc_pdf_export_overlay', {
         id: activeDoc.id,
-        ops: state.ops,
+        ops: exportOps,
         blocks,
         pageHeights: state.pageHeights,
         outputPath: savePath,
@@ -545,7 +1284,17 @@
   onresize={handleWindowResize}
 />
 
-<div class="forge-page" class:resizing-pane={isResizingPane}>
+<div
+  class="forge-page"
+  role="main"
+  aria-label="Forge workspace"
+  class:resizing-pane={isResizingPane}
+  class:file-drag-over={isFileDragOver}
+  ondragenter={handleForgeDragEnter}
+  ondragover={handleForgeDragOver}
+  ondragleave={handleForgeDragLeave}
+  ondrop={handleForgeDrop}
+>
   {#if activeDoc}
     <!-- Document View Mode -->
     <div class="toolbar">
@@ -638,7 +1387,12 @@
       </div>
     </div>
 
-    <div class="workspace" bind:this={workspaceEl}>
+    <div
+      class="workspace"
+      class:chat-open={chatOpen}
+      bind:this={workspaceEl}
+      style={`--chat-pane-width: ${chatPaneWidth}px;`}
+    >
       <div class="main-area">
         {#if isAgentEditing && activeDoc.docType !== 'presentation'}
           <div class="agent-editing-banner">
@@ -660,7 +1414,7 @@
               onchange={handlePdfOcrTextChange}
             />
           {:else}
-            <PdfViewer sessionId={activeDoc.id} onBlockSelect={handlePdfBlockSelect} onAiRewrite={handlePdfAiRewrite} />
+            <PdfViewer sessionId={activeDoc.id} onAiRewrite={handlePdfAiRewrite} />
           {/if}
         {:else if activeDoc.docType === 'presentation'}
           <PptxViewer
@@ -676,6 +1430,7 @@
                 content={wordEditorContent}
                 editable={true}
                 onchange={handleTextChange}
+                onInlinePrompt={handleInlineRewrite}
               />
             {:else}
               <div class="word-fallback-banner">
@@ -685,6 +1440,7 @@
                 content={wordPlainFallbackContent}
                 editable={true}
                 onchange={handleTextChange}
+                onInlinePrompt={handleInlineRewrite}
               />
             {/if}
           {:else if isMarkdownDoc}
@@ -704,6 +1460,7 @@
               content={plainTextContent}
               editable={true}
               onchange={handleTextChange}
+              onInlinePrompt={handleInlineRewrite}
             />
           {/if}
         {:else}
@@ -721,7 +1478,7 @@
           aria-label="Resize chat panel"
           onmousedown={startPaneResize}
         ></button>
-        <div class="chat-side" style:width={`${chatPaneWidth}px`}>
+        <div class="chat-side">
           {#if isConnected}
             <ChatPanel />
           {:else if activeGateway}
@@ -861,6 +1618,16 @@
       onReject={handleRejectPatch}
     />
   {/if}
+
+  {#if isFileDragOver}
+    <div class="forge-drop-overlay">
+      <div class="forge-drop-content">
+        <Upload size={26} />
+        <strong>{$t("file.drop")}</strong>
+        <span>파일을 놓으면 Forge 편집기로 바로 열립니다.</span>
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -876,6 +1643,55 @@
   .forge-page.resizing-pane {
     cursor: col-resize;
     user-select: none;
+  }
+
+  .forge-page.file-drag-over {
+    background: color-mix(in srgb, var(--color-bg) 86%, rgba(99, 102, 241, 0.24));
+    transition: background 120ms var(--ease-out);
+  }
+
+  .forge-drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1200;
+    pointer-events: none;
+    background: rgba(15, 23, 42, 0.28);
+    border: 2px dashed rgba(99, 102, 241, 0.45);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(2px);
+    animation: forge-drop-in 140ms var(--ease-out);
+  }
+
+  .forge-drop-content {
+    min-width: 320px;
+    max-width: min(90vw, 560px);
+    margin: 16px;
+    padding: 20px 24px;
+    border-radius: 14px;
+    border: 1px solid rgba(129, 140, 248, 0.42);
+    background: rgba(15, 23, 42, 0.8);
+    color: #e2e8f0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+    box-shadow: 0 12px 36px rgba(2, 6, 23, 0.35);
+  }
+
+  .forge-drop-content strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: #c7d2fe;
+  }
+
+  .forge-drop-content span {
+    font-size: 12px;
+    color: #cbd5e1;
+    line-height: 1.45;
   }
 
   /* Toolbar */
@@ -1010,15 +1826,28 @@
   .workspace {
     flex: 1;
     display: flex;
+    position: relative;
     overflow: hidden;
+    min-height: 0;
   }
 
   .main-area {
     flex: 1;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     padding: 16px;
     background: var(--color-bg);
     position: relative;
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    transition: padding-right var(--duration-normal) var(--ease-out);
+  }
+
+  .workspace.chat-open .main-area {
+    padding-right: calc(var(--chat-pane-width, 520px) + 28px);
   }
 
   .agent-editing-banner {
@@ -1045,24 +1874,28 @@
   }
 
   .pane-resizer {
-    width: 8px;
+    width: 12px;
     cursor: col-resize;
-    flex-shrink: 0;
-    position: relative;
+    position: absolute;
+    top: 20px;
+    bottom: 20px;
+    right: calc(var(--chat-pane-width, 520px) + 10px);
     background: transparent;
     border: none;
     padding: 0;
+    z-index: 5;
   }
 
   .pane-resizer::before {
     content: "";
     position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 3px;
+    top: 10px;
+    bottom: 10px;
+    left: 5px;
     width: 2px;
     background: var(--color-border);
     transition: background var(--duration-fast) var(--ease-out);
+    border-radius: 999px;
   }
 
   .pane-resizer:hover::before,
@@ -1072,13 +1905,22 @@
 
   /* Chat Side Panel */
   .chat-side {
-    width: clamp(360px, 34vw, 520px);
-    flex-shrink: 0;
-    border-left: 1px solid var(--color-border);
-    background: var(--color-surface);
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    width: var(--chat-pane-width, 520px);
+    border: 1px solid var(--color-border);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--color-surface) 92%, transparent);
+    box-shadow: 0 18px 44px rgba(2, 6, 23, 0.2);
+    backdrop-filter: blur(7px);
     display: flex;
     flex-direction: column;
     min-height: 0;
+    overflow: hidden;
+    z-index: 4;
+    animation: chat-dock-in 180ms var(--ease-out);
   }
 
   .chat-status {
@@ -1399,7 +2241,12 @@
   @media (max-width: 980px) {
     .workspace,
     .landing-wrapper {
+      display: flex;
       flex-direction: column;
+    }
+
+    .workspace.chat-open .main-area {
+      padding-right: 16px;
     }
 
     .pane-resizer {
@@ -1407,8 +2254,12 @@
     }
 
     .chat-side {
+      position: static;
       width: 100% !important;
       height: 44vh;
+      border-radius: 0;
+      box-shadow: none;
+      backdrop-filter: none;
       border-left: none;
       border-top: 1px solid var(--color-border);
     }
@@ -1455,5 +2306,27 @@
   @keyframes spin {
     from { transform: rotate(0deg); }
     to { transform: rotate(360deg); }
+  }
+
+  @keyframes chat-dock-in {
+    from {
+      opacity: 0;
+      transform: translateX(14px) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  @keyframes forge-drop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.992);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 </style>

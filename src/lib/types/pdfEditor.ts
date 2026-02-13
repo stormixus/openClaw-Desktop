@@ -21,6 +21,7 @@ export interface PdfLine {
   wordIds: string[];
   bbox: BBox;
   text: string;
+  fontSize: number;
 }
 
 export interface PdfBlock {
@@ -30,11 +31,15 @@ export interface PdfBlock {
   lineIds: string[];
   bbox: BBox;
   text: string;
+  fontSize: number;
+  bgColor?: string;
+  fontName?: string;
 }
 
 export type Op =
   | { t: "move"; targetId: string; dx: number; dy: number }
-  | { t: "replaceText"; targetId: string; text: string }
+  | { t: "resize"; targetId: string; dw: number; dh: number }
+  | { t: "replaceText"; targetId: string; text: string; fontSize?: number }
   | { t: "delete"; targetId: string }
   | { t: "insertText"; page: number; at: { x: number; y: number }; text: string; fontSize?: number }
   | { t: "highlight"; page: number; rects: BBox[]; color?: string }
@@ -65,6 +70,7 @@ export interface PdfLayoutResultRaw {
     word_ids: string[];
     bbox: { x: number; y: number; w: number; h: number };
     text: string;
+    font_size: number;
   }>;
   blocks: Array<{
     id: string;
@@ -73,5 +79,6 @@ export interface PdfLayoutResultRaw {
     line_ids: string[];
     bbox: { x: number; y: number; w: number; h: number };
     text: string;
+    font_size: number;
   }>;
 }

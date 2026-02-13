@@ -9,6 +9,7 @@ use crate::document::formats::pptx::PptxAdapter;
 use crate::document::formats::pdf_layout;
 use crate::document::formats::pdf_export;
 use crate::document::formats::DocumentAdapter;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -336,6 +337,169 @@ fn resolve_tessdata_dir(app: &tauri::AppHandle, configured: Option<String>) -> O
     }
 
     None
+}
+
+#[tauri::command]
+pub async fn doc_ocr_ensure_langs(
+    app: tauri::AppHandle,
+    langs: Vec<String>,
+) -> Result<String, String> {
+    // Validate language codes
+    for lang in &langs {
+        if !lang.chars().all(|c| c.is_alphanumeric() || c == '_') {
+            return Err(format!("Invalid language code: {}", lang));
+        }
+    }
+
+    // First: check if system tessdata already has ALL needed languages.
+    // If so, return that path directly (no download, no override).
+    if let Some(system_dir) = resolve_tessdata_dir(&app, None) {
+        let all_exist = langs.iter().all(|lang| {
+            system_dir.join(format!("{}.traineddata", lang)).exists()
+        });
+        if all_exist {
+            return Ok(system_dir.to_string_lossy().to_string());
+        }
+    }
+
+    // System doesn't have all langs. Use app data dir for downloads.
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?;
+    let tessdata_dir = data_dir.join("tessdata");
+
+    std::fs::create_dir_all(&tessdata_dir)
+        .map_err(|e| format!("Failed to create tessdata dir: {}", e))?;
+
+    // Copy existing traineddata from system tessdata dir if available
+    if let Some(system_dir) = resolve_tessdata_dir(&app, None) {
+        if system_dir != tessdata_dir {
+            for lang in &langs {
+                let dest = tessdata_dir.join(format!("{}.traineddata", lang));
+                if dest.exists() {
+                    continue;
+                }
+                let src = system_dir.join(format!("{}.traineddata", lang));
+                if src.exists() {
+                    let _ = std::fs::copy(&src, &dest);
+                }
+            }
+        }
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(120))
+        .build()
+        .map_err(|e| format!("HTTP client error: {}", e))?;
+
+    for lang in &langs {
+        let traineddata_path = tessdata_dir.join(format!("{}.traineddata", lang));
+        if traineddata_path.exists() {
+            continue;
+        }
+
+        // Download from GitHub tessdata_fast (smaller, faster download)
+        let urls = [
+            format!(
+                "https://github.com/tesseract-ocr/tessdata_fast/raw/main/{}.traineddata",
+                lang
+            ),
+            format!(
+                "https://github.com/tesseract-ocr/tessdata/raw/main/{}.traineddata",
+                lang
+            ),
+        ];
+
+        let mut success = false;
+        for url in &urls {
+            match client.get(url).send().await {
+                Ok(response) if response.status().is_success() => {
+                    match response.bytes().await {
+                        Ok(bytes) if !bytes.is_empty() => {
+                            if let Ok(()) = std::fs::write(&traineddata_path, &bytes) {
+                                success = true;
+                                break;
+                            }
+                        }
+                        _ => continue,
+                    }
+                }
+                _ => continue,
+            }
+        }
+
+        if !success {
+            return Err(format!(
+                "Failed to download trained data for language '{}'",
+                lang
+            ));
+        }
+    }
+
+    Ok(tessdata_dir.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn doc_ocr_list_langs(
+    app: tauri::AppHandle,
+) -> Result<Vec<String>, String> {
+    let binary_path = resolve_tesseract_bin(&app, None);
+
+    let mut cmd = Command::new(&binary_path);
+    cmd.arg("--list-langs");
+
+    if let Some(dir) = resolve_tessdata_dir(&app, None) {
+        cmd.arg("--tessdata-dir").arg(dir);
+    }
+
+    let output = cmd
+        .output()
+        .map_err(|e| format!("Failed to execute tesseract --list-langs: {}", e))?;
+
+    // tesseract prints available languages to stderr (header line + one lang per line)
+    let raw = if output.status.success() {
+        String::from_utf8_lossy(&output.stderr).to_string()
+    } else {
+        // Some tesseract versions output to stdout instead
+        let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+        if stdout.trim().is_empty() {
+            return Err(format!(
+                "tesseract --list-langs failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ));
+        }
+        stdout
+    };
+
+    let mut lang_set: BTreeSet<String> = raw
+        .lines()
+        .skip(1) // skip header line ("List of available languages...")
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty() && l != "osd")
+        .collect();
+
+    // Merge downloaded app-local traineddata files so UI reflects languages
+    // that were auto-fetched via doc_ocr_ensure_langs.
+    if let Ok(data_dir) = app.path().app_data_dir() {
+        let tessdata_dir = data_dir.join("tessdata");
+        if let Ok(entries) = std::fs::read_dir(tessdata_dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("traineddata") {
+                    continue;
+                }
+                if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
+                    let lang = stem.trim();
+                    if !lang.is_empty() {
+                        lang_set.insert(lang.to_string());
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(lang_set.into_iter().collect())
 }
 
 #[tauri::command]

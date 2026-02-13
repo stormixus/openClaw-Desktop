@@ -38,10 +38,46 @@ import { db } from "$lib/db";
 
 const PROTOCOL_VERSION = 3;
 const RECONNECT_DELAYS = [1000, 2000, 4000, 8000, 16000, 30000];
+const UI_LOCALE_STORAGE_KEY = "openclaw.locale";
 
 type UnknownRecord = Record<string, unknown>;
 
 type EventCallback<T> = (data: T) => void;
+
+function normalizeLocale(raw?: string | null): string | null {
+  if (!raw) return null;
+  const normalized = raw.trim().replace(/_/g, "-");
+  if (!normalized) return null;
+  return normalized;
+}
+
+function resolveClientLocale(): string {
+  try {
+    if (typeof localStorage !== "undefined") {
+      const saved = normalizeLocale(localStorage.getItem(UI_LOCALE_STORAGE_KEY));
+      if (saved) {
+        if (saved === "ko") return "ko-KR";
+        if (saved === "en") return "en-US";
+        return saved;
+      }
+    }
+  } catch {
+    // Ignore storage access issues and continue with runtime locale detection.
+  }
+
+  if (typeof navigator !== "undefined") {
+    const candidates = [
+      ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+      navigator.language,
+    ];
+    for (const candidate of candidates) {
+      const normalized = normalizeLocale(candidate);
+      if (normalized) return normalized;
+    }
+  }
+
+  return "en-US";
+}
 
 export class GatewayClient {
   private ws: WebSocket | null = null;
@@ -551,7 +587,7 @@ export class GatewayClient {
       caps: [],
       auth,
       userAgent: "openclaw-desktop/0.1.0",
-      locale: navigator.language,
+      locale: resolveClientLocale(),
     };
     
     const connectRequest = {

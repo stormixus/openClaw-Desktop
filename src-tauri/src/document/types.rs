@@ -197,6 +197,7 @@ pub struct PdfLine {
     pub word_ids: Vec<String>,
     pub bbox: BBox,
     pub text: String,
+    pub font_size: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -207,6 +208,7 @@ pub struct PdfBlock {
     pub line_ids: Vec<String>,
     pub bbox: BBox,
     pub text: String,
+    pub font_size: f64,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { t } from "$lib/i18n";
-  import { Home, MessageSquare, Layers, Settings, Sparkles } from "@lucide/svelte";
+  import { Home, MessageSquare, Gamepad2, Layers, Settings, Sparkles } from "@lucide/svelte";
 
   interface NavItem {
     id: string;
@@ -13,6 +13,7 @@
   const navItems: NavItem[] = [
     { id: "home", icon: Home, labelKey: "nav.home", href: "/" },
     { id: "chat", icon: MessageSquare, labelKey: "nav.chat", href: "/chat" },
+    { id: "games", icon: Gamepad2, labelKey: "nav.games", href: "/games" },
     { id: "forge", icon: Layers, labelKey: "nav.forge", href: "/forge" },
     { id: "settings", icon: Settings, labelKey: "nav.settings", href: "/settings" },
   ];

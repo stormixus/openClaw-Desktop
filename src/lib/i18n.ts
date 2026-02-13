@@ -30,22 +30,76 @@ const STORAGE_KEY = "openclaw.locale";
 export const locales: Locale[] = Object.keys(dictionaries) as Locale[];
 export const locale = writable<Locale>(FALLBACK_LOCALE);
 
-function resolveLocale(raw?: string | null): Locale {
-  if (!raw) return FALLBACK_LOCALE;
-  const normalized = raw.toLowerCase();
-  if (normalized.startsWith("ko")) return "ko";
-  if (normalized.startsWith("en")) return "en";
+function isSupportedLocale(value: string): value is Locale {
+  return locales.includes(value as Locale);
+}
+
+function resolveLocale(raw?: string | null): Locale | null {
+  if (!raw) return null;
+
+  const normalized = raw
+    .trim()
+    .replace(/_/g, "-")
+    .toLowerCase();
+  if (!normalized) return null;
+
+  // Accept single locale tags or header-like values (e.g. "ko-KR,en-US;q=0.9").
+  const firstCandidate = normalized
+    .split(",")[0]
+    ?.split(";")[0]
+    ?.trim();
+  if (!firstCandidate) return null;
+
+  if (isSupportedLocale(firstCandidate)) return firstCandidate;
+  const base = firstCandidate.split("-")[0];
+  if (isSupportedLocale(base)) return base;
+
+  // Friendly fallback mapping for future locale-file expansion.
+  if (firstCandidate.startsWith("ko")) return "ko";
+  if (firstCandidate.startsWith("en")) return "en";
+  return null;
+}
+
+function detectBrowserLocale(): Locale {
+  const candidates: string[] = [];
+
+  if (browser) {
+    if (Array.isArray(navigator.languages)) {
+      candidates.push(...navigator.languages);
+    }
+    if (typeof navigator.language === "string" && navigator.language.trim()) {
+      candidates.push(navigator.language);
+    }
+  }
+
+  try {
+    const intlLocale = Intl.DateTimeFormat().resolvedOptions().locale;
+    if (intlLocale) candidates.push(intlLocale);
+  } catch {
+    // Ignore platform Intl failures and fall back below.
+  }
+
+  for (const candidate of candidates) {
+    const resolved = resolveLocale(candidate);
+    if (resolved) return resolved;
+  }
+
   return FALLBACK_LOCALE;
 }
 
 export function initLocale() {
   if (!browser) return;
-  const saved = localStorage.getItem(STORAGE_KEY);
+  const savedRaw = localStorage.getItem(STORAGE_KEY);
+  const saved = resolveLocale(savedRaw);
   if (saved) {
-    locale.set(resolveLocale(saved));
+    locale.set(saved);
     return;
   }
-  locale.set(resolveLocale(navigator.language));
+  if (savedRaw) {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  locale.set(detectBrowserLocale());
 }
 
 export function setLocale(next: Locale) {

@@ -11,6 +11,7 @@ export default {
   "nav.home": "홈",
   "nav.chat": "채팅",
   "nav.forge": "Forge",
+  "nav.games": "게임",
   "nav.settings": "설정",
   "nav.onboarding": "온보딩",
 
@@ -150,6 +151,17 @@ export default {
   "forge.ai_suggestions": "AI 제안",
   "forge.change_history": "변경 이력",
   "forge.session_active": "Forge 세션 활성",
+
+  // Games
+  "games.title": "게임",
+  "games.slogan": "AI 에이전트와 게임하고 토큰을 낭비하세요",
+  "games.play": "플레이",
+  "games.badge.playable": "플레이 가능",
+  "games.badge.soon": "출시 예정",
+  "games.more.title": "더 많은 게임",
+  "games.more.desc": "새로운 게임이 개발 중입니다. 기대해 주세요!",
+  "games.store.title": "게임 스토어",
+  "games.store.desc": "커뮤니티 게임을 다운로드하고 설치하세요. 향후 업데이트에서 제공 예정.",
 
   // Tool Output
   "tool.expand": "펼치기",
