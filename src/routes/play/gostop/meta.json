@@ -1,0 +1,7 @@
+{
+  "id": "gostop",
+  "emoji": "🎴",
+  "titleKey": "games.module.gostop.title",
+  "descKey": "games.module.gostop.desc",
+  "status": "playable"
+}

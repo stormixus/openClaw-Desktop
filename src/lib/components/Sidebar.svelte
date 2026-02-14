@@ -13,7 +13,7 @@
   const navItems: NavItem[] = [
     { id: "home", icon: Home, labelKey: "nav.home", href: "/" },
     { id: "chat", icon: MessageSquare, labelKey: "nav.chat", href: "/chat" },
-    { id: "games", icon: Gamepad2, labelKey: "nav.games", href: "/games" },
+    { id: "play", icon: Gamepad2, labelKey: "nav.play", href: "/play" },
     { id: "forge", icon: Layers, labelKey: "nav.forge", href: "/forge" },
     { id: "settings", icon: Settings, labelKey: "nav.settings", href: "/settings" },
   ];

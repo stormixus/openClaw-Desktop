@@ -1,0 +1,7 @@
+{
+  "id": "cube",
+  "emoji": "🧊",
+  "titleKey": "games.module.cube.title",
+  "descKey": "games.module.cube.desc",
+  "status": "playable"
+}

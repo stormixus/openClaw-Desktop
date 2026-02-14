@@ -1,0 +1,7 @@
+{
+  "id": "mines3d",
+  "emoji": "💣",
+  "titleKey": "games.module.mines3d.title",
+  "descKey": "games.module.mines3d.desc",
+  "status": "playable"
+}

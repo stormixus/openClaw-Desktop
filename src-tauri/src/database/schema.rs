@@ -61,4 +61,16 @@ CREATE TABLE IF NOT EXISTS npc_bg_paths (
     theme_id TEXT PRIMARY KEY,
     file_path TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS games (
+    id TEXT PRIMARY KEY,
+    emoji TEXT NOT NULL DEFAULT '',
+    title_key TEXT NOT NULL,
+    desc_key TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'playable',
+    source TEXT NOT NULL DEFAULT 'builtin',
+    visible INTEGER NOT NULL DEFAULT 1,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
 "#;

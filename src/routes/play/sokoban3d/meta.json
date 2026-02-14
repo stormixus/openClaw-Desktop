@@ -1,0 +1,7 @@
+{
+  "id": "sokoban3d",
+  "emoji": "📦",
+  "titleKey": "games.module.sokoban3d.title",
+  "descKey": "games.module.sokoban3d.desc",
+  "status": "playable"
+}

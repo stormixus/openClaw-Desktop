@@ -388,6 +388,11 @@ pub fn run() {
             database::themes::db_delete_custom_theme,
             database::themes::db_get_bg_path,
             database::themes::db_set_bg_path,
+            database::games::db_get_games,
+            database::games::db_upsert_game,
+            database::games::db_update_game_visibility,
+            database::games::db_update_game_orders,
+            database::games::db_seed_games,
             database::migration::db_migrate_from_json,
         ])
         .run(tauri::generate_context!())

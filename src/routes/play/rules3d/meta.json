@@ -1,0 +1,7 @@
+{
+  "id": "rules3d",
+  "emoji": "🧩",
+  "titleKey": "games.module.rules3d.title",
+  "descKey": "games.module.rules3d.desc",
+  "status": "playable"
+}

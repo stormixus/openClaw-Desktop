@@ -1,0 +1,7 @@
+{
+  "id": "lightsout",
+  "emoji": "💡",
+  "titleKey": "games.module.lightsout.title",
+  "descKey": "games.module.lightsout.desc",
+  "status": "playable"
+}

@@ -1,12 +1,7 @@
 {
   "version": "1.0.0",
-<<<<<<< Updated upstream
-  "lastScanned": 1770905795538,
+  "lastScanned": 1770991417266,
   "projectRoot": "/Volumes/MacExt/Projects/openClaw Desktop",
-=======
-  "lastScanned": 1770870032936,
-  "projectRoot": "/Volumes/MacExt/Projects/openClaw-Desktop",
->>>>>>> Stashed changes
   "techStack": {
     "languages": [
       {
@@ -82,31 +77,24 @@
   },
   "customNotes": [],
   "directoryMap": {
-<<<<<<< Updated upstream
-=======
     "build": {
       "path": "build",
       "purpose": "Build output",
-      "fileCount": 6,
-      "lastAccessed": 1770870032920,
+      "fileCount": 7,
+      "lastAccessed": 1770991417234,
       "keyFiles": [
+        "favicon-dark.png",
+        "favicon-light.png",
         "favicon.png",
         "index.html",
-        "svelte.svg",
-        "tauri.svg",
-        "vite.svg"
+        "svelte.svg"
       ]
     },
->>>>>>> Stashed changes
     "src": {
       "path": "src",
       "purpose": "Source code",
       "fileCount": 1,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770905795510,
-=======
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417237,
       "keyFiles": [
         "app.html"
       ]
@@ -114,13 +102,8 @@
     "src-tauri": {
       "path": "src-tauri",
       "purpose": null,
-<<<<<<< Updated upstream
       "fileCount": 5,
-      "lastAccessed": 1770905795510,
-=======
-      "fileCount": 6,
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417238,
       "keyFiles": [
         "Cargo.lock",
         "Cargo.toml",
@@ -131,13 +114,8 @@
     "static": {
       "path": "static",
       "purpose": "Static files",
-<<<<<<< Updated upstream
       "fileCount": 6,
-      "lastAccessed": 1770905795513,
-=======
-      "fileCount": 5,
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417238,
       "keyFiles": [
         "favicon-dark.png",
         "favicon-light.png",
@@ -150,11 +128,7 @@
       "path": "src/lib",
       "purpose": "Library code",
       "fileCount": 6,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770905795513,
-=======
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417238,
       "keyFiles": [
         "db.ts",
         "i18n.ts",
@@ -165,11 +139,7 @@
       "path": "src/routes",
       "purpose": "Route handlers",
       "fileCount": 3,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770905795513,
-=======
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417238,
       "keyFiles": [
         "+layout.svelte",
         "+layout.ts",
@@ -180,11 +150,7 @@
       "path": "src-tauri/src",
       "purpose": "Source code",
       "fileCount": 2,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770905795513,
-=======
-      "lastAccessed": 1770870032926,
->>>>>>> Stashed changes
+      "lastAccessed": 1770991417238,
       "keyFiles": [
         "lib.rs",
         "main.rs"
@@ -193,428 +159,304 @@
   },
   "hotPaths": [
     {
-<<<<<<< Updated upstream
-      "path": "src/lib/components/Document/ExcelGrid.svelte",
-      "accessCount": 137,
-      "lastAccessed": 1770912494653,
-=======
-      "path": "src-tauri/src/document/formats/hwp.rs",
-      "accessCount": 33,
-      "lastAccessed": 1770876254604,
->>>>>>> Stashed changes
-      "type": "file"
-    },
-    {
-      "path": "src/routes/forge/+page.svelte",
-<<<<<<< Updated upstream
-      "accessCount": 60,
-      "lastAccessed": 1770938766252,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/components/Forge/PdfViewer.svelte",
-      "accessCount": 46,
-      "lastAccessed": 1770938661511,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/commands.rs",
-      "accessCount": 21,
-      "lastAccessed": 1770938745009,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/lib.rs",
-      "accessCount": 20,
-      "lastAccessed": 1770914083605,
-=======
-      "accessCount": 31,
-      "lastAccessed": 1770884675120,
->>>>>>> Stashed changes
-      "type": "file"
-    },
-    {
-      "path": "src/lib/components/Forge/WordEditor.svelte",
-      "accessCount": 17,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770912493610,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/stores/pdfEditor.svelte.ts",
-      "accessCount": 11,
-      "lastAccessed": 1770938735807,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/formats/mod.rs",
-      "accessCount": 9,
-      "lastAccessed": 1770912390408,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/Cargo.toml",
-      "accessCount": 9,
-      "lastAccessed": 1770937989336,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/types.rs",
-      "accessCount": 8,
-      "lastAccessed": 1770912246158,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/formats/pdf_export.rs",
-      "accessCount": 7,
-      "lastAccessed": 1770938563358,
-=======
-      "lastAccessed": 1770877413137,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/commands.rs",
-      "accessCount": 14,
-      "lastAccessed": 1770884595500,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/gateway/store.svelte.ts",
-      "accessCount": 13,
-      "lastAccessed": 1770884190394,
->>>>>>> Stashed changes
-      "type": "file"
-    },
-    {
-      "path": "src/lib/stores/document.svelte.ts",
-<<<<<<< Updated upstream
-      "accessCount": 6,
-      "lastAccessed": 1770912776961,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/gateway/store.svelte.ts",
-      "accessCount": 5,
-      "lastAccessed": 1770938615177,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/types/pdfEditor.ts",
-      "accessCount": 5,
-      "lastAccessed": 1770938721407,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/formats/pdf_layout.rs",
-      "accessCount": 4,
-      "lastAccessed": 1770912247941,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/manager.rs",
-      "accessCount": 4,
-      "lastAccessed": 1770912252600,
-      "type": "file"
-    },
-    {
-      "path": "package.json",
-      "accessCount": 4,
-      "lastAccessed": 1770913389841,
-      "type": "file"
-    },
-    {
       "path": "",
-      "accessCount": 4,
-      "lastAccessed": 1770939838969,
+      "accessCount": 33,
+      "lastAccessed": 1771050106371,
       "type": "directory"
     },
     {
-      "path": "src/lib/components/Document/DocPreview.svelte",
-      "accessCount": 3,
-      "lastAccessed": 1770906792873,
-=======
-      "accessCount": 8,
-      "lastAccessed": 1770884150928,
+      "path": "src/lib/gateway/store.svelte.ts",
+      "accessCount": 14,
+      "lastAccessed": 1770998956918,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/docx.rs",
-      "accessCount": 8,
-      "lastAccessed": 1770884584862,
+      "path": "src/lib/games/chess/ChessBoard.svelte",
+      "accessCount": 13,
+      "lastAccessed": 1770994744616,
       "type": "file"
     },
     {
       "path": "src/lib/gateway/client.ts",
+      "accessCount": 11,
+      "lastAccessed": 1770998118823,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/mines3d/store/mines3dStore.ts",
+      "accessCount": 9,
+      "lastAccessed": 1770994546629,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/module.ts",
+      "accessCount": 9,
+      "lastAccessed": 1770995086592,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/registry.ts",
+      "accessCount": 8,
+      "lastAccessed": 1770995086324,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/checkers/engine.ts",
       "accessCount": 7,
-      "lastAccessed": 1770877459984,
->>>>>>> Stashed changes
+      "lastAccessed": 1770994530751,
       "type": "file"
     },
     {
-      "path": "src/lib/components/Forge/PptxViewer.svelte",
-<<<<<<< Updated upstream
-      "accessCount": 3,
-      "lastAccessed": 1770910475432,
-=======
+      "path": "src/lib/games/checkers/CheckersBoard.svelte",
+      "accessCount": 6,
+      "lastAccessed": 1770994372888,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/go3d/components/AgentPanel.svelte",
+      "accessCount": 6,
+      "lastAccessed": 1770994470409,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/janggi/module.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770995092945,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/go3d/module.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770995093280,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/checkers/module.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770995093719,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/mines3d/module.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770995094478,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/rules3d/module.ts",
+      "accessCount": 6,
+      "lastAccessed": 1770995094715,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/chess/module.ts",
       "accessCount": 5,
-      "lastAccessed": 1770884231225,
+      "lastAccessed": 1770995086881,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/types.rs",
+      "path": "gameplugin.md",
       "accessCount": 4,
-      "lastAccessed": 1770879868525,
+      "lastAccessed": 1770993275954,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/pptx.rs",
+      "path": "src/routes/games/+page.svelte",
       "accessCount": 4,
-      "lastAccessed": 1770880644576,
+      "lastAccessed": 1770994946509,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/mod.rs",
+      "path": "src/lib/games/janggi/engine.ts",
       "accessCount": 3,
-      "lastAccessed": 1770879873400,
+      "lastAccessed": 1770993802019,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document",
-      "accessCount": 2,
-      "lastAccessed": 1770871384305,
-      "type": "directory"
-    },
-    {
-      "path": "src/lib/components/Forge",
-      "accessCount": 2,
-      "lastAccessed": 1770871410836,
-      "type": "directory"
-    },
-    {
-      "path": "src/lib/components/Chat/ChatPanel.svelte",
-      "accessCount": 2,
-      "lastAccessed": 1770877674350,
->>>>>>> Stashed changes
-      "type": "file"
-    },
-    {
-      "path": "src",
-<<<<<<< Updated upstream
+      "path": "src/lib/mines3d/core/engine.ts",
       "accessCount": 3,
-      "lastAccessed": 1770910721829,
-      "type": "directory"
+      "lastAccessed": 1770994198876,
+      "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/pdf.rs",
+      "path": "src/routes/games/janggi/+page.svelte",
       "accessCount": 3,
-      "lastAccessed": 1770911044878,
+      "lastAccessed": 1770994944056,
       "type": "file"
     },
     {
-      "path": "src/lib/stores/fonts.svelte.ts",
+      "path": "src/routes/games/checkers/+page.svelte",
       "accessCount": 3,
-      "lastAccessed": 1770912459342,
+      "lastAccessed": 1770994944700,
       "type": "file"
     },
     {
-      "path": "src/lib/components/Forge/MarkdownEditor.svelte",
+      "path": "src/routes/games/go3d/+page.svelte",
+      "accessCount": 3,
+      "lastAccessed": 1770994945109,
+      "type": "file"
+    },
+    {
+      "path": "src/routes/games/rules3d/+page.svelte",
+      "accessCount": 3,
+      "lastAccessed": 1770994946027,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/janggi/JanggiBoard.svelte",
       "accessCount": 2,
-      "lastAccessed": 1770910477174,
+      "lastAccessed": 1770993799947,
       "type": "file"
     },
     {
-      "path": "src/lib/components/Forge/PlainTextEditor.svelte",
+      "path": "src/lib/games/checkers/state.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910477980,
+      "lastAccessed": 1770994191127,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/mod.rs",
+      "path": "src/lib/games/checkers/i18n.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910710804,
+      "lastAccessed": 1770994191365,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/error.rs",
+      "path": "src/lib/go3d/core/types.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910715638,
+      "lastAccessed": 1770994198694,
       "type": "file"
     },
     {
-      "path": "pdf-AI.md",
+      "path": "src/lib/mines3d/core/hints.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910718433,
+      "lastAccessed": 1770994199084,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/excel.rs",
+      "path": "src/lib/mines3d/core/types.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910724263,
+      "lastAccessed": 1770994199298,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/hwp.rs",
+      "path": "src/lib/games/chess/engine.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910724657,
+      "lastAccessed": 1770994199878,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/pptx.rs",
+      "path": "src/lib/go3d/components/HUD.svelte",
       "accessCount": 2,
-      "lastAccessed": 1770910725041,
+      "lastAccessed": 1770994201440,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/formats/docx.rs",
+      "path": "src/lib/go3d/core/goRules.ts",
       "accessCount": 2,
-      "lastAccessed": 1770910725372,
+      "lastAccessed": 1770994201698,
       "type": "file"
     },
     {
-      "path": "src-tauri/src",
+      "path": "src/lib/go3d/core/hints.ts",
       "accessCount": 2,
-      "lastAccessed": 1770912776527,
-      "type": "directory"
+      "lastAccessed": 1770994201905,
+      "type": "file"
     },
     {
-      "path": "task.md",
+      "path": "src/lib/go3d/core/puzzleEngine.ts",
       "accessCount": 2,
-      "lastAccessed": 1770939903111,
+      "lastAccessed": 1770994202427,
       "type": "file"
     },
     {
-      "path": "src/routes/forge/npc/+page.svelte",
-      "accessCount": 1,
-      "lastAccessed": 1770906042310,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/components/Document/ApprovalModal.svelte",
-      "accessCount": 1,
-      "lastAccessed": 1770906048975,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/components/Forge/JsonEditor.svelte",
-      "accessCount": 1,
-      "lastAccessed": 1770906052308,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/gateway/types.ts",
-      "accessCount": 1,
-      "lastAccessed": 1770906055090,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/lang/ko/index.ts",
-      "accessCount": 1,
-      "lastAccessed": 1770906056997,
-      "type": "file"
-    },
-    {
-      "path": "src/lib",
-      "accessCount": 1,
-      "lastAccessed": 1770910399716,
-      "type": "directory"
-    },
-    {
-      "path": "src/lib/components/FileUpload/PdfThumbnail.svelte",
-      "accessCount": 1,
-      "lastAccessed": 1770910709042,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/patch.rs",
-      "accessCount": 1,
-      "lastAccessed": 1770910713746,
-      "type": "file"
-    },
-    {
-      "path": "src/routes/Forge/+page.svelte",
-      "accessCount": 1,
-      "lastAccessed": 1770910723838,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/formats/xlsx_visuals.rs",
-      "accessCount": 1,
-      "lastAccessed": 1770910728509,
-      "type": "file"
-    },
-    {
-      "path": "tsconfig.json",
-      "accessCount": 1,
-      "lastAccessed": 1770911614031,
-=======
+      "path": "src/lib/go3d/core/sgf.ts",
       "accessCount": 2,
-      "lastAccessed": 1770877675436,
-      "type": "directory"
+      "lastAccessed": 1770994202569,
+      "type": "file"
     },
     {
-      "path": "src/lib/gateway/types.ts",
+      "path": "src/lib/go3d/puzzles/index.ts",
       "accessCount": 2,
-      "lastAccessed": 1770877765182,
+      "lastAccessed": 1770994202627,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/document/error.rs",
+      "path": "src/lib/rules3d/core/types.ts",
       "accessCount": 2,
-      "lastAccessed": 1770879858393,
->>>>>>> Stashed changes
+      "lastAccessed": 1770994204984,
       "type": "file"
     },
     {
-      "path": "src-tauri/src/lib.rs",
+      "path": "src/routes/games/chess/+page.svelte",
       "accessCount": 2,
-      "lastAccessed": 1770884600687,
+      "lastAccessed": 1770994943604,
       "type": "file"
     },
     {
-      "path": "src/lib/components/Document/ExcelGrid.svelte",
-      "accessCount": 1,
-<<<<<<< Updated upstream
-      "lastAccessed": 1770912769580,
-      "type": "directory"
-    },
-    {
-      "path": "src/lib/gateway",
-      "accessCount": 1,
-      "lastAccessed": 1770938611223,
-=======
-      "lastAccessed": 1770872193493,
+      "path": "src/routes/games/mines3d/+page.svelte",
+      "accessCount": 2,
+      "lastAccessed": 1770994945575,
       "type": "file"
-    },
-    {
-      "path": "src-tauri/src/database/gateways.rs",
-      "accessCount": 1,
-      "lastAccessed": 1770877459365,
-      "type": "file"
-    },
-    {
-      "path": "src-tauri/src/document/manager.rs",
-      "accessCount": 1,
-      "lastAccessed": 1770877460737,
-      "type": "file"
-    },
-    {
-      "path": "src/lib/components/Chat",
-      "accessCount": 1,
-      "lastAccessed": 1770877668081,
-      "type": "directory"
     },
     {
       "path": "src-tauri/Cargo.toml",
-      "accessCount": 1,
-      "lastAccessed": 1770879682380,
+      "accessCount": 2,
+      "lastAccessed": 1770996617009,
       "type": "file"
     },
     {
-      "path": "src-tauri/src",
+      "path": "package.json",
       "accessCount": 1,
-      "lastAccessed": 1770884583744,
->>>>>>> Stashed changes
-      "type": "directory"
+      "lastAccessed": 1770992059639,
+      "type": "file"
+    },
+    {
+      "path": "src-tauri/tauri.conf.json",
+      "accessCount": 1,
+      "lastAccessed": 1770992068243,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/chess/state.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770992980606,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/chess/board3d.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770992981461,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/chess/i18n.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770992981927,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/janggi/board3d.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770993758808,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/go3d/components/Go3DViewport.svelte",
+      "accessCount": 1,
+      "lastAccessed": 1770993759615,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/janggi/i18n.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770993759706,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/games/janggi/parser.ts",
+      "accessCount": 1,
+      "lastAccessed": 1770993760588,
+      "type": "file"
     }
   ],
   "userDirectives": []

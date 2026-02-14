@@ -1,0 +1,7 @@
+{
+  "id": "checkers",
+  "emoji": "⛀",
+  "titleKey": "games.module.checkers.title",
+  "descKey": "games.module.checkers.desc",
+  "status": "playable"
+}

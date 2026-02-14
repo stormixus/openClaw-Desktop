@@ -1,0 +1,7 @@
+{
+  "id": "nonogram3d",
+  "emoji": "🔢",
+  "titleKey": "games.module.nonogram3d.title",
+  "descKey": "games.module.nonogram3d.desc",
+  "status": "playable"
+}

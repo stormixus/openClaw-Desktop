@@ -242,6 +242,16 @@ export function getActiveClient(): GatewayClient | null {
   return store.activeGatewayId ? clients.get(store.activeGatewayId) ?? null : null;
 }
 
+/** Get a connected client by gateway ID (for multi-gateway features like Agent vs Agent) */
+export function getClientById(id: string): GatewayClient | null {
+  return clients.get(id) ?? null;
+}
+
+/** Get all currently connected gateway IDs */
+export function getConnectedGatewayIds(): string[] {
+  return [...clients.keys()];
+}
+
 // ============================================================================
 // Chat History (server-authoritative, matching official openClaw UI)
 // ============================================================================

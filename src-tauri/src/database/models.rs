@@ -82,6 +82,38 @@ pub struct NpcThemeRow {
     pub created_at: Option<i64>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GameRow {
+    pub id: String,
+    #[serde(default)]
+    pub emoji: String,
+    pub title_key: String,
+    pub desc_key: String,
+    #[serde(default = "default_game_status")]
+    pub status: String,
+    #[serde(default = "default_game_source")]
+    pub source: String,
+    #[serde(default = "default_visible")]
+    pub visible: bool,
+    #[serde(default)]
+    pub sort_order: i32,
+    #[serde(default)]
+    pub created_at: Option<i64>,
+}
+
+fn default_game_status() -> String {
+    "playable".to_string()
+}
+
+fn default_game_source() -> String {
+    "builtin".to_string()
+}
+
+fn default_visible() -> bool {
+    true
+}
+
 /// Payload sent from the frontend for one-time migration
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

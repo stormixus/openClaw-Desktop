@@ -1,0 +1,7 @@
+{
+  "id": "matgo",
+  "emoji": "🃏",
+  "titleKey": "games.module.matgo.title",
+  "descKey": "games.module.matgo.desc",
+  "status": "playable"
+}

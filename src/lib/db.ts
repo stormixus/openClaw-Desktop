@@ -83,6 +83,18 @@ export interface NpcThemeRow {
   createdAt?: number | null;
 }
 
+export interface GameRow {
+  id: string;
+  emoji: string;
+  titleKey: string;
+  descKey: string;
+  status: string;
+  source: string;
+  visible: boolean;
+  sortOrder: number;
+  createdAt?: number | null;
+}
+
 export interface BgPathEntry {
   themeId: string;
   filePath: string;
@@ -254,6 +266,39 @@ const lsFallback = {
       lsSet(`bgPath.${themeId}`, path);
     },
   },
+
+  games: {
+    list: async (): Promise<GameRow[]> => lsGet<GameRow[]>("games_registry", []),
+    upsert: async (game: GameRow) => {
+      const list = lsGet<GameRow[]>("games_registry", []);
+      const idx = list.findIndex((g) => g.id === game.id);
+      if (idx >= 0) list[idx] = game;
+      else list.push(game);
+      lsSet("games_registry", list);
+    },
+    updateVisibility: async (id: string, visible: boolean) => {
+      const list = lsGet<GameRow[]>("games_registry", []);
+      const g = list.find((x) => x.id === id);
+      if (g) g.visible = visible;
+      lsSet("games_registry", list);
+    },
+    updateOrders: async (updates: [string, number][]) => {
+      const list = lsGet<GameRow[]>("games_registry", []);
+      for (const [id, order] of updates) {
+        const g = list.find((x) => x.id === id);
+        if (g) g.sortOrder = order;
+      }
+      lsSet("games_registry", list);
+    },
+    seed: async (games: GameRow[]) => {
+      const existing = lsGet<GameRow[]>("games_registry", []);
+      const ids = new Set(existing.map((g) => g.id));
+      for (const g of games) {
+        if (!ids.has(g.id)) existing.push(g);
+      }
+      lsSet("games_registry", existing);
+    },
+  },
 };
 
 // ============================================================================
@@ -309,6 +354,16 @@ const tauriDb: DbApi = {
     get: (themeId) => tauriInvoke<string | null>("db_get_bg_path", { themeId }),
     set: (themeId, path) =>
       tauriInvoke("db_set_bg_path", { themeId, path }),
+  },
+
+  games: {
+    list: () => tauriInvoke<GameRow[]>("db_get_games"),
+    upsert: (game) => tauriInvoke("db_upsert_game", { game }),
+    updateVisibility: (id, visible) =>
+      tauriInvoke("db_update_game_visibility", { id, visible }),
+    updateOrders: (updates) =>
+      tauriInvoke("db_update_game_orders", { updates }),
+    seed: (games) => tauriInvoke("db_seed_games", { games }),
   },
 };
 

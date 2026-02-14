@@ -1,0 +1,7 @@
+{
+  "id": "slitherlink",
+  "emoji": "🔗",
+  "titleKey": "games.module.slitherlink.title",
+  "descKey": "games.module.slitherlink.desc",
+  "status": "playable"
+}

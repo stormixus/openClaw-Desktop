@@ -5,6 +5,7 @@ pub mod settings;
 pub mod identity;
 pub mod auth;
 pub mod themes;
+pub mod games;
 pub mod migration;
 
 use rusqlite::Connection;
