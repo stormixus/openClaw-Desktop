@@ -9,3 +9,7 @@ node_modules
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 openclaw-source
+.omc
+.vscode
+.claude
+.codex
