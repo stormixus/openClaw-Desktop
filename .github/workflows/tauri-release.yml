@@ -18,7 +18,7 @@ jobs:
             args: ""
           - platform: windows-latest
             args: ""
-          - platform: macos-13
+          - platform: macos-14
             args: "--target x86_64-apple-darwin"
           - platform: macos-14
             args: "--target aarch64-apple-darwin"
@@ -44,6 +44,10 @@ jobs:
 
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Add x86_64 Rust target for Intel macOS cross-compile
+        if: matrix.platform == 'macos-14' && contains(matrix.args, 'x86_64')
+        run: rustup target add x86_64-apple-darwin
 
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
