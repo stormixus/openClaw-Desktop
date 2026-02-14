@@ -13,3 +13,7 @@ openclaw-source
 .vscode
 .claude
 .codex
+
+# Docs/specs (keep only README.md)
+*.md
+!README.md
