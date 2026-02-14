@@ -17,6 +17,8 @@ export const rules3dStore = store;
 export function goToLevel(idx: number) {
   const clamped = Math.max(0, Math.min(idx, ALL_LEVELS.length - 1));
   levelIndex.set(clamped);
+  tokenHistory.set([]);
+  tokensUsed.set(0);
   store.set(loadLevel(ALL_LEVELS[clamped]));
 }
 
@@ -71,6 +73,8 @@ export function rulesText(state: ReturnType<typeof loadLevel>) {
 }
 
 export let agentLoading = writable(false);
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
 
 export async function askAgent() {
   const client = getActiveClient();
@@ -106,6 +110,9 @@ Analyze the position and give 2-3 sentences of advice. What rules should the pla
     }
 
     if (response) {
+      const est = Math.round(response.length * 1.3);
+      tokensUsed.update((n) => n + est);
+      tokenHistory.update((h) => [...h, est]);
       store.update((st) => ({ ...st, agentSpeech: response.slice(0, 300), agentMood: 'calm' }));
     }
   } catch (e) {

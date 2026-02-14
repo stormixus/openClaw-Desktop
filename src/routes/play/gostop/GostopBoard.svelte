@@ -3,12 +3,17 @@
   import { locale } from '$lib/i18n';
   import { store, getClientById } from '$lib/gateway/store.svelte';
   import { kt } from './i18n';
+  import { Zap } from '@lucide/svelte';
+  import TokenBarChart from '$lib/components/TokenBarChart.svelte';
   import {
     buildAgentPrompt,
     chooseProgramCard,
     chooseProgramGoStop,
     chooseProgramPendingMatch,
     createNewGame,
+    computePenalties,
+    detectBombs,
+    detectShakes,
     formatCard,
     getCurrentPlayer,
     getPlayerById,
@@ -21,6 +26,7 @@
     resolvePendingMatch,
     scoreState,
     sortCards,
+    totalShakeMultiplier,
     type CardKind,
     type GostopState,
     type HwatuCard,
@@ -29,7 +35,7 @@
     type PlayerSetup,
   } from './engine';
   import { clearGostopState, loadGostopState, saveGostopState } from './state';
-  import { playCardSlap, playCardFlip, playCapture, playDing, playTurnNotify, playGo, playStop, playWin, playLose } from './sounds';
+  import { playCardSlap, playCardFlip, playCapture, playCardMatch, playCardShuffle, playDing, playTurnNotify, playGo, playStop, playWin, playLose } from './sounds';
   import { getCardImageUrl } from './hwatu';
 
   type StartPreset =
@@ -58,7 +64,20 @@
   let preset = $state<StartPreset>('program-program-human');
   let speechMap = $state<Record<PlayerId, string>>(emptySpeechMap());
   let thinkingPlayerId = $state<PlayerId | null>(null);
+  let dealPhase = $state<'shuffle' | 'deal' | 'table' | 'deck' | null>(null);
   let missingCardArt = $state<Record<string, boolean>>({});
+  let tokensUsed = $state(0);
+  let tokenHistory = $state<number[]>([]);
+
+  interface CaptureImpact { played: HwatuCard; matched: HwatuCard }
+  let captureEffect = $state<CaptureImpact | null>(null);
+  let captureTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function triggerCaptureEffect(played: HwatuCard, matched: HwatuCard): void {
+    captureEffect = { played, matched };
+    if (captureTimer) clearTimeout(captureTimer);
+    captureTimer = setTimeout(() => { captureEffect = null; captureTimer = null; }, 380);
+  }
 
   let aiLoopRunning = false;
 
@@ -90,9 +109,19 @@
       !thinkingPlayerId,
     ),
   );
-  const subStatus = $derived(
-    game ? `${$kt('turn')}: ${game.turnNumber} · ${$kt('deck')}: ${game.deck.length}` : '',
-  );
+  const shakeMult = $derived(game ? totalShakeMultiplier(game) : 1);
+  const penalties = $derived(game ? computePenalties(game) : null);
+  const subStatus = $derived.by(() => {
+    if (!game) return '';
+    let s = `${$kt('turn')}: ${game.turnNumber} · ${$kt('deck')}: ${game.deck.length}`;
+    if (shakeMult > 1) s += ` · ${$kt('shake_multiplier')}${shakeMult}`;
+    if (game.winnerId && penalties) {
+      if (penalties.piBak.length) s += ` · ${$kt('pi_bak')}`;
+      if (penalties.gwangBak.length) s += ` · ${$kt('gwang_bak')}`;
+      if (penalties.multiplier > 1) s += ` · ${$kt('penalty_multiplier')}${penalties.multiplier}`;
+    }
+    return s;
+  });
   const statusText = $derived.by(() => {
     if (!game) return $kt('status_waiting_setup');
     if (game.winnerId === 'draw') return $kt('status_draw');
@@ -190,9 +219,50 @@
     if (!players) return;
 
     preset = nextPreset;
-    game = createNewGame(players);
+    const newGame = createNewGame(players);
+    game = newGame;
     thinkingPlayerId = null;
-    seedSpeechFromGame(game);
+    speechMap = emptySpeechMap();
+
+    dealPhase = 'shuffle';
+    void runDealAnimation(newGame);
+  }
+
+  async function runDealAnimation(newGame: GostopState): Promise<void> {
+    playCardShuffle();
+    await wait(900);
+
+    dealPhase = 'deal';
+    for (let i = 0; i < 21; i++) {
+      setTimeout(() => playCardFlip(), i * 55);
+    }
+    await wait(1400);
+
+    dealPhase = 'table';
+    for (let i = 0; i < 6; i++) {
+      setTimeout(() => playCardFlip(), i * 70);
+    }
+    await wait(700);
+
+    dealPhase = 'deck';
+    playCardSlap();
+    await wait(400);
+
+    dealPhase = null;
+    seedSpeechFromGame(newGame);
+
+    for (const player of newGame.players) {
+      const bombLog = newGame.log.find((l) => l.includes('BOMB') && l.includes(player.name));
+      const shakeLog = newGame.log.find((l) => l.includes('shakes') && l.includes(player.name));
+      if (bombLog && shakeLog) {
+        speechMap = { ...speechMap, [player.id]: `${$kt('bomb_speech')} & ${$kt('shake_speech')}` };
+      } else if (bombLog) {
+        speechMap = { ...speechMap, [player.id]: $kt('bomb_speech') };
+      } else if (shakeLog) {
+        speechMap = { ...speechMap, [player.id]: $kt('shake_speech') };
+      }
+    }
+
     clearGostopState();
   }
 
@@ -204,6 +274,8 @@
     game = null;
     thinkingPlayerId = null;
     speechMap = emptySpeechMap();
+    tokensUsed = 0;
+    tokenHistory = [];
     clearGostopState();
   }
 
@@ -242,14 +314,23 @@
   function handleTableCardClick(cardId: string): void {
     if (!game || !pendingForHuman) return;
     if (!isPendingMatch(cardId)) return;
+    const chosen = pendingForHuman.matches.find((c) => c.id === cardId);
+    if (chosen) triggerCaptureEffect(pendingForHuman.card, chosen);
     game = resolvePendingMatch(game, cardId);
-    playCapture();
+    playCardMatch();
   }
 
   function handleHumanHandClick(cardId: string): void {
     if (!game || !canPlayHand) return;
+    const card = getPlayerById(game, 'human').hand.find((c) => c.id === cardId);
+    const tableMatches = card ? game.table.filter((c) => c.month === card.month) : [];
     game = playTurnCard(game, cardId);
-    playCardSlap();
+    if (card && (tableMatches.length === 1 || tableMatches.length >= 3)) {
+      triggerCaptureEffect(card, tableMatches[0]);
+      playCardMatch();
+    } else {
+      playCardSlap();
+    }
   }
 
   async function requestAgentChoice(stateSnapshot: GostopState, actorId: PlayerId, options: string[]): Promise<string | null> {
@@ -277,6 +358,9 @@
           const assist = hist.find((entry: any) => entry.role === 'assistant');
           const content = typeof assist?.content === 'string' ? assist.content : '';
           if (content) {
+            const turnTokens = Math.round(content.length * 1.3);
+            tokensUsed += turnTokens;
+            tokenHistory = [...tokenHistory, turnTokens];
             return parseAgentChoice(content, options);
           }
         } catch {
@@ -313,6 +397,9 @@
           const assist = hist.find((entry: any) => entry.role === 'assistant');
           const content = typeof assist?.content === 'string' ? assist.content : '';
           if (content) {
+            const turnTokens = Math.round(content.length * 1.3);
+            tokensUsed += turnTokens;
+            tokenHistory = [...tokenHistory, turnTokens];
             return parseAgentGoStop(content);
           }
         } catch {
@@ -372,8 +459,14 @@
           if (!chosenId) break;
 
           const playedCard = actor.hand.find((card) => card.id === chosenId) ?? null;
+          const aiTableMatches = playedCard ? snapshot.table.filter((c) => c.month === playedCard.month) : [];
           game = playTurnCard(snapshot, chosenId);
-          playCardSlap();
+          if (playedCard && (aiTableMatches.length === 1 || aiTableMatches.length >= 3)) {
+            triggerCaptureEffect(playedCard, aiTableMatches[0]);
+            playCardMatch();
+          } else {
+            playCardSlap();
+          }
           speechMap = {
             ...speechMap,
             [actor.id]: playedCard
@@ -402,8 +495,9 @@
           if (!chosenMatchId) break;
 
           const chosenCard = snapshot.pendingChoice.matches.find((card) => card.id === chosenMatchId) ?? null;
+          if (chosenCard) triggerCaptureEffect(snapshot.pendingChoice.card, chosenCard);
           game = resolvePendingMatch(snapshot, chosenMatchId);
-          playCapture();
+          playCardMatch();
           speechMap = {
             ...speechMap,
             [actor.id]: chosenCard
@@ -423,7 +517,7 @@
   }
 
   $effect(() => {
-    if (!game || game.winnerId) return;
+    if (!game || game.winnerId || dealPhase) return;
     const actor = getCurrentPlayer(game);
     if (actor.role !== 'human' && !aiLoopRunning) {
       void driveAiTurns();
@@ -431,7 +525,7 @@
   });
 
   $effect(() => {
-    if (!game) return;
+    if (!game || dealPhase) return;
     if (game.winnerId) {
       if (game.winnerId === 'human') playWin();
       else playLose();
@@ -448,6 +542,7 @@
   }
 
   onDestroy(() => {
+    if (captureTimer) { clearTimeout(captureTimer); captureTimer = null; }
     if (game && !game.winnerId) saveGostopState(game);
     else clearGostopState();
   });
@@ -541,6 +636,41 @@
   {@const humanPlayer = getPlayerById(game, 'human')}
   <div class="board">
     <div class="felt-table">
+      {#if dealPhase}
+        <div class="deal-overlay">
+          <div class="deal-deck" class:shuffling={dealPhase === 'shuffle'} class:deck-settle={dealPhase === 'deck'}>
+            {#each Array(6) as _, i}
+              <div class="card-back card-sm shuffle-card" style="--si:{i}"></div>
+            {/each}
+          </div>
+
+          {#if dealPhase === 'deal' || dealPhase === 'table' || dealPhase === 'deck'}
+            <div class="deal-target deal-left-target">
+              {#each Array(7) as _, i}
+                <div class="card-back card-sm deal-fly" style="--delay:{i * 55}ms"></div>
+              {/each}
+            </div>
+            <div class="deal-target deal-right-target">
+              {#each Array(7) as _, i}
+                <div class="card-back card-sm deal-fly" style="--delay:{(7 + i) * 55}ms"></div>
+              {/each}
+            </div>
+            <div class="deal-target deal-human-target">
+              {#each Array(7) as _, i}
+                <div class="card-back card-sm deal-fly" style="--delay:{(14 + i) * 55}ms"></div>
+              {/each}
+            </div>
+          {/if}
+
+          {#if dealPhase === 'table' || dealPhase === 'deck'}
+            <div class="deal-target deal-table-target">
+              {#each Array(6) as _, i}
+                <div class="card-back card-sm deal-fly-table" style="--delay:{i * 70}ms"></div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {/if}
 
       <!-- ── Status Bar ── -->
       <header class="status-bar">
@@ -616,6 +746,27 @@
           </article>
         {/each}
       </div>
+
+      <!-- ── Capture Impact Effect ── -->
+      {#if captureEffect}
+        <div class="capture-impact">
+          <div class="impact-card impact-from-left">
+            {#if hasCardArt(captureEffect.played)}
+              <img src={cardArtSrc(captureEffect.played)} alt="" />
+            {:else}
+              <span class="impact-emoji">{monthEmoji(captureEffect.played.month)}</span>
+            {/if}
+          </div>
+          <div class="impact-card impact-from-right">
+            {#if hasCardArt(captureEffect.matched)}
+              <img src={cardArtSrc(captureEffect.matched)} alt="" />
+            {:else}
+              <span class="impact-emoji">{monthEmoji(captureEffect.matched.month)}</span>
+            {/if}
+          </div>
+          <div class="impact-flash"></div>
+        </div>
+      {/if}
 
       <!-- ── Field / Table Center ── -->
       <section class="field-area">
@@ -790,6 +941,15 @@
           <span class="log-entry log-empty">{$kt('no_log')}</span>
         {/if}
       </div>
+
+      <!-- ── Token Waste Chart ── -->
+      {#if tokenHistory.length > 0}
+        <div class="token-section">
+          <span class="section-label">{$kt('token_graph')}</span>
+          <div class="token-chart-wrap"><TokenBarChart data={tokenHistory} /></div>
+          <div class="token-total"><Zap size={11} /><span>{$kt('total')}: ~{tokensUsed.toLocaleString()} {$kt('tokens_wasted')}</span></div>
+        </div>
+      {/if}
 
     </div>
   </div>
@@ -1641,6 +1801,252 @@
 
   .log-empty {
     font-style: italic;
+  }
+
+  /* ── Token Section ── */
+  .token-section {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-felt-dim);
+  }
+
+  .token-chart-wrap {
+    height: 72px;
+    background: rgba(0,0,0,0.2);
+    border-radius: 8px;
+    overflow: visible;
+    padding: 6px 4px;
+  }
+
+  .token-total {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #fbbf24;
+    font-size: 11px;
+  }
+
+  /* ═══════════════════════════════════════════════
+     CAPTURE IMPACT EFFECT
+     ═══════════════════════════════════════════════ */
+  .capture-impact {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 50;
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .impact-card {
+    width: 54px;
+    height: 76px;
+    border-radius: 5px;
+    background: var(--cream);
+    border: 2px solid #c0302a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+    overflow: hidden;
+  }
+
+  .impact-card img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 3px;
+  }
+
+  .impact-emoji {
+    font-size: 22px;
+    line-height: 1;
+  }
+
+  .impact-from-left {
+    animation: slam-left 360ms ease-out forwards;
+    z-index: 2;
+  }
+
+  .impact-from-right {
+    animation: slam-right 360ms ease-out forwards;
+    z-index: 1;
+  }
+
+  .impact-flash {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(255, 215, 0, 0.7) 0%, transparent 70%);
+    animation: flash-burst 360ms ease-out forwards;
+    pointer-events: none;
+  }
+
+  @keyframes slam-left {
+    0% { transform: translateX(-40px) rotate(-12deg); opacity: 0.9; }
+    25% { transform: translateX(3px) rotate(2deg); opacity: 1; }
+    50% { transform: translateX(0) rotate(0); opacity: 1; }
+    100% { transform: translateX(0) rotate(0) scale(0.7); opacity: 0; }
+  }
+
+  @keyframes slam-right {
+    0% { transform: translateX(40px) rotate(12deg); opacity: 0.9; }
+    25% { transform: translateX(-3px) rotate(-2deg); opacity: 1; }
+    50% { transform: translateX(0) rotate(0); opacity: 1; }
+    100% { transform: translateX(0) rotate(0) scale(0.7); opacity: 0; }
+  }
+
+  @keyframes flash-burst {
+    0% { transform: scale(0.3); opacity: 0; }
+    25% { transform: scale(1); opacity: 0.9; }
+    100% { transform: scale(1.6); opacity: 0; }
+  }
+
+  /* ═══════════════════════════════════════════════
+     DEAL ANIMATION OVERLAY
+     ═══════════════════════════════════════════════ */
+  .deal-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: inherit;
+  }
+
+  .deal-deck {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: var(--card-w);
+    height: var(--card-h);
+  }
+
+  .shuffle-card {
+    position: absolute;
+    inset: 0;
+  }
+
+  .deal-deck.shuffling .shuffle-card {
+    animation: shuffle-riffle 850ms ease-in-out both;
+    animation-delay: calc(var(--si) * 50ms);
+  }
+
+  @keyframes shuffle-riffle {
+    0% { transform: translateX(0) rotate(0); }
+    25% { transform: translateX(calc((var(--si) - 2.5) * 16px)) rotate(calc((var(--si) - 2.5) * 8deg)); }
+    50% { transform: translateX(calc((var(--si) - 2.5) * -10px)) rotate(calc((var(--si) - 2.5) * -5deg)); }
+    75% { transform: translateX(calc((var(--si) - 2.5) * 5px)) rotate(calc((var(--si) - 2.5) * 3deg)); }
+    100% { transform: translateX(0) rotate(0); }
+  }
+
+  .deal-deck.deck-settle {
+    animation: deck-glow 400ms ease-out;
+  }
+
+  @keyframes deck-glow {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    40% { transform: translate(-50%, -50%) scale(1.06); filter: drop-shadow(0 0 16px rgba(255, 215, 0, 0.6)); }
+    100% { transform: translate(-50%, -50%) scale(1); filter: none; }
+  }
+
+  .deal-target {
+    position: absolute;
+    display: flex;
+    gap: 3px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .deal-left-target {
+    top: 15%;
+    left: 25%;
+    transform: translateX(-50%);
+  }
+
+  .deal-right-target {
+    top: 15%;
+    right: 25%;
+    transform: translateX(50%);
+  }
+
+  .deal-human-target {
+    bottom: 12%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+
+  .deal-table-target {
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    gap: 5px;
+    margin-top: -30px;
+  }
+
+  .deal-fly {
+    animation: deal-card-fly 350ms ease-out both;
+    animation-delay: var(--delay, 0ms);
+  }
+
+  .deal-left-target .deal-fly {
+    --fly-y: 60px;
+    --fly-x: 40px;
+  }
+
+  .deal-right-target .deal-fly {
+    --fly-y: 60px;
+    --fly-x: -40px;
+  }
+
+  .deal-human-target .deal-fly {
+    --fly-y: -80px;
+    --fly-x: 0px;
+  }
+
+  @keyframes deal-card-fly {
+    from {
+      opacity: 0;
+      transform: scale(0.3) translate(var(--fly-x, 0px), var(--fly-y, 0px));
+    }
+    60% {
+      opacity: 1;
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translate(0, 0);
+    }
+  }
+
+  .deal-fly-table {
+    animation: deal-table-fly 300ms ease-out both;
+    animation-delay: var(--delay, 0ms);
+  }
+
+  @keyframes deal-table-fly {
+    from {
+      opacity: 0;
+      transform: scale(0.4);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
   }
 
   /* ═══════════════════════════════════════════════

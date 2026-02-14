@@ -47,6 +47,8 @@ function makeInitialState(size: number = 9, mode: GameMode = 'agent'): GoGameSta
     avaBlackGw: '',
     avaWhiteGw: '',
     avaRunning: false,
+    tokensUsed: 0,
+    tokenHistory: [],
   };
 }
 
@@ -262,6 +264,12 @@ async function requestAiMove() {
       const cur = get(go3dStore);
       const parsed = parseLlmGoMove(response, cur.board, cur.size, cur.turn, cur.koHash);
       const comment = response.replace(/\b[A-HJ-T]\d{1,2}\b/gi, '').replace(/^[\s,.:;-]+/, '').trim().slice(0, 300);
+      const tokensEstimate = Math.round(response.length * 1.3);
+      go3dStore.update((s) => ({
+        ...s,
+        tokensUsed: s.tokensUsed + tokensEstimate,
+        tokenHistory: [...s.tokenHistory, tokensEstimate],
+      }));
       if (parsed) {
         applyAiResult(parsed, comment);
       } else {
@@ -388,6 +396,12 @@ async function requestMoveForSide(side: PlayerStone): Promise<boolean> {
       const parsed = parseLlmGoMove(response, cur.board, cur.size, cur.turn, cur.koHash);
       const sideLabel = side === 1 ? 'Black' : 'White';
       const comment = `[${sideLabel}] ${response.replace(/\b[A-HJ-T]\d{1,2}\b/gi, '').replace(/^[\s,.:;-]+/, '').trim().slice(0, 200)}`;
+      const tokensEstimate = Math.round(response.length * 1.3);
+      go3dStore.update((s) => ({
+        ...s,
+        tokensUsed: s.tokensUsed + tokensEstimate,
+        tokenHistory: [...s.tokenHistory, tokensEstimate],
+      }));
       if (parsed) {
         applyAiResult(parsed, comment);
       } else {

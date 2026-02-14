@@ -1,22 +1,23 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
+  import { kt } from './i18n';
+  import { ArrowLeft } from '@lucide/svelte';
   import Sokoban3DViewport from './components/Sokoban3DViewport.svelte';
   import HUD from './components/HUD.svelte';
   import AgentPanel from './components/AgentPanel.svelte';
 </script>
 
 <svelte:head>
-  <title>Sokoban 3D - openClaw</title>
+  <title>{$kt('title')} | {$t('nav.play')} | {$t('app.title')}</title>
 </svelte:head>
 
-<div class="page-container">
-  <header class="page-header">
-    <a href="/play" class="back-link">
-      ← Back to Games
-    </a>
-    <h1>Sokoban 3D</h1>
-  </header>
+<div class="page">
+  <div class="header">
+    <a href="/play" class="back-link"><ArrowLeft size={16} />{$kt('back')}</a>
+    <h2>{$kt('title')}</h2>
+  </div>
 
-  <main class="game-layout">
+  <div class="game-container">
     <div class="viewport-container">
       <Sokoban3DViewport />
     </div>
@@ -25,65 +26,79 @@
       <HUD />
       <AgentPanel />
     </aside>
-  </main>
+  </div>
 </div>
 
 <style>
-  .page-container {
-    width: 100%;
-    min-height: 100vh;
-    background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
-    padding: 2rem;
+  .page {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--color-bg);
   }
 
-  .page-header {
+  .header {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    margin-bottom: 2rem;
+    gap: 14px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
   }
 
   .back-link {
-    color: rgba(255, 255, 255, 0.7);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
     text-decoration: none;
-    transition: color 0.2s;
+    padding: 5px 10px;
+    border-radius: 6px;
+    transition: all 150ms ease;
   }
 
   .back-link:hover {
-    color: white;
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
   }
 
-  .page-header h1 {
+  h2 {
     margin: 0;
-    font-size: 2rem;
-    font-weight: bold;
-    color: white;
+    font-size: 16px;
+    color: var(--color-text);
   }
 
-  .game-layout {
+  .game-container {
     display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 2rem;
-    height: calc(100vh - 8rem);
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    padding: 16px;
+    flex: 1;
+    overflow: hidden;
   }
 
   .viewport-container {
-    background: rgba(15, 15, 26, 0.5);
-    border-radius: 0.5rem;
+    position: relative;
+    border-radius: 10px;
     overflow: hidden;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
   }
 
   .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
+    gap: 12px;
     overflow-y: auto;
   }
 
-  @media (max-width: 1024px) {
-    .game-layout {
+  @media (max-width: 900px) {
+    .game-container {
       grid-template-columns: 1fr;
-      height: auto;
+      grid-template-rows: 1fr auto;
     }
 
     .viewport-container {

@@ -34,6 +34,8 @@ store.subscribe((s) => {
 
 export function newGameAction(difficulty: Difficulty) {
   stopTimer();
+  tokenHistory.set([]);
+  tokensUsed.set(0);
   store.set(newGame(difficulty));
 }
 
@@ -43,6 +45,8 @@ export function toggleEdgeAction(edge: Edge) {
 
 export function restart() {
   stopTimer();
+  tokenHistory.set([]);
+  tokensUsed.set(0);
   const s = get(store);
   store.set(newGame(s.difficulty));
 }
@@ -88,6 +92,8 @@ function boardSummary(s: SlitherlinkState): string {
 }
 
 export let agentLoading = writable(false);
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
 
 export async function askAgent() {
   const client = getActiveClient();
@@ -143,6 +149,9 @@ Reply in 2-3 concise sentences with actionable advice. Reference specific cells 
     }
 
     if (response) {
+      const est = Math.round(response.length * 1.3);
+      tokensUsed.update((n) => n + est);
+      tokenHistory.update((h) => [...h, est]);
       store.update((st) => ({ ...st, agentSpeech: response.slice(0, 300), agentMood: 'calm' }));
     }
   } catch (e) {

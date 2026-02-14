@@ -17,6 +17,40 @@ function parseSquare(s: string) {
   return { f, r };
 }
 
+// ---------------------------------------------------------------------------
+// Palace helpers
+// ---------------------------------------------------------------------------
+
+/** Which palace does a square belong to? null if not in any palace. */
+function whichPalace(f: number, r: number): 'w' | 'b' | null {
+  if (f < 3 || f > 5) return null;
+  if (r >= 1 && r <= 3) return 'w';
+  if (r >= 8 && r <= 10) return 'b';
+  return null;
+}
+
+/**
+ * Is the square on a palace diagonal line?
+ * Only corners and center of each palace sit on the diagonal lines.
+ * Corners: d1,f1,d3,f3 / d8,f8,d10,f10   Center: e2 / e9
+ */
+function onPalaceDiag(f: number, r: number): boolean {
+  if (whichPalace(f, r) === null) return false;
+  // Center
+  if (f === 4 && (r === 2 || r === 9)) return true;
+  // Corners
+  if ((f === 3 || f === 5) && (r === 1 || r === 3 || r === 8 || r === 10)) return true;
+  return false;
+}
+
+/** Check if two squares are in the same palace (either side). */
+function inSamePalace(af: number, ar: number, bf: number, br: number): boolean {
+  const pa = whichPalace(af, ar);
+  const pb = whichPalace(bf, br);
+  return pa !== null && pa === pb;
+}
+
+/** Legacy helper: both squares in the given color's palace. Used for king/guard confinement. */
 function samePalace(a: string, b: string, color: Color): boolean {
   const aa = parseSquare(a);
   const bb = parseSquare(b);
@@ -24,6 +58,10 @@ function samePalace(a: string, b: string, color: Color): boolean {
     p.f >= 3 && p.f <= 5 && (color === 'w' ? p.r >= 1 && p.r <= 3 : p.r >= 8 && p.r <= 10);
   return inPalace(aa) && inPalace(bb);
 }
+
+// ---------------------------------------------------------------------------
+// Board setup
+// ---------------------------------------------------------------------------
 
 export function createInitialBoard(setup: JanggiRuleSet['startingSetup'] = 'standard'): BoardMap {
   const b: BoardMap = {};
@@ -58,15 +96,25 @@ export function createInitialBoard(setup: JanggiRuleSet['startingSetup'] = 'stan
   return b;
 }
 
+// ---------------------------------------------------------------------------
+// Move helpers
+// ---------------------------------------------------------------------------
+
 function addIfValid(list: Move[], board: BoardMap, from: string, to: string, color: Color) {
   const p = board[to];
   if (!p) list.push({ from, to, capture: false });
   else if (p.color !== color) list.push({ from, to, capture: true });
 }
 
+// ---------------------------------------------------------------------------
+// Piece move generators (pseudo-legal — no check filtering)
+// ---------------------------------------------------------------------------
+
 function rookMoves(from: string, board: BoardMap, color: Color, rules: JanggiRuleSet): Move[] {
   const out: Move[] = [];
   const { f, r } = parseSquare(from);
+
+  // Orthogonal sliding
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const [df, dr] of dirs) {
     let nf = f + df, nr = r + dr;
@@ -82,13 +130,22 @@ function rookMoves(from: string, board: BoardMap, color: Color, rules: JanggiRul
     }
   }
 
-  if (rules.palaceDiagonalFor.rook) {
+  // Palace diagonal sliding (in either palace)
+  if (rules.palaceDiagonalFor.rook && onPalaceDiag(f, r)) {
     const diagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
     for (const [df, dr] of diagonals) {
-      const nf = f + df, nr = r + dr;
-      if (!inBoard(nf, nr)) continue;
-      const to = sq(nf, nr);
-      if (samePalace(from, to, color)) addIfValid(out, board, from, to, color);
+      let nf = f + df, nr = r + dr;
+      while (inBoard(nf, nr) && onPalaceDiag(nf, nr) && inSamePalace(f, r, nf, nr)) {
+        const to = sq(nf, nr);
+        const p = board[to];
+        if (!p) {
+          out.push({ from, to });
+        } else {
+          if (p.color !== color) out.push({ from, to, capture: true });
+          break;
+        }
+        nf += df; nr += dr;
+      }
     }
   }
 
@@ -98,6 +155,8 @@ function rookMoves(from: string, board: BoardMap, color: Color, rules: JanggiRul
 function cannonMoves(from: string, board: BoardMap, color: Color, rules: JanggiRuleSet): Move[] {
   const out: Move[] = [];
   const { f, r } = parseSquare(from);
+
+  // Orthogonal: must jump over exactly one non-cannon piece
   const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const [df, dr] of dirs) {
     let nf = f + df, nr = r + dr;
@@ -106,7 +165,10 @@ function cannonMoves(from: string, board: BoardMap, color: Color, rules: JanggiR
       const to = sq(nf, nr);
       const p = board[to];
       if (!screenSeen) {
-        if (p) screenSeen = true;
+        if (p) {
+          if (p.type === 'cannon') break; // cannon cannot jump over another cannon
+          screenSeen = true;
+        }
       } else {
         if (!p) out.push({ from, to });
         else {
@@ -121,13 +183,25 @@ function cannonMoves(from: string, board: BoardMap, color: Color, rules: JanggiR
     }
   }
 
-  if (rules.palaceDiagonalFor.cannon) {
+  // Palace diagonal: jump from corner over center to opposite corner
+  if (rules.palaceDiagonalFor.cannon && onPalaceDiag(f, r)) {
     const diagonals = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
     for (const [df, dr] of diagonals) {
-      const nf = f + df, nr = r + dr;
-      if (!inBoard(nf, nr)) continue;
-      const to = sq(nf, nr);
-      if (samePalace(from, to, color)) addIfValid(out, board, from, to, color);
+      const mf = f + df, mr = r + dr;   // middle (screen position)
+      const tf = f + 2 * df, tr = r + 2 * dr; // target (landing position)
+      if (!inBoard(mf, mr) || !inBoard(tf, tr)) continue;
+      if (!onPalaceDiag(mf, mr) || !onPalaceDiag(tf, tr)) continue;
+      if (!inSamePalace(f, r, tf, tr)) continue;
+
+      const mid = board[sq(mf, mr)];
+      if (!mid || mid.type === 'cannon') continue; // need non-cannon screen
+
+      const target = board[sq(tf, tr)];
+      if (!target) {
+        out.push({ from, to: sq(tf, tr) });
+      } else if (target.color !== color && (target.type !== 'cannon' || rules.cannonCaptureCannonAllowed)) {
+        out.push({ from, to: sq(tf, tr), capture: true });
+      }
     }
   }
 
@@ -137,9 +211,9 @@ function cannonMoves(from: string, board: BoardMap, color: Color, rules: JanggiR
 function kingGuardMoves(from: string, board: BoardMap, color: Color, rules: JanggiRuleSet, isKing: boolean): Move[] {
   const out: Move[] = [];
   const { f, r } = parseSquare(from);
-  const orth = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  const diag = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 
+  // Orthogonal (one step, confined to own palace)
+  const orth = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const [df, dr] of orth) {
     const nf = f + df, nr = r + dr;
     if (!inBoard(nf, nr)) continue;
@@ -147,11 +221,14 @@ function kingGuardMoves(from: string, board: BoardMap, color: Color, rules: Jang
     if (samePalace(from, to, color)) addIfValid(out, board, from, to, color);
   }
 
+  // Diagonal (one step, only on palace diagonal lines)
   const allowDiag = isKing ? rules.palaceDiagonalFor.king : rules.palaceDiagonalFor.guard;
-  if (allowDiag) {
+  if (allowDiag && onPalaceDiag(f, r)) {
+    const diag = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
     for (const [df, dr] of diag) {
       const nf = f + df, nr = r + dr;
       if (!inBoard(nf, nr)) continue;
+      if (!onPalaceDiag(nf, nr)) continue;
       const to = sq(nf, nr);
       if (samePalace(from, to, color)) addIfValid(out, board, from, to, color);
     }
@@ -208,16 +285,34 @@ function soldierMoves(from: string, board: BoardMap, color: Color): Move[] {
   const { f, r } = parseSquare(from);
   const dr = color === 'w' ? 1 : -1;
 
+  // Forward and sideways
   [[0, dr], [1, 0], [-1, 0]].forEach(([df, rr]) => {
     const nf = f + df, nr = r + rr;
     if (!inBoard(nf, nr)) return;
     addIfValid(out, board, from, sq(nf, nr), color);
   });
 
+  // Diagonal forward in enemy palace
+  const enemyPalace = color === 'w' ? 'b' : 'w';
+  if (whichPalace(f, r) === enemyPalace && onPalaceDiag(f, r)) {
+    [[1, dr], [-1, dr]].forEach(([df, rr]) => {
+      const nf = f + df, nr = r + rr;
+      if (!inBoard(nf, nr)) return;
+      if (!onPalaceDiag(nf, nr)) return;
+      if (whichPalace(nf, nr) !== enemyPalace) return;
+      addIfValid(out, board, from, sq(nf, nr), color);
+    });
+  }
+
   return out;
 }
 
-export function legalMovesForSquare(board: BoardMap, from: string, rules: JanggiRuleSet): Move[] {
+// ---------------------------------------------------------------------------
+// Check detection & legal move filtering
+// ---------------------------------------------------------------------------
+
+/** Generate pseudo-legal moves for a square (no check filtering). */
+function rawMovesForSquare(board: BoardMap, from: string, rules: JanggiRuleSet): Move[] {
   const piece = board[from];
   if (!piece) return [];
 
@@ -232,6 +327,40 @@ export function legalMovesForSquare(board: BoardMap, from: string, rules: Janggi
   }
 }
 
+/** Is the given color's king under attack? */
+export function isInCheck(board: BoardMap, color: Color, rules: JanggiRuleSet): boolean {
+  // Find king
+  let kingPos: string | null = null;
+  for (const [s, piece] of Object.entries(board)) {
+    if (piece.type === 'king' && piece.color === color) {
+      kingPos = s;
+      break;
+    }
+  }
+  if (!kingPos) return true; // king missing
+
+  // Check if any enemy piece can reach the king
+  for (const [s, piece] of Object.entries(board)) {
+    if (piece.color === color) continue;
+    const moves = rawMovesForSquare(board, s, rules);
+    if (moves.some(m => m.to === kingPos)) return true;
+  }
+  return false;
+}
+
+/** Legal moves for a single square (with check filtering). */
+export function legalMovesForSquare(board: BoardMap, from: string, rules: JanggiRuleSet): Move[] {
+  const piece = board[from];
+  if (!piece) return [];
+
+  const raw = rawMovesForSquare(board, from, rules);
+  return raw.filter(m => {
+    const after = applyMove(board, m);
+    return !isInCheck(after, piece.color, rules);
+  });
+}
+
+/** All legal moves for a player. */
 export function legalMoves(board: BoardMap, turn: Color, rules: JanggiRuleSet): Move[] {
   const out: Move[] = [];
   for (const k of Object.keys(board)) {
@@ -240,6 +369,10 @@ export function legalMoves(board: BoardMap, turn: Color, rules: JanggiRuleSet): 
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Game actions
+// ---------------------------------------------------------------------------
 
 export function applyMove(board: BoardMap, move: Move): BoardMap {
   const nb: BoardMap = { ...board };

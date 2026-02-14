@@ -13,10 +13,10 @@ const PIECE_CHARS: Record<string, Record<'w' | 'b', string>> = {
   king:     { w: '楚', b: '漢' },
   guard:    { w: '士', b: '士' },
   rook:     { w: '車', b: '車' },
-  cannon:   { w: '包', b: '砲' },
+  cannon:   { w: '砲', b: '包' },
   horse:    { w: '馬', b: '馬' },
   elephant: { w: '象', b: '象' },
-  soldier:  { w: '兵', b: '卒' },
+  soldier:  { w: '卒', b: '兵' },
 };
 
 interface PieceShape {
@@ -27,16 +27,14 @@ interface PieceShape {
 }
 
 const PIECE_SHAPES: Record<keyof typeof PIECE_CHARS, PieceShape> = {
-  // Smallest
-  soldier: { radius: 0.31, height: 0.11, fontSize: 152, borderWidth: 3 },
-  // Middle cluster
-  guard: { radius: 0.36, height: 0.13, fontSize: 146, borderWidth: 3 },
-  horse: { radius: 0.37, height: 0.13, fontSize: 146, borderWidth: 3 },
-  elephant: { radius: 0.39, height: 0.14, fontSize: 145, borderWidth: 3 },
-  cannon: { radius: 0.40, height: 0.15, fontSize: 144, borderWidth: 4 },
-  rook: { radius: 0.42, height: 0.15, fontSize: 144, borderWidth: 4 },
-  // Largest
-  king: { radius: 0.44, height: 0.17, fontSize: 142, borderWidth: 4 },
+  // Real janggi set proportions: 궁 > 차 > 포 > 상 > 마 > 사 > 졸
+  soldier:  { radius: 0.27, height: 0.09, fontSize: 158, borderWidth: 2 },
+  guard:    { radius: 0.29, height: 0.10, fontSize: 156, borderWidth: 2 },
+  horse:    { radius: 0.33, height: 0.12, fontSize: 150, borderWidth: 3 },
+  elephant: { radius: 0.35, height: 0.13, fontSize: 148, borderWidth: 3 },
+  cannon:   { radius: 0.38, height: 0.14, fontSize: 146, borderWidth: 3 },
+  rook:     { radius: 0.41, height: 0.16, fontSize: 144, borderWidth: 4 },
+  king:     { radius: 0.45, height: 0.18, fontSize: 140, borderWidth: 4 },
 };
 
 function pieceShape(type: string): PieceShape {
@@ -164,15 +162,6 @@ export class JanggiBoard3D {
       this.scene.add(line);
     }
 
-    // River marking (between rows 5 and 6)
-    const riverMat = new THREE.MeshStandardMaterial({ color: 0x6b92b8, roughness: 0.6, transparent: true, opacity: 0.15 });
-    const river = new THREE.Mesh(
-      new THREE.BoxGeometry(9, 0.01, 0.5),
-      riverMat,
-    );
-    river.position.set(0, 0.05, -0.25);
-    this.scene.add(river);
-
     // Palace diagonals
     const createPalaceDiagonals = (files: number[], rows: number[]) => {
       const [f1, f2, f3] = files.map(f => f - HALF_W + 0.5);
@@ -213,8 +202,12 @@ export class JanggiBoard3D {
     canvas.height = 256;
     const ctx = canvas.getContext('2d')!;
 
-    // Background (light tan wood color)
-    ctx.fillStyle = '#deb887';
+    // Ivory background with subtle warm gradient
+    const grad = ctx.createRadialGradient(128, 118, 20, 128, 138, 140);
+    grad.addColorStop(0, '#fdf6e8');   // warm ivory center highlight
+    grad.addColorStop(0.6, '#f5edd6'); // ivory mid
+    grad.addColorStop(1, '#e8dfc8');   // slightly darker edge
+    ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 256, 256);
 
     // Draw octagon border
@@ -231,15 +224,29 @@ export class JanggiBoard3D {
       if (i === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = color === 'w' ? '#b91c1c' : '#1d4ed8';
+    ctx.strokeStyle = color === 'w' ? '#a01515' : '#1a3f8f';
     ctx.lineWidth = shape.borderWidth;
     ctx.stroke();
 
-    // Draw character
+    // Subtle inner shadow on border
+    ctx.strokeStyle = color === 'w' ? 'rgba(160, 21, 21, 0.15)' : 'rgba(26, 63, 143, 0.15)';
+    ctx.lineWidth = shape.borderWidth + 3;
+    ctx.stroke();
+
+    // Redraw crisp border on top
+    ctx.strokeStyle = color === 'w' ? '#a01515' : '#1a3f8f';
+    ctx.lineWidth = shape.borderWidth;
+    ctx.stroke();
+
+    // Draw character with slight shadow for depth
     ctx.font = `bold ${shape.fontSize}px serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = color === 'w' ? '#b91c1c' : '#1d4ed8';
+    // Text shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.08)';
+    ctx.fillText(char, centerX + 1, centerY + 2);
+    // Main text
+    ctx.fillStyle = color === 'w' ? '#8b1a1a' : '#1a3a7a';
     ctx.fillText(char, centerX, centerY);
 
     const texture = new THREE.CanvasTexture(canvas);
@@ -258,10 +265,10 @@ export class JanggiBoard3D {
     const pieceGeom = new THREE.CylinderGeometry(shape.radius, shape.radius, shape.height, 8);
 
     // Create materials array for different faces
-    const sideMat = new THREE.MeshStandardMaterial({ color: 0x8b6f47, roughness: 0.6 });
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0xe8dfc8, roughness: 0.35, metalness: 0.05 });
     const topTexture = this.makeCharTexture(char, color, shape);
-    const topMat = new THREE.MeshStandardMaterial({ map: topTexture, roughness: 0.3 });
-    const bottomMat = new THREE.MeshStandardMaterial({ color: 0x8b6f47, roughness: 0.6 });
+    const topMat = new THREE.MeshStandardMaterial({ map: topTexture, roughness: 0.25, metalness: 0.05 });
+    const bottomMat = new THREE.MeshStandardMaterial({ color: 0xddd4bc, roughness: 0.4 });
 
     // Apply materials: side, top, bottom
     const materials = [sideMat, topMat, bottomMat];

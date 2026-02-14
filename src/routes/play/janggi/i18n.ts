@@ -3,7 +3,7 @@ import { locale } from '$lib/i18n';
 
 const messages: Record<string, Record<string, string>> = {
   en: {
-    title: 'Janggi',
+    title: 'Korean Chess',
     desc: 'Korean chess with a 3D board and AI opponent.',
     back: 'Games',
     your_turn: 'Your turn',
@@ -16,9 +16,9 @@ const messages: Record<string, Record<string, string>> = {
     agent: 'AI Agent',
     offline: 'Offline',
     moves: 'Moves',
-    token_graph: 'Token Usage per AI Turn',
+    token_graph: 'Token Waste per Turn',
     total: 'Total',
-    tokens_used: 'tokens used',
+    tokens_wasted: 'tokens wasted',
     ai_commentary: 'AI Commentary',
     no_gateway: 'No gateway connected. Playing random move.',
     ai_timeout: 'AI timed out. Playing random move.',
@@ -42,9 +42,9 @@ const messages: Record<string, Record<string, string>> = {
     agent: 'AI 에이전트',
     offline: '오프라인',
     moves: '수순',
-    token_graph: '턴별 토큰 소비',
+    token_graph: '턴별 토큰 낭비',
     total: '누적',
-    tokens_used: '토큰 사용',
+    tokens_wasted: '토큰 낭비',
     ai_commentary: 'AI 코멘터리',
     no_gateway: '게이트웨이 미연결, 랜덤 수를 둡니다.',
     ai_timeout: 'AI 시간 초과, 랜덤 수를 둡니다.',

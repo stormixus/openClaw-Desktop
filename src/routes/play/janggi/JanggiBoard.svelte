@@ -3,7 +3,7 @@
   import { locale } from '$lib/i18n';
   import { jt } from './i18n';
   import { store, getActiveClient } from '$lib/gateway/store.svelte';
-  import { LineChart } from 'layerchart';
+  import TokenBarChart from '$lib/components/TokenBarChart.svelte';
   import { RotateCcw, Bot, Cpu, Zap, MessageSquare, Radio } from '@lucide/svelte';
   import { JanggiBoard3D } from './board3d';
   import { defaultJanggiRuleSet } from './rules';
@@ -38,7 +38,7 @@
   let board3d: JanggiBoard3D | null = null;
   let container: HTMLDivElement;
 
-  const tokenChartData = $derived(tokenHistory.map((t, i) => ({ turn: i + 1, tokens: t })));
+
   const winnerColor = $derived.by(() => { void rev; return winner(board); });
   const isOver = $derived.by(() => { void rev; return winnerColor !== null; });
   const isWin = $derived.by(() => { void rev; return winnerColor === 'w'; });
@@ -268,26 +268,15 @@
       </div>
     </div>
 
-    {#if tokenChartData.length > 0}
+    {#if tokenHistory.length > 0}
       <div class="panel-section token-section">
         <span class="section-label">{$jt('token_graph')}</span>
         <div class="token-chart-wrap">
-          <LineChart
-            data={tokenChartData}
-            x="turn"
-            y="tokens"
-            axis={false}
-            grid={false}
-            rule={false}
-            props={{
-              spline: { stroke: '#fbbf24', strokeWidth: 2 },
-              highlight: { points: { r: 5, fill: '#fbbf24', strokeWidth: 2, stroke: '#1a1a2e' } },
-            }}
-          />
+          <TokenBarChart data={tokenHistory} />
         </div>
         <div class="token-total">
           <Zap size={11} />
-          <span>{$jt('total')}: ~{tokensUsed.toLocaleString()} {$jt('tokens_used')}</span>
+          <span>{$jt('total')}: ~{tokensUsed.toLocaleString()} {$jt('tokens_wasted')}</span>
         </div>
       </div>
     {/if}
@@ -452,7 +441,7 @@
     height: 72px;
     background: var(--color-surface-elevated);
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
     padding: 6px 4px;
   }
 

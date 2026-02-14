@@ -3,6 +3,9 @@ import type { GridSize, LightsOutState } from '../core/types';
 import { newGame, toggle, hint } from '../core/engine';
 import { store as gwStore, getActiveClient } from '$lib/gateway/store.svelte';
 
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
+
 const initialState = newGame(5);
 
 function createLightsOutStore() {
@@ -17,9 +20,13 @@ function createLightsOutStore() {
 			});
 		},
 		newGameAction: (size: GridSize) => {
+			tokenHistory.set([]);
+			tokensUsed.set(0);
 			set(newGame(size));
 		},
 		resetGame: () => {
+			tokenHistory.set([]);
+			tokensUsed.set(0);
 			update((state) => newGame(state.size));
 		},
 		getHint: () => {
@@ -98,6 +105,11 @@ Keep responses brief and encouraging (2-3 sentences). If asked for help, provide
 					}
 				}
 
+				if (response) {
+					const est = Math.round(response.length * 1.3);
+					tokensUsed.update((n) => n + est);
+					tokenHistory.update((h) => [...h, est]);
+				}
 				update((state) => ({
 					...state,
 					agentSpeech: response || 'No response received.',

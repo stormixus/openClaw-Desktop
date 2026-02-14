@@ -1,6 +1,9 @@
 <script lang="ts">
-  import { rules3dStore, askAgent, agentLoading } from '../store/rules3dStore';
+  import { rules3dStore, askAgent, agentLoading, tokenHistory, tokensUsed } from '../store/rules3dStore';
   import { store as gwStore } from '$lib/gateway/store.svelte';
+  import { kt } from '../i18n';
+  import { Zap } from '@lucide/svelte';
+  import TokenBarChart from '$lib/components/TokenBarChart.svelte';
 </script>
 
 <div class="panel">
@@ -16,6 +19,21 @@
   {#if !gwStore.activeGatewayId}
     <small class="no-gw">No gateway connected</small>
   {/if}
+
+  {#if $tokenHistory.length > 0}
+    <div class="token-section">
+      <div class="token-header">
+        <Zap size={14} />
+        <span>{$kt('token_graph')}</span>
+      </div>
+      <div class="chart-wrap">
+        <TokenBarChart data={$tokenHistory} />
+      </div>
+      <div class="total">
+        {$kt('total')}: ~{$tokensUsed.toLocaleString()} {$kt('tokens_wasted')}
+      </div>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -27,4 +45,8 @@
   .ask-btn:disabled{opacity:0.5;cursor:wait}
   p{margin:0 0 4px;color:var(--color-text-muted);font-size:13px}
   .no-gw{font-size:11px;color:var(--color-text-subtle);font-style:italic}
+  .token-section{margin-top:12px}
+  .token-header{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:600;color:var(--color-text-muted);margin-bottom:6px}
+  .chart-wrap{height:48px}
+  .total{font-size:11px;color:var(--color-text-subtle);margin-top:4px}
 </style>

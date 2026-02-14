@@ -6,14 +6,14 @@ function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
 }
 
-export function saveTexasPokerState(state: PokerState): void {
+export function savePokerState(state: PokerState): void {
   saved = clone(state);
 }
 
-export function loadTexasPokerState(): PokerState | null {
+export function loadPokerState(): PokerState | null {
   return saved ? clone(saved) : null;
 }
 
-export function clearTexasPokerState(): void {
+export function clearPokerState(): void {
   saved = null;
 }

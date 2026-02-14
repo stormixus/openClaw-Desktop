@@ -34,6 +34,8 @@ store.subscribe((s) => {
 
 export function newGamePreset(difficulty: Difficulty) {
   stopTimer();
+  tokenHistory.set([]);
+  tokensUsed.set(0);
   store.set(newGame(difficulty));
 }
 
@@ -125,6 +127,8 @@ function boardSummary(s: NonogramState): string {
 }
 
 export let agentLoading = writable(false);
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
 
 export async function askAgent() {
   const client = getActiveClient();
@@ -172,6 +176,9 @@ Reply in 2-3 concise sentences with actionable advice. Mention specific coordina
     }
 
     if (response) {
+      const est = Math.round(response.length * 1.3);
+      tokensUsed.update((n) => n + est);
+      tokenHistory.update((h) => [...h, est]);
       store.update((st) => ({
         ...st,
         agentSpeech: response.slice(0, 300),

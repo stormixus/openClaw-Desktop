@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cubeStore } from '../store/cubeStore';
+  import { kt } from '../i18n';
   import type { Face } from '../core/types';
 
   const faces: Face[] = ['U', 'D', 'L', 'R', 'F', 'B'];
@@ -24,13 +25,13 @@
 <div class="hud">
   <div class="stats">
     <div class="stat">
-      <span class="label">Moves:</span>
-      <span class="value">{$cubeStore.moveCount}</span>
+      <span class="stat-label">{$kt('moves')}:</span>
+      <span class="stat-value">{$cubeStore.moveCount}</span>
     </div>
     <div class="stat">
-      <span class="label">Status:</span>
-      <span class="value status-{$cubeStore.status}">
-        {$cubeStore.status === 'solved' ? 'Solved!' : 'Playing'}
+      <span class="stat-label">{$kt('status')}:</span>
+      <span class="stat-value status-{$cubeStore.status}">
+        {$cubeStore.status === 'solved' ? $kt('solved') : $kt('playing')}
       </span>
     </div>
   </div>
@@ -68,20 +69,20 @@
 
     <div class="action-buttons">
       <button class="action-btn scramble" onclick={handleScramble}>
-        Scramble
+        {$kt('scramble')}
       </button>
       <button class="action-btn reset" onclick={handleReset}>
-        Reset
+        {$kt('reset')}
       </button>
       <button class="action-btn undo" onclick={handleUndo} disabled={$cubeStore.moves.length === 0}>
-        Undo
+        {$kt('undo')}
       </button>
     </div>
   </div>
 
   {#if $cubeStore.moves.length > 0}
     <div class="move-history">
-      <span class="label">Moves:</span>
+      <span class="history-label">{$kt('move_history')}:</span>
       <span class="moves">{$cubeStore.moves.join(' ')}</span>
     </div>
   {/if}
@@ -91,58 +92,59 @@
   .hud {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem;
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 8px;
+    gap: 12px;
+    padding: 12px;
+    background: var(--color-surface);
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
   }
 
   .stats {
     display: flex;
-    gap: 2rem;
+    gap: 16px;
     justify-content: center;
   }
 
   .stat {
     display: flex;
-    gap: 0.5rem;
+    gap: 6px;
     align-items: center;
   }
 
-  .label {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.7);
+  .stat-label {
+    font-size: 12px;
+    color: var(--color-text-muted);
   }
 
-  .value {
-    font-size: 1.125rem;
+  .stat-value {
+    font-size: 14px;
     font-weight: 600;
-    color: white;
+    color: var(--color-text);
   }
 
   .status-solved {
-    color: #4ade80;
+    color: #22c55e;
   }
 
   .status-playing {
-    color: #60a5fa;
+    color: var(--color-primary);
   }
 
   .controls {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 10px;
   }
 
   .move-buttons {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 6px;
   }
 
   .move-row {
     display: flex;
-    gap: 0.5rem;
+    gap: 4px;
     flex-wrap: wrap;
     justify-content: center;
   }
@@ -153,45 +155,46 @@
   }
 
   .move-btn {
-    padding: 0.5rem 0.75rem;
-    background: rgba(96, 165, 250, 0.3);
-    border: 1px solid rgba(96, 165, 250, 0.5);
+    padding: 6px 8px;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
     border-radius: 4px;
-    color: white;
+    color: var(--color-text);
     font-weight: 600;
+    font-size: 12px;
     cursor: pointer;
-    transition: all 0.2s;
-    min-width: 2.5rem;
+    transition: all 150ms ease;
+    min-width: 2rem;
   }
 
   .move-btn:hover {
-    background: rgba(96, 165, 250, 0.5);
-    transform: translateY(-1px);
+    background: var(--color-surface-hover);
+    border-color: var(--color-primary);
   }
 
   .move-btn:active {
-    transform: translateY(0);
+    transform: scale(0.95);
   }
 
   .move-btn.secondary {
-    background: rgba(96, 165, 250, 0.2);
-    border-color: rgba(96, 165, 250, 0.3);
-    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
   }
 
   .action-buttons {
     display: flex;
-    gap: 0.5rem;
+    gap: 6px;
     justify-content: center;
   }
 
   .action-btn {
-    padding: 0.75rem 1.5rem;
+    padding: 8px 14px;
     border: none;
-    border-radius: 6px;
+    border-radius: 8px;
     font-weight: 600;
+    font-size: 13px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 150ms ease;
   }
 
   .action-btn.scramble {
@@ -204,42 +207,45 @@
   }
 
   .action-btn.reset {
-    background: #6366f1;
+    background: var(--color-primary);
     color: white;
   }
 
   .action-btn.reset:hover {
-    background: #4f46e5;
+    background: var(--color-primary-hover);
   }
 
   .action-btn.undo {
-    background: #8b5cf6;
-    color: white;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
   }
 
   .action-btn.undo:hover:not(:disabled) {
-    background: #7c3aed;
+    background: var(--color-surface-hover);
+    border-color: var(--color-border-strong);
   }
 
   .action-btn:disabled {
-    opacity: 0.5;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
   .move-history {
-    padding: 0.75rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 4px;
-    font-size: 0.875rem;
+    padding: 8px;
+    background: var(--color-surface-elevated);
+    border-radius: 6px;
+    font-size: 12px;
   }
 
-  .move-history .label {
+  .history-label {
     display: block;
-    margin-bottom: 0.25rem;
+    margin-bottom: 4px;
+    color: var(--color-text-muted);
   }
 
-  .move-history .moves {
-    color: white;
+  .moves {
+    color: var(--color-text);
     font-family: 'Courier New', monospace;
   }
 </style>

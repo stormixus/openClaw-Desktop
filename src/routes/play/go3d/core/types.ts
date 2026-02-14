@@ -34,6 +34,8 @@ export type GoGameState = {
   avaBlackGw: string;
   avaWhiteGw: string;
   avaRunning: boolean;
+  tokensUsed: number;
+  tokenHistory: number[];
 };
 
 export type ApplyResult =

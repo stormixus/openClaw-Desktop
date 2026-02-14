@@ -1,0 +1,7 @@
+{
+  "id": "poker",
+  "emoji": "🃏",
+  "titleKey": "games.module.poker.title",
+  "descKey": "games.module.poker.desc",
+  "status": "playable"
+}

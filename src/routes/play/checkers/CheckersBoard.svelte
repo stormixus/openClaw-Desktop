@@ -8,6 +8,8 @@
   import { createBoard, legalMoves, applyMove, winner, aiPick, buildCheckersPrompt, parseCheckersMove, type Board } from './engine';
   import { clearCheckersState, loadCheckersState, saveCheckersState } from './state';
   import { store, getActiveClient } from '$lib/gateway/store.svelte';
+  import { Zap } from '@lucide/svelte';
+  import TokenBarChart from '$lib/components/TokenBarChart.svelte';
 
   const restored = loadCheckersState();
   let board = $state<Board>(restored?.board ?? createBoard());
@@ -18,6 +20,8 @@
   let targets = $state<string[]>([]);
   let thinking = $state(false);
   let commentary = $state('');
+  let tokensUsed = $state(0);
+  let tokenHistory = $state<number[]>([]);
 
   const win = $derived(winner(board));
   const status = $derived(
@@ -86,6 +90,9 @@
             // Extract commentary (remove the move notation from response)
             const movePattern = /[a-h][1-8]\s*[-x\s]\s*[a-h][1-8]/gi;
             commentary = response.replace(movePattern, '').replace(/^\s*[.:,\s]+/, '').trim().slice(0, 200);
+            const turnTokens = Math.round(response.length * 1.3);
+            tokensUsed += turnTokens;
+            tokenHistory = [...tokenHistory, turnTokens];
             turn = 'w';
             thinking = false;
             return;
@@ -105,7 +112,7 @@
     turn = 'w';
   }
 
-  function newGame(){ board=createBoard(); turn='w'; moveList=[]; selected=null; targets=[]; commentary=''; clearCheckersState(); }
+  function newGame(){ board=createBoard(); turn='w'; moveList=[]; selected=null; targets=[]; commentary=''; tokensUsed=0; tokenHistory=[]; clearCheckersState(); }
 
   onDestroy(() => {
     if (!winner(board)) saveCheckersState({ board, turn, moveList, useAgent });
@@ -460,13 +467,20 @@
       <div class="thinking"><span class="dot-pulse"></span></div>
     {/if}
     <div class="moves"><b>{$kt('moves')}</b> {moveList.join(' ')}</div>
+    {#if tokenHistory.length > 0}
+      <div class="token-section">
+        <span class="section-label">{$kt('token_graph')}</span>
+        <div class="token-chart-wrap"><TokenBarChart data={tokenHistory} /></div>
+        <div class="token-total"><Zap size={11} /><span>{$kt('total')}: ~{tokensUsed.toLocaleString()} {$kt('tokens_wasted')}</span></div>
+      </div>
+    {/if}
   </div>
 </div>
 
 <style>
   .wrap{display:flex;gap:16px;width:100%;height:100%;min-height:520px}
   .viewport{flex:1;width:min(72vh,560px);aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--color-bg)}
-  .panel{flex:1;min-width:240px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
+  .panel{width:240px;flex-shrink:0;background:var(--color-surface);border:1px solid var(--color-border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:10px}
   .status{font-weight:600}
   .toggle{display:flex;gap:8px}.toggle button{flex:1}
   button{padding:8px 10px;border-radius:8px;border:1px solid var(--color-border);background:var(--color-surface-elevated)}
@@ -476,5 +490,9 @@
   .dot-pulse{width:6px;height:6px;border-radius:50%;background:var(--color-primary);animation:pulse 1s ease infinite}
   @keyframes pulse{0%,100%{opacity:.3}50%{opacity:1}}
   .moves{font-size:12px;color:var(--color-text-muted);line-height:1.5}
+  .token-section{display:flex;flex-direction:column;gap:6px}
+  .section-label{font-size:11px;font-weight:600;color:var(--color-text-muted)}
+  .token-chart-wrap{height:72px;background:var(--color-surface-elevated);border-radius:8px;overflow:visible;padding:6px 4px}
+  .token-total{display:flex;align-items:center;gap:5px;color:#fbbf24;font-size:11px}
   @media(max-width:900px){.wrap{flex-direction:column}.viewport{width:100%}}
 </style>

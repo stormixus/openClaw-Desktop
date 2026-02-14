@@ -24,6 +24,7 @@ const SEED_DATA: GameRow[] = Object.entries(metaFiles)
     sortOrder: 0,
   }))
   .sort((a, b) => a.id.localeCompare(b.id));
+const BUILTIN_IDS = new Set(SEED_DATA.map((game) => game.id));
 
 // ---------------------------------------------------------------------------
 // Reactive store
@@ -58,7 +59,8 @@ export async function initGameRegistry(): Promise<void> {
 
     // Read all games from DB (includes sort_order, visibility)
     const rows = await db.games.list();
-    gameModules.set(rows.map(rowToModule));
+    const filtered = rows.filter((row) => row.source !== 'builtin' || BUILTIN_IDS.has(row.id));
+    gameModules.set(filtered.map(rowToModule));
   } catch {
     // Fallback: use seed data directly
     gameModules.set(SEED_DATA.map((s) => rowToModule(s)));

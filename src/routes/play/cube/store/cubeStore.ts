@@ -3,6 +3,9 @@ import type { CubeState } from '../core/types';
 import { newGame, applyMove, scramble, isSolved } from '../core/engine';
 import { store as gwStore, getActiveClient } from '$lib/gateway/store.svelte';
 
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
+
 function createCubeStore() {
   const initialState = newGame();
   const store = writable<CubeState>(initialState);
@@ -33,6 +36,8 @@ function createCubeStore() {
     },
 
     scrambleCube() {
+      tokenHistory.set([]);
+      tokensUsed.set(0);
       update((state) => {
         const scrambled = scramble(state, 20);
         return {
@@ -44,6 +49,8 @@ function createCubeStore() {
     },
 
     resetCube() {
+      tokenHistory.set([]);
+      tokensUsed.set(0);
       set({
         ...newGame(),
         agentSpeech: 'Fresh start! Scramble when ready.',
@@ -110,6 +117,9 @@ function createCubeStore() {
         // Listen for response
         const handleMessage = (msg: any) => {
           if (msg.role === 'assistant' && msg.content) {
+            const est = Math.round(msg.content.length * 1.3);
+            tokensUsed.update((n) => n + est);
+            tokenHistory.update((h) => [...h, est]);
             update((state) => ({
               ...state,
               agentSpeech: msg.content,

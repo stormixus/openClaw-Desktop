@@ -2,7 +2,7 @@
   import { t } from '$lib/i18n';
   import { kt } from './i18n';
   import { ArrowLeft } from '@lucide/svelte';
-  import TexasPokerBoard from './TexasPokerBoard.svelte';
+  import PokerBoard from './PokerBoard.svelte';
 </script>
 
 <svelte:head>
@@ -15,7 +15,7 @@
     <h2>{$kt('title')}</h2>
   </div>
   <div class="content">
-    <TexasPokerBoard />
+    <PokerBoard />
   </div>
 </div>
 

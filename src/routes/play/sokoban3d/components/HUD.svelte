@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../store/sokobanStore';
+  import { kt } from '../i18n';
   import { LEVEL_DATA } from '../core/levels';
 
   let state = $state($store);
@@ -27,17 +28,17 @@
       {state.level.title}
     </h2>
     <div class="level-progress">
-      Level {state.currentLevelIndex + 1} / {LEVEL_DATA.length}
+      {$kt('level')} {state.currentLevelIndex + 1} / {LEVEL_DATA.length}
     </div>
   </div>
 
   <div class="stats">
     <div class="stat-item">
-      <span class="stat-label">Moves</span>
+      <span class="stat-label">{$kt('moves')}</span>
       <span class="stat-value">{state.moves}</span>
     </div>
     <div class="stat-item">
-      <span class="stat-label">Pushes</span>
+      <span class="stat-label">{$kt('pushes')}</span>
       <span class="stat-value">{state.pushes}</span>
     </div>
   </div>
@@ -48,35 +49,35 @@
       disabled={state.history.length === 0}
       class="control-btn"
     >
-      Undo (Ctrl+Z)
+      {$kt('undo')}
     </button>
     <button
       onclick={handleReset}
       class="control-btn"
     >
-      Reset (R)
+      {$kt('reset')}
     </button>
   </div>
 
   {#if state.status === 'won'}
     <div class="win-message">
-      <p>Level Complete!</p>
+      <p>{$kt('level_complete')}</p>
       {#if state.currentLevelIndex < LEVEL_DATA.length - 1}
         <button onclick={handleNextLevel} class="next-level-btn">
-          Next Level
+          {$kt('next_level')}
         </button>
       {:else}
-        <p class="congrats">All levels completed!</p>
+        <p class="congrats">{$kt('all_complete')}</p>
       {/if}
     </div>
   {/if}
 
   <div class="instructions">
-    <h3>Controls</h3>
+    <h3>{$kt('controls')}</h3>
     <ul>
-      <li>WASD / Arrow Keys - Move</li>
-      <li>Ctrl+Z - Undo</li>
-      <li>R - Reset Level</li>
+      <li>{$kt('ctrl_move')}</li>
+      <li>{$kt('ctrl_undo')}</li>
+      <li>{$kt('ctrl_reset')}</li>
     </ul>
   </div>
 </div>
@@ -85,76 +86,79 @@
   .hud {
     display: flex;
     flex-direction: column;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    background: rgba(15, 15, 26, 0.8);
-    border-radius: 0.5rem;
-    color: white;
+    gap: 12px;
+    padding: 12px;
+    background: var(--color-surface);
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
   }
 
   .header {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 4px;
   }
 
   .level-title {
-    font-size: 1.5rem;
-    font-weight: bold;
+    font-size: 15px;
+    font-weight: 600;
     margin: 0;
+    color: var(--color-text);
   }
 
   .level-progress {
-    font-size: 0.875rem;
-    opacity: 0.7;
+    font-size: 12px;
+    color: var(--color-text-muted);
   }
 
   .stats {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    gap: 8px;
   }
 
   .stat-item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.75rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 0.375rem;
+    gap: 2px;
+    padding: 8px;
+    background: var(--color-surface-elevated);
+    border-radius: 6px;
   }
 
   .stat-label {
-    font-size: 0.75rem;
-    opacity: 0.7;
+    font-size: 11px;
+    color: var(--color-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
   }
 
   .stat-value {
-    font-size: 1.5rem;
-    font-weight: bold;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--color-text);
   }
 
   .controls {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 6px;
   }
 
   .control-btn {
-    padding: 0.75rem;
-    background: rgba(59, 130, 246, 0.2);
-    border: 1px solid rgba(59, 130, 246, 0.3);
-    border-radius: 0.375rem;
-    color: white;
+    padding: 8px;
+    background: var(--color-surface-elevated);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    color: var(--color-text);
     cursor: pointer;
-    transition: all 0.2s;
+    font-size: 13px;
+    transition: all 150ms ease;
   }
 
   .control-btn:hover:not(:disabled) {
-    background: rgba(59, 130, 246, 0.3);
-    border-color: rgba(59, 130, 246, 0.5);
+    background: var(--color-surface-hover);
+    border-color: var(--color-border-strong);
   }
 
   .control-btn:disabled {
@@ -163,49 +167,51 @@
   }
 
   .win-message {
-    padding: 1rem;
-    background: rgba(74, 222, 128, 0.2);
-    border: 1px solid rgba(74, 222, 128, 0.3);
-    border-radius: 0.375rem;
+    padding: 12px;
+    background: rgba(34, 197, 94, 0.12);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 8px;
     text-align: center;
   }
 
   .win-message p {
-    margin: 0 0 0.75rem 0;
-    font-size: 1.125rem;
-    font-weight: bold;
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #22c55e;
   }
 
   .next-level-btn {
-    padding: 0.75rem 1.5rem;
-    background: rgb(74, 222, 128);
+    padding: 8px 16px;
+    background: #22c55e;
     border: none;
-    border-radius: 0.375rem;
-    color: rgb(15, 15, 26);
-    font-weight: bold;
+    border-radius: 8px;
+    color: white;
+    font-weight: 600;
+    font-size: 13px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: background 150ms ease;
   }
 
   .next-level-btn:hover {
-    background: rgb(34, 197, 94);
+    background: #16a34a;
   }
 
   .congrats {
-    color: rgb(74, 222, 128);
-    margin: 0;
+    color: #22c55e;
+    margin: 0 !important;
   }
 
   .instructions {
-    padding: 1rem;
-    background: rgba(255, 255, 255, 0.05);
-    border-radius: 0.375rem;
+    padding: 10px;
+    background: var(--color-surface-elevated);
+    border-radius: 6px;
   }
 
   .instructions h3 {
-    margin: 0 0 0.75rem 0;
-    font-size: 1rem;
-    opacity: 0.9;
+    margin: 0 0 8px 0;
+    font-size: 13px;
+    color: var(--color-text);
   }
 
   .instructions ul {
@@ -215,8 +221,8 @@
   }
 
   .instructions li {
-    margin: 0.25rem 0;
-    font-size: 0.875rem;
-    opacity: 0.8;
+    margin: 3px 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
   }
 </style>

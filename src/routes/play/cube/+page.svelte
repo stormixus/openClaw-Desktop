@@ -1,91 +1,114 @@
 <script lang="ts">
+  import { t } from '$lib/i18n';
+  import { kt } from './i18n';
+  import { ArrowLeft } from '@lucide/svelte';
   import CubeViewport from './components/CubeViewport.svelte';
   import HUD from './components/HUD.svelte';
   import AgentPanel from './components/AgentPanel.svelte';
-  import { cubeStore } from './store/cubeStore';
 </script>
 
 <svelte:head>
-  <title>Rubik's Cube - openClaw</title>
+  <title>{$kt('title')} | {$t('nav.play')} | {$t('app.title')}</title>
 </svelte:head>
 
 <div class="page">
-  <header class="header">
-    <h1>🧊 Rubik's Cube</h1>
-    <p class="subtitle">Solve the classic 3x3x3 puzzle cube</p>
-  </header>
+  <div class="header">
+    <a href="/play" class="back-link"><ArrowLeft size={16} />{$kt('back')}</a>
+    <h2>{$kt('title')}</h2>
+    <p class="subtitle">{$kt('subtitle')}</p>
+  </div>
 
-  <div class="game-layout">
+  <div class="game-container">
     <div class="viewport-container">
       <CubeViewport />
     </div>
 
-    <div class="side-panel">
+    <aside class="sidebar">
       <HUD />
       <AgentPanel />
-    </div>
+    </aside>
   </div>
 </div>
 
 <style>
   .page {
-    width: 100%;
-    height: 100vh;
+    flex: 1;
     display: flex;
     flex-direction: column;
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-    color: white;
     overflow: hidden;
+    background: var(--color-bg);
   }
 
   .header {
-    padding: 1.5rem 2rem;
-    background: rgba(0, 0, 0, 0.3);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
   }
 
-  .header h1 {
+  .back-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-decoration: none;
+    padding: 5px 10px;
+    border-radius: 6px;
+    transition: all 150ms ease;
+  }
+
+  .back-link:hover {
+    background: var(--color-surface-hover);
+    color: var(--color-primary);
+  }
+
+  h2 {
     margin: 0;
-    font-size: 2rem;
-    font-weight: 700;
+    font-size: 16px;
+    color: var(--color-text);
   }
 
   .subtitle {
-    margin: 0.5rem 0 0;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
   }
 
-  .game-layout {
-    flex: 1;
+  .game-container {
     display: grid;
-    grid-template-columns: 1fr 400px;
-    gap: 1rem;
-    padding: 1rem;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    padding: 16px;
+    flex: 1;
     overflow: hidden;
   }
 
   .viewport-container {
     position: relative;
-    border-radius: 8px;
+    border-radius: 10px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
   }
 
-  .side-panel {
+  .sidebar {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 12px;
     overflow-y: auto;
   }
 
-  @media (max-width: 1024px) {
-    .game-layout {
+  @media (max-width: 900px) {
+    .game-container {
       grid-template-columns: 1fr;
       grid-template-rows: 1fr auto;
     }
 
-    .side-panel {
+    .sidebar {
       max-height: 400px;
     }
   }

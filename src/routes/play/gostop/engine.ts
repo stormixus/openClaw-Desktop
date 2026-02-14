@@ -43,6 +43,7 @@ export interface GostopState {
   turnNumber: number;
   goCount: Record<PlayerId, number>;
   goDecisions: number;
+  shakeCount: Record<PlayerId, number>;
 }
 
 export interface ScoreSummary {
@@ -166,6 +167,92 @@ function cardAtom(card: HwatuCard): string {
 function removeCards(table: HwatuCard[], cardIds: string[]): HwatuCard[] {
   const idSet = new Set(cardIds);
   return table.filter((card) => !idSet.has(card.id));
+}
+
+export function detectBombs(hand: HwatuCard[]): { month: number; cards: HwatuCard[] }[] {
+  const byMonth = new Map<number, HwatuCard[]>();
+  for (const card of hand) {
+    const group = byMonth.get(card.month) ?? [];
+    group.push(card);
+    byMonth.set(card.month, group);
+  }
+  const bombs: { month: number; cards: HwatuCard[] }[] = [];
+  for (const [month, cards] of byMonth) {
+    if (cards.length === 4) {
+      bombs.push({ month, cards });
+    }
+  }
+  return bombs;
+}
+
+function resolveBombs(state: GostopState): GostopState {
+  let current = state;
+  for (const player of state.players) {
+    const bombs = detectBombs(player.hand);
+    for (const bomb of bombs) {
+      const bombIds = new Set(bomb.cards.map((c) => c.id));
+      const updatedHand = getPlayer(current, player.id).hand.filter((c) => !bombIds.has(c.id));
+      current = updatePlayer(current, player.id, { hand: updatedHand });
+      current = withCaptured(current, player.id, bomb.cards);
+      const text = `${player.name} declared a BOMB! Month ${bomb.month} — 4 cards captured!`;
+      current = addLog(current, text);
+    }
+  }
+  return current;
+}
+
+function resolveTableBombs(state: GostopState, dealerId: PlayerId): GostopState {
+  let current = state;
+  const byMonth = new Map<number, HwatuCard[]>();
+  for (const card of current.table) {
+    const group = byMonth.get(card.month) ?? [];
+    group.push(card);
+    byMonth.set(card.month, group);
+  }
+  for (const [month, cards] of byMonth) {
+    if (cards.length === 4) {
+      const ids = cards.map((c) => c.id);
+      current = { ...current, table: removeCards(current.table, ids) };
+      current = withCaptured(current, dealerId, cards);
+      const dealer = getPlayer(current, dealerId);
+      const text = `${dealer.name} captures table BOMB! Month ${month} — all 4 cards swept from the table!`;
+      current = addLog(current, text);
+    }
+  }
+  return current;
+}
+
+export function detectShakes(hand: HwatuCard[]): number[] {
+  const byMonth = new Map<number, number>();
+  for (const card of hand) {
+    byMonth.set(card.month, (byMonth.get(card.month) ?? 0) + 1);
+  }
+  const months: number[] = [];
+  for (const [month, count] of byMonth) {
+    if (count === 3) months.push(month);
+  }
+  return months;
+}
+
+function resolveShakes(state: GostopState): GostopState {
+  let current = state;
+  for (const player of state.players) {
+    const hand = getPlayer(current, player.id).hand;
+    const shakeMonths = detectShakes(hand);
+    if (shakeMonths.length > 0) {
+      current = {
+        ...current,
+        shakeCount: {
+          ...current.shakeCount,
+          [player.id]: current.shakeCount[player.id] + shakeMonths.length,
+        },
+      };
+      const monthsStr = shakeMonths.join(', ');
+      const text = `${player.name} shakes! (Month ${monthsStr}) — score x${Math.pow(2, current.shakeCount[player.id])}`;
+      current = addLog(current, text);
+    }
+  }
+  return current;
 }
 
 function addLog(state: GostopState, text: string): GostopState {
@@ -315,37 +402,65 @@ function goThreshold(state: GostopState, playerId: PlayerId): number {
   return WIN_SCORE + state.goCount[playerId];
 }
 
+function stealPi(state: GostopState, actorId: PlayerId, count: number): { state: GostopState; stolen: number } {
+  let current = state;
+  let stolen = 0;
+  for (const player of current.players) {
+    if (player.id === actorId) continue;
+    const piCards = getPlayer(current, player.id).captured.filter((c) => c.kind === 'pi');
+    const toSteal = piCards.slice(0, count);
+    if (!toSteal.length) continue;
+    const ids = new Set(toSteal.map((c) => c.id));
+    current = updatePlayer(current, player.id, {
+      captured: getPlayer(current, player.id).captured.filter((c) => !ids.has(c.id)),
+    });
+    current = withCaptured(current, actorId, toSteal);
+    stolen += toSteal.length;
+  }
+  return { state: current, stolen };
+}
+
 function finishTurn(state: GostopState, actorId: PlayerId, actionText: string): GostopState {
-  const board = scoreState(state);
+  let current = state;
+  let finalText = actionText;
+
+  // 판쓸이: table is empty after captures
+  if (current.table.length === 0 && current.turnNumber > 0) {
+    const result = stealPi(current, actorId, 1);
+    current = result.state;
+    if (result.stolen > 0) {
+      finalText = `${finalText} Pan-sseuri! Stole ${result.stolen} pi.`;
+    }
+  }
+
+  const board = scoreState(current);
   const actorScore = board[actorId].total;
-  const threshold = goThreshold(state, actorId);
+  const threshold = goThreshold(current, actorId);
 
   let winnerId: GostopState['winnerId'] = null;
   let step: TurnStep = 'play-hand';
 
   if (actorScore >= threshold) {
-    // Player reached threshold -- enter go-or-stop decision
     step = 'go-or-stop';
-  } else if (state.deck.length === 0) {
-    winnerId = determineWinnerOnDeckEmpty(state);
+  } else if (current.deck.length === 0) {
+    winnerId = determineWinnerOnDeckEmpty(current);
   }
 
-  const actorName = getPlayer(state, actorId).name;
-  let finalText = actionText;
+  const actorName = getPlayer(current, actorId).name;
   if (step === 'go-or-stop') {
-    finalText = `${actionText} ${actorName} reached ${threshold} points -- Go or Stop?`;
+    finalText = `${finalText} ${actorName} reached ${threshold} points -- Go or Stop?`;
   }
-  if (winnerId === 'draw') finalText = `${actionText} Deck is empty with tied score.`;
+  if (winnerId === 'draw') finalText = `${finalText} Deck is empty with tied score.`;
 
-  const nextTurn = (winnerId || step === 'go-or-stop') ? state.turnIndex : (state.turnIndex + 1) % state.players.length;
+  const nextTurn = (winnerId || step === 'go-or-stop') ? current.turnIndex : (current.turnIndex + 1) % current.players.length;
 
   const nextState: GostopState = {
-    ...state,
+    ...current,
     turnIndex: nextTurn,
     step,
     pendingChoice: null,
     winnerId,
-    turnNumber: (winnerId || step === 'go-or-stop') ? state.turnNumber : state.turnNumber + 1,
+    turnNumber: (winnerId || step === 'go-or-stop') ? current.turnNumber : current.turnNumber + 1,
     lastAction: finalText,
   };
 
@@ -404,19 +519,44 @@ export function chooseProgramGoStop(state: GostopState, actorId: PlayerId): 'go'
   return Math.random() < 0.5 ? 'go' : 'stop';
 }
 
-function drawAndResolve(state: GostopState, actorId: PlayerId, prefix: string): GostopState {
+interface DeferredCapture {
+  card: HwatuCard;
+  matched: HwatuCard;
+}
+
+function drawAndResolve(state: GostopState, actorId: PlayerId, prefix: string, deferred?: DeferredCapture, placedCard?: HwatuCard): GostopState {
   if (!state.deck.length) {
-    return finishTurn(state, actorId, `${prefix}. No draw card remained.`);
+    let s = state;
+    if (deferred) {
+      s = withCaptured(s, actorId, [deferred.card, deferred.matched]);
+    }
+    return finishTurn(s, actorId, `${prefix}. No draw card remained.`);
   }
 
   const drawCard = state.deck[0];
   const restDeck = state.deck.slice(1);
-  const drawResolution = resolveCardAgainstTable(state.table, drawCard);
+
+  // 뻑 check: deferred single-match + drawn card is same month
+  if (deferred && drawCard.month === deferred.card.month) {
+    const newTable = [...state.table, deferred.matched, deferred.card, drawCard];
+    const nextState: GostopState = { ...state, deck: restDeck, table: newTable };
+    const actorName = getPlayer(nextState, actorId).name;
+    const text = `${prefix}. ${actorName} drew ${cardToken(drawCard)} — Ppeok! Month ${deferred.card.month} stacked on table.`;
+    return finishTurn(nextState, actorId, text);
+  }
+
+  // Apply deferred capture (no 뻑)
+  let baseState = state;
+  if (deferred) {
+    baseState = withCaptured(baseState, actorId, [deferred.card, deferred.matched]);
+  }
+
+  const drawResolution = resolveCardAgainstTable(baseState.table, drawCard);
 
   if (drawResolution.pendingMatches) {
-    const actorName = getPlayer(state, actorId).name;
+    const actorName = getPlayer(baseState, actorId).name;
     const withDrawPending: GostopState = {
-      ...state,
+      ...baseState,
       deck: restDeck,
       table: drawResolution.table,
       step: 'choose-match',
@@ -432,17 +572,34 @@ function drawAndResolve(state: GostopState, actorId: PlayerId, prefix: string): 
   }
 
   let nextState: GostopState = {
-    ...state,
+    ...baseState,
     deck: restDeck,
     table: drawResolution.table,
   };
   nextState = withCaptured(nextState, actorId, drawResolution.captured);
 
   const actorName = getPlayer(nextState, actorId).name;
+  let bonusText = '';
+  const drawCaptured = drawResolution.captured.length > 0;
+
+  // 따닥: hand captured (deferred) + draw also captured
+  if (deferred && drawCaptured) {
+    const result = stealPi(nextState, actorId, 1);
+    nextState = result.state;
+    if (result.stolen > 0) bonusText = ` Ddadak! Stole ${result.stolen} pi.`;
+  }
+
+  // 자뻑: hand placed on table (no match) + draw matches placed card
+  if (placedCard && drawCaptured && drawCard.month === placedCard.month) {
+    const result = stealPi(nextState, actorId, 1);
+    nextState = result.state;
+    if (result.stolen > 0) bonusText = ` Ja-ppeok! Stole ${result.stolen} pi.`;
+  }
+
   return finishTurn(
     nextState,
     actorId,
-    `${prefix}. ${actorName} drew ${cardToken(drawCard)} and ${drawResolution.text}`,
+    `${prefix}. ${actorName} drew ${cardToken(drawCard)} and ${drawResolution.text}${bonusText}`,
   );
 }
 
@@ -471,7 +628,7 @@ export function createNewGame(players: PlayerSetup[], startTurnIndex?: number): 
       : Math.floor(Math.random() * states.length);
 
   const opener = states[initialTurn];
-  return {
+  let initial: GostopState = {
     players: states,
     deck,
     table,
@@ -484,7 +641,25 @@ export function createNewGame(players: PlayerSetup[], startTurnIndex?: number): 
     turnNumber: 1,
     goCount: emptyGoCount(),
     goDecisions: 0,
+    shakeCount: { left: 0, right: 0, human: 0 },
   };
+
+  initial = resolveTableBombs(initial, opener.id as PlayerId);
+  initial = resolveBombs(initial);
+  initial = resolveShakes(initial);
+
+  // 총통: if any player already meets win score after bombs/shakes
+  const postBoard = scoreState(initial);
+  for (const player of initial.players) {
+    if (postBoard[player.id].total >= WIN_SCORE) {
+      const text = `${player.name} wins by Chongtong! (${postBoard[player.id].total} pts from opening)`;
+      initial = { ...initial, winnerId: player.id, lastAction: text };
+      initial = addLog(initial, text);
+      break;
+    }
+  }
+
+  return initial;
 }
 
 export function getCurrentPlayer(state: GostopState): PlayerState {
@@ -542,6 +717,37 @@ export function scoreCaptured(cards: HwatuCard[]): ScoreSummary {
   };
 }
 
+export interface PenaltyDetail {
+  piBak: PlayerId[];
+  gwangBak: PlayerId[];
+  multiplier: number;
+}
+
+export function computePenalties(state: GostopState): PenaltyDetail {
+  const winnerId = state.winnerId;
+  if (!winnerId || winnerId === 'draw') {
+    return { piBak: [], gwangBak: [], multiplier: 1 };
+  }
+
+  const losers = state.players.filter((p) => p.id !== winnerId);
+  const piBak: PlayerId[] = [];
+  const gwangBak: PlayerId[] = [];
+
+  for (const loser of losers) {
+    const score = scoreCaptured(loser.captured);
+    if (score.pi < 1) piBak.push(loser.id);
+    if (score.bright === 0) gwangBak.push(loser.id);
+  }
+
+  const multiplier = Math.pow(2, piBak.length + gwangBak.length);
+  return { piBak, gwangBak, multiplier };
+}
+
+export function totalShakeMultiplier(state: GostopState): number {
+  const total = state.shakeCount.left + state.shakeCount.right + state.shakeCount.human;
+  return total > 0 ? Math.pow(2, total) : 1;
+}
+
 export function scoreState(state: GostopState): ScoreBoard {
   const board: ScoreBoard = {
     left: newScore(),
@@ -549,8 +755,13 @@ export function scoreState(state: GostopState): ScoreBoard {
     human: newScore(),
   };
 
+  const mult = totalShakeMultiplier(state);
+
   for (const player of state.players) {
-    board[player.id] = scoreCaptured(player.captured);
+    const base = scoreCaptured(player.captured);
+    board[player.id] = mult > 1
+      ? { ...base, total: base.total * mult }
+      : base;
   }
 
   return board;
@@ -588,8 +799,20 @@ export function playTurnCard(state: GostopState, cardId: string): GostopState {
     ...nextState,
     table: handResolution.table,
   };
+
+  // Single match (2 cards): defer capture for 뻑 check during draw
+  if (handResolution.captured.length === 2) {
+    const deferred: DeferredCapture = {
+      card: handResolution.captured[0],
+      matched: handResolution.captured[1],
+    };
+    return drawAndResolve(nextState, actor.id, `${actor.name} played ${cardToken(card)}`, deferred);
+  }
+
+  // 0 matches (placed on table) or sweep (4 cards captured)
+  const placed = handResolution.captured.length === 0 ? card : undefined;
   nextState = withCaptured(nextState, actor.id, handResolution.captured);
-  return drawAndResolve(nextState, actor.id, `${actor.name} played ${cardToken(card)} and ${handResolution.text}`);
+  return drawAndResolve(nextState, actor.id, `${actor.name} played ${cardToken(card)} and ${handResolution.text}`, undefined, placed);
 }
 
 export function resolvePendingMatch(state: GostopState, tableCardId: string): GostopState {
@@ -606,13 +829,15 @@ export function resolvePendingMatch(state: GostopState, tableCardId: string): Go
     step: 'play-hand',
     pendingChoice: null,
   };
-  nextState = withCaptured(nextState, pending.actorId, [pending.card, chosen]);
 
   const prefix = `${actor.name} chose ${cardToken(chosen)} to pair with ${cardToken(pending.card)}`;
   if (pending.source === 'hand') {
-    return drawAndResolve(nextState, pending.actorId, prefix);
+    // Defer capture for 뻑 check during draw
+    const deferred: DeferredCapture = { card: pending.card, matched: chosen };
+    return drawAndResolve(nextState, pending.actorId, prefix, deferred);
   }
 
+  nextState = withCaptured(nextState, pending.actorId, [pending.card, chosen]);
   return finishTurn(nextState, pending.actorId, `${prefix}. Draw phase resolved.`);
 }
 

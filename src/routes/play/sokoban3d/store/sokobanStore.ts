@@ -4,6 +4,9 @@ import { move, undo, resetLevel, loadLevel, checkWin } from '../core/engine';
 import { LEVEL_DATA } from '../core/levels';
 import { store as gwStore, getActiveClient } from '$lib/gateway/store.svelte';
 
+export const tokenHistory = writable<number[]>([]);
+export const tokensUsed = writable(0);
+
 function createInitialState(): SokobanState {
   const level = loadLevel(LEVEL_DATA[0]);
   return {
@@ -45,6 +48,8 @@ function createSokobanStore() {
     },
 
     resetCurrentLevel() {
+      tokenHistory.set([]);
+      tokensUsed.set(0);
       update(state => ({
         ...resetLevel(state),
         agentSpeech: 'Level reset. Try again!',
@@ -81,6 +86,8 @@ function createSokobanStore() {
 
     loadLevelByIndex(index: number) {
       if (index < 0 || index >= LEVEL_DATA.length) return;
+      tokenHistory.set([]);
+      tokensUsed.set(0);
 
       update(() => {
         const level = loadLevel(LEVEL_DATA[index]);
@@ -145,6 +152,12 @@ Current stats: ${moves} moves, ${pushes} pushes`;
         const messages = gwStore.chatMessages;
         const lastMsg = messages[messages.length - 1];
         const hint = lastMsg?.content || 'Keep trying!';
+
+        if (hint && hint !== 'Keep trying!') {
+          const est = Math.round(hint.length * 1.3);
+          tokensUsed.update((n) => n + est);
+          tokenHistory.update((h) => [...h, est]);
+        }
 
         update(s => ({
           ...s,

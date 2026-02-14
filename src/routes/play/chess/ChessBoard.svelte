@@ -8,7 +8,7 @@
   import { store, getActiveClient, getClientById, getConnectedGatewayIds } from '$lib/gateway/store.svelte';
   import { saveChessState, loadChessState, clearChessState } from './state';
   import { RotateCcw, Bot, Cpu, Zap, MessageSquare, Radio, Swords } from '@lucide/svelte';
-  import { LineChart } from 'layerchart';
+  import TokenBarChart from '$lib/components/TokenBarChart.svelte';
 
   // ===== Game State (restore from persisted if available) =====
   const restored = loadChessState();
@@ -65,7 +65,7 @@
   const isWin = $derived.by(() => { void rev; return game.isCheckmate() && game.turn() === 'b'; });
   const isLose = $derived.by(() => { void rev; return game.isCheckmate() && game.turn() === 'w'; });
   const moveNum = $derived.by(() => { void rev; return game.moveNumber(); });
-  const tokenChartData = $derived(tokenHistory.map((t, i) => ({ turn: i + 1, tokens: t })));
+
 
   // ===== Helpers =====
   function delay(ms: number) { return new Promise(r => setTimeout(r, ms)); }
@@ -496,22 +496,11 @@
     </div>
 
     <!-- Token Waste Graph -->
-    {#if tokenChartData.length > 0}
+    {#if tokenHistory.length > 0}
       <div class="panel-section token-section">
         <span class="section-label">{$ct('token_graph')}</span>
         <div class="token-chart-wrap">
-          <LineChart
-            data={tokenChartData}
-            x="turn"
-            y="tokens"
-            axis={false}
-            grid={false}
-            rule={false}
-            props={{
-              spline: { stroke: '#fbbf24', strokeWidth: 2 },
-              highlight: { points: { r: 5, fill: '#fbbf24', strokeWidth: 2, stroke: '#1a1a2e' } },
-            }}
-          />
+          <TokenBarChart data={tokenHistory} />
         </div>
         <div class="token-total">
           <Zap size={11} />
@@ -729,7 +718,7 @@
     height: 72px;
     background: var(--color-surface-elevated);
     border-radius: 8px;
-    overflow: hidden;
+    overflow: visible;
     padding: 6px 4px;
   }
 

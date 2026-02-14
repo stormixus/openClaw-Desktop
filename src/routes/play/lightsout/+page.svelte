@@ -1,17 +1,22 @@
 <script lang="ts">
+	import { t } from '$lib/i18n';
+	import { kt } from './i18n';
+	import { ArrowLeft } from '@lucide/svelte';
 	import LightsOutViewport from './components/LightsOutViewport.svelte';
 	import HUD from './components/HUD.svelte';
 	import AgentPanel from './components/AgentPanel.svelte';
 </script>
 
+<svelte:head>
+	<title>{$kt('title')} | {$t('nav.play')} | {$t('app.title')}</title>
+</svelte:head>
+
 <div class="page">
-	<header class="header">
-		<h1 class="title">
-			<span class="emoji">💡</span>
-			<span>Lights Out</span>
-		</h1>
-		<p class="subtitle">Toggle the lights to turn them all off</p>
-	</header>
+	<div class="header">
+		<a href="/play" class="back-link"><ArrowLeft size={16} />{$kt('back')}</a>
+		<h2>{$kt('title')}</h2>
+		<p class="subtitle">{$kt('subtitle')}</p>
+	</div>
 
 	<div class="game-container">
 		<div class="viewport-container">
@@ -27,90 +32,77 @@
 
 <style>
 	.page {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
-		height: 100vh;
-		background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-		color: #e2e8f0;
 		overflow: hidden;
+		background: var(--color-bg);
 	}
 
 	.header {
-		padding: 1.5rem 2rem;
-		background: rgba(15, 23, 42, 0.8);
-		border-bottom: 1px solid rgba(148, 163, 184, 0.1);
-		backdrop-filter: blur(10px);
-	}
-
-	.title {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		font-size: 2rem;
-		font-weight: 700;
-		margin: 0;
-		background: linear-gradient(135deg, #fbbf24, #f59e0b);
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		background-clip: text;
+		gap: 14px;
+		padding: 16px 24px;
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
 	}
 
-	.emoji {
-		font-size: 2.5rem;
-		filter: drop-shadow(0 0 10px rgba(251, 191, 36, 0.5));
+	.back-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--color-text-muted);
+		text-decoration: none;
+		padding: 5px 10px;
+		border-radius: 6px;
+		transition: all 150ms ease;
+	}
+
+	.back-link:hover {
+		background: var(--color-surface-hover);
+		color: var(--color-primary);
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 16px;
+		color: var(--color-text);
 	}
 
 	.subtitle {
-		margin: 0.5rem 0 0 0;
-		font-size: 1rem;
-		color: #94a3b8;
-		font-weight: 400;
+		margin: 0;
+		font-size: 12px;
+		color: var(--color-text-muted);
 	}
 
 	.game-container {
 		display: grid;
-		grid-template-columns: 1fr 320px;
-		gap: 1.5rem;
-		padding: 1.5rem;
+		grid-template-columns: 1fr 280px;
+		gap: 16px;
+		padding: 16px;
 		flex: 1;
 		overflow: hidden;
 	}
 
 	.viewport-container {
 		position: relative;
-		border-radius: 0.75rem;
+		border-radius: 10px;
 		overflow: hidden;
-		background: rgba(11, 16, 32, 0.5);
-		border: 1px solid rgba(148, 163, 184, 0.1);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
 	}
 
 	.sidebar {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 12px;
 		overflow-y: auto;
-		padding-right: 0.5rem;
 	}
 
-	.sidebar::-webkit-scrollbar {
-		width: 6px;
-	}
-
-	.sidebar::-webkit-scrollbar-track {
-		background: rgba(30, 41, 59, 0.3);
-		border-radius: 3px;
-	}
-
-	.sidebar::-webkit-scrollbar-thumb {
-		background: rgba(148, 163, 184, 0.3);
-		border-radius: 3px;
-	}
-
-	.sidebar::-webkit-scrollbar-thumb:hover {
-		background: rgba(148, 163, 184, 0.5);
-	}
-
-	@media (max-width: 1024px) {
+	@media (max-width: 900px) {
 		.game-container {
 			grid-template-columns: 1fr;
 			grid-template-rows: 1fr auto;

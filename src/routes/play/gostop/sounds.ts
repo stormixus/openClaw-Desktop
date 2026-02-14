@@ -77,6 +77,33 @@ export function playCardFlip(): void {
   }
 }
 
+export function playCardShuffle(): void {
+  try {
+    const ac = getCtx();
+    const t = ac.currentTime;
+    const bursts = 12;
+    const dur = 0.85;
+
+    for (let i = 0; i < bursts; i++) {
+      const offset = (i / bursts) * dur;
+      const n = noise(ac, 0.07, 0.6);
+      const filt = ac.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(1200 + Math.sin(i * 0.8) * 600, t + offset);
+      filt.Q.value = 1.2;
+      const g = ac.createGain();
+      const vol = 0.12 + Math.sin((i / bursts) * Math.PI) * 0.08;
+      g.gain.setValueAtTime(vol, t + offset);
+      g.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.07);
+      connect(ac, n, filt, g);
+      n.start(t + offset);
+      n.stop(t + offset + 0.07);
+    }
+  } catch {
+    // Audio not available
+  }
+}
+
 export function playCapture(): void {
   try {
     const ac = getCtx();
@@ -105,6 +132,53 @@ export function playCapture(): void {
     connect(ac, osc, og);
     osc.start(t + 0.04);
     osc.stop(t + 0.26);
+  } catch {
+    // Audio not available
+  }
+}
+
+/** Sharp "딱!" of two hwatu cards slapping together */
+export function playCardMatch(): void {
+  try {
+    const ac = getCtx();
+    const t = ac.currentTime;
+
+    // 1. Sharp crack — card edges hitting
+    const crack = noise(ac, 0.02, 1.0);
+    const crackFilt = ac.createBiquadFilter();
+    crackFilt.type = 'bandpass';
+    crackFilt.frequency.value = 3200;
+    crackFilt.Q.value = 0.7;
+    const crackGain = ac.createGain();
+    crackGain.gain.setValueAtTime(0.6, t);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, t + 0.02);
+    connect(ac, crack, crackFilt, crackGain);
+    crack.start(t);
+    crack.stop(t + 0.025);
+
+    // 2. Body thump — card body resonance
+    const thump = ac.createOscillator();
+    thump.type = 'sine';
+    thump.frequency.setValueAtTime(320, t);
+    thump.frequency.exponentialRampToValueAtTime(100, t + 0.05);
+    const thumpGain = ac.createGain();
+    thumpGain.gain.setValueAtTime(0.3, t);
+    thumpGain.gain.exponentialRampToValueAtTime(0.001, t + 0.06);
+    connect(ac, thump, thumpGain);
+    thump.start(t);
+    thump.stop(t + 0.07);
+
+    // 3. Secondary tap — slight bounce
+    const tap = ac.createOscillator();
+    tap.type = 'triangle';
+    tap.frequency.value = 480;
+    const tapGain = ac.createGain();
+    tapGain.gain.setValueAtTime(0, t);
+    tapGain.gain.linearRampToValueAtTime(0.12, t + 0.025);
+    tapGain.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+    connect(ac, tap, tapGain);
+    tap.start(t + 0.018);
+    tap.stop(t + 0.06);
   } catch {
     // Audio not available
   }
