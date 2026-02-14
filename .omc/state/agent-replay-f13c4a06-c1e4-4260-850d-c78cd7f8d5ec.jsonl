@@ -1,7 +1,0 @@
-{"t":0,"agent":"a690dea","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
-{"t":0,"agent":"a690dea","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":111581}
-{"t":0,"agent":"system","event":"skill_invoked","skill_name":"oh-my-claudecode:swarm"}
-{"t":0,"agent":"aabb345","agent_type":"Explore","event":"agent_start","parent_mode":"none"}
-{"t":0,"agent":"aabb345","agent_type":"Explore","event":"agent_stop","success":true,"duration_ms":156340}
-{"t":0,"agent":"a53010a","agent_type":"executor","event":"agent_start","parent_mode":"none"}
-{"t":0,"agent":"a53010a","agent_type":"executor","event":"agent_stop","success":true,"duration_ms":294460}
