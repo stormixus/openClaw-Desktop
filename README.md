@@ -21,15 +21,15 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_aarch64.dmg"><img src="https://img.shields.io/badge/macOS-DMG_(Apple_Silicon)-000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Apple Silicon" /></a>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_x64.dmg"><img src="https://img.shields.io/badge/macOS-DMG_(Intel)-000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Intel" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_aarch64.dmg"><img src="https://img.shields.io/badge/macOS-DMG_(Apple_Silicon)-000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Apple Silicon" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_x64.dmg"><img src="https://img.shields.io/badge/macOS-DMG_(Intel)-000?style=for-the-badge&logo=apple&logoColor=white" alt="macOS Intel" /></a>
   <br/>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_x64-setup.exe"><img src="https://img.shields.io/badge/Windows-Installer_(x64)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows x64" /></a>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_x64_en-US.msi"><img src="https://img.shields.io/badge/Windows-MSI_(x64)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows MSI" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_x64-setup.exe"><img src="https://img.shields.io/badge/Windows-Installer_(x64)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows x64" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_x64_en-US.msi"><img src="https://img.shields.io/badge/Windows-MSI_(x64)-0078D4?style=for-the-badge&logo=windows&logoColor=white" alt="Windows MSI" /></a>
   <br/>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_amd64.deb"><img src="https://img.shields.io/badge/Linux-DEB_(amd64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux deb" /></a>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop_0.1.3_amd64.AppImage"><img src="https://img.shields.io/badge/Linux-AppImage_(amd64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux AppImage" /></a>
-  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw-Desktop-0.1.3-1.x86_64.rpm"><img src="https://img.shields.io/badge/Linux-RPM_(x86__64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux RPM" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_amd64.deb"><img src="https://img.shields.io/badge/Linux-DEB_(amd64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux deb" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop_0.1.3_amd64.AppImage"><img src="https://img.shields.io/badge/Linux-AppImage_(amd64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux AppImage" /></a>
+  <a href="https://github.com/stormixus/openClaw-Desktop/releases/latest/download/openClaw.Desktop-0.1.3-1.x86_64.rpm"><img src="https://img.shields.io/badge/Linux-RPM_(x86__64)-FCC624?style=for-the-badge&logo=linux&logoColor=black" alt="Linux RPM" /></a>
 </p>
 
 <p align="center">
