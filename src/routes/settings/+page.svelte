@@ -6,7 +6,9 @@
   import { store, loadGateways, removeGateway, connectGateway, disconnectGateway } from "$lib/gateway/store.svelte";
   import type { GatewayConfig, ConnectionStatus } from "$lib/gateway/types";
   import AddGatewayModal from "$lib/components/Gateway/AddGatewayModal.svelte";
-  import { Radio, Pencil, Trash2, Plus, Shield, Key, Lock, Palette, Monitor, Eye, EyeOff, Check } from "@lucide/svelte";
+  import { Radio, Pencil, Trash2, Plus, Shield, Key, Lock, Palette, Monitor, Eye, EyeOff, Check, Download } from "@lucide/svelte";
+  import { check } from "@tauri-apps/plugin-updater";
+  import { getVersion } from "@tauri-apps/api/app";
 
   type Section = "appearance" | "system" | "gateway" | "apikeys";
   let activeSection = $state<Section>("appearance");
@@ -16,6 +18,8 @@
   // API Key UI state
   let visibleKeys = $state<Record<string, boolean>>({});
   let savedKeys = $state<Record<string, boolean>>({});
+  let updateStatus = $state<'idle' | 'checking' | 'latest' | 'error'>('idle');
+  let version = $state("...");
 
   const API_PROVIDERS: { key: string; icon: string; color: string }[] = [
     { key: "openai", icon: "⚡", color: "#10a37f" },
@@ -45,11 +49,28 @@
     return key.slice(0, 4) + "•".repeat(Math.min(key.length - 8, 20)) + key.slice(-4);
   }
 
+  async function checkForUpdates() {
+    updateStatus = 'checking';
+    try {
+      const update = await check();
+      if (update?.available) {
+        await update.downloadAndInstall();
+      } else {
+        updateStatus = 'latest';
+        setTimeout(() => { updateStatus = 'idle'; }, 3000);
+      }
+    } catch {
+      updateStatus = 'error';
+      setTimeout(() => { updateStatus = 'idle'; }, 3000);
+    }
+  }
+
   onMount(() => {
     initLocale();
     initTheme();
     initSettings();
     loadGateways();
+    getVersion().then(v => version = v);
   });
 
   const themes: Theme[] = ["system", "light", "dark"];
@@ -282,6 +303,24 @@
               title={$t("settings.auto_update_desc")}
             >
               <span class="knob"></span>
+            </button>
+          </div>
+
+          <div class="list-row">
+            <div>
+              <div class="row-title">
+                <Download size={16} class="mini-icon" color="var(--color-primary)" />
+                <h4>{$t("settings.check_update")}</h4>
+              </div>
+              <p>
+                {#if updateStatus === 'checking'}{$t("settings.update_checking")}
+                {:else if updateStatus === 'latest'}{$t("settings.update_latest")}
+                {:else if updateStatus === 'error'}{$t("settings.update_error")}
+                {:else}v{version}{/if}
+              </p>
+            </div>
+            <button class="action-btn" onclick={checkForUpdates} disabled={updateStatus === 'checking'}>
+              {$t("settings.check_update")}
             </button>
           </div>
 
@@ -1128,6 +1167,31 @@
     border: 1px solid rgba(99, 102, 241, 0.1);
     font-size: 11px;
     color: var(--color-text-muted);
+  }
+
+  .action-btn {
+    padding: 6px 14px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface);
+    color: var(--color-text);
+    font-size: 12px;
+    font-family: var(--font-sans);
+    font-weight: 500;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--duration-fast) var(--ease-out);
+  }
+
+  .action-btn:hover:not(:disabled) {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(99, 102, 241, 0.05);
+  }
+
+  .action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
   }
 
   @media (max-width: 900px) {
