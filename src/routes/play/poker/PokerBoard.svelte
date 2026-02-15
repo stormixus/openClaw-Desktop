@@ -8,6 +8,7 @@
   import { Zap } from '@lucide/svelte';
   import TokenBarChart from '$lib/components/TokenBarChart.svelte';
   import {
+    analyzePlayerHand,
     applyAction,
     buildAgentPrompt,
     calculatePlayerOdds,
@@ -34,7 +35,7 @@
     type PokerVariant,
   } from './engine';
   import { clearPokerState, loadPokerState, savePokerState } from './state';
-  import { playPokerActionVoice, playPokerDealCard } from './sounds';
+  import { playPokerActionVoice, playPokerDealCard, playPokerWinJingle } from './sounds';
   import { cardBackUri, cardImageUri } from './cardArt';
 
   interface SeatConfig {
@@ -61,7 +62,43 @@
     active: boolean;
   }
 
+  interface WinnerPopupState {
+    handNumber: number;
+    winners: string[];
+    handLabel: string | null;
+    pot: number | null;
+    split: boolean;
+  }
+
   const DEAL_ORIGIN = { x: 46.6, y: 54.2 };
+  const PROGRAM_NAME_POOL_EN = [
+    'Nova Jack',
+    'River Quinn',
+    'Axel Vale',
+    'Mika Lane',
+    'Blaze Orion',
+    'Nash Cole',
+    'Luca Storm',
+    'Ivy Knight',
+    'Theo Rush',
+    'Rin Parker',
+    'Kai Sterling',
+    'Juno Drake',
+  ] as const;
+  const PROGRAM_NAME_POOL_KO = [
+    '라임',
+    '도윤',
+    '하린',
+    '서준',
+    '유진',
+    '지안',
+    '민서',
+    '태오',
+    '아린',
+    '윤호',
+    '채원',
+    '시온',
+  ] as const;
 
   const HAND_LABEL_KEY: Record<string, string> = {
     'High Card': 'hand_high_card',
@@ -148,6 +185,24 @@
     return store.gateways.find((gateway) => gateway.id === gatewayId)?.name ?? gatewayId.slice(0, 8);
   }
 
+  function randomProgramName(localeCode: string, used: Set<string>): string {
+    const pool = localeCode.startsWith('ko') ? PROGRAM_NAME_POOL_KO : PROGRAM_NAME_POOL_EN;
+    const attempts = [...pool];
+    while (attempts.length > 0) {
+      const idx = Math.floor(Math.random() * attempts.length);
+      const [picked] = attempts.splice(idx, 1);
+      if (!used.has(picked)) return picked;
+    }
+
+    let suffix = 1;
+    let fallback = localeCode.startsWith('ko') ? `프로그램 ${suffix}` : `Program ${suffix}`;
+    while (used.has(fallback)) {
+      suffix += 1;
+      fallback = localeCode.startsWith('ko') ? `프로그램 ${suffix}` : `Program ${suffix}`;
+    }
+    return fallback;
+  }
+
   function seatName(seatId: string, role: PlayerRole, gatewayId: string | null): string {
     const seatNo = seatNumberFromId(seatId);
     const base = `${$kt('seat_label')} ${seatNo}`;
@@ -161,13 +216,18 @@
     humanSeatNumber: number,
   ): PlayerSetup[] {
     const players: PlayerSetup[] = [];
+    const usedNames = new Set<string>([$kt('seat_you')]);
     for (const seat of seatConfigs) {
       const seatNo = seatNumberFromId(seat.id);
       const role: PlayerRole = seatNo === humanSeatNumber ? 'human' : seat.role;
+      const name = role === 'program'
+        ? randomProgramName($locale, usedNames)
+        : seatName(seat.id, role, seat.gatewayId);
+      usedNames.add(name);
       players.push({
         id: seat.id,
         role,
-        name: seatName(seat.id, role, seat.gatewayId),
+        name,
         gatewayId: role === 'agent' ? seat.gatewayId : null,
       });
     }
@@ -239,6 +299,54 @@
     return key ? $kt(key) : label;
   }
 
+  function parsePotFromAction(line: string): number | null {
+    const match = line.match(/pot\s+(\d+)/i);
+    if (!match) return null;
+    const value = Number.parseInt(match[1], 10);
+    return Number.isFinite(value) ? value : null;
+  }
+
+  function winnerHandLabel(state: PokerState): string | null {
+    if (!state.winnerIds.length) return null;
+    const labels = new Set<string>();
+    for (const winnerId of state.winnerIds) {
+      const rank = state.showdownRanks[winnerId];
+      if (!rank) continue;
+      labels.add(localizedHandLabel(rank.label, rank.category));
+    }
+    if (!labels.size) return null;
+    return [...labels].join(' / ');
+  }
+
+  function winnerNames(state: PokerState): string[] {
+    return state.winnerIds.map((winnerId) => {
+      const found = state.players.find((player) => player.id === winnerId);
+      return found?.name ?? winnerId;
+    });
+  }
+
+  function avatarInitial(name: string): string {
+    const trimmed = name.trim();
+    if (!trimmed) return '?';
+    const first = [...trimmed][0];
+    return first ? first.toUpperCase() : '?';
+  }
+
+  function hashStr(input: string): number {
+    let hash = 0;
+    for (let i = 0; i < input.length; i++) {
+      hash = ((hash << 5) - hash + input.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash);
+  }
+
+  function seatAvatarStyle(player: PokerPlayer): string {
+    const base = hashStr(`${player.id}-${player.name}`);
+    const h = base % 360;
+    const h2 = (h + 46) % 360;
+    return `--avatar-h:${h};--avatar-h2:${h2};`;
+  }
+
   const restored = loadPokerState();
   let game = $state<PokerState | null>(isValidPokerState(restored) ? restored : null);
   let selectedVariant = $state<PokerVariant>(game?.variant ?? 'texas');
@@ -252,11 +360,13 @@
   let dealAnimCards = $state<DealAnimCard[]>([]);
   let isInitialDealAnimating = $state(false);
   let visibleCommunityCount = $state<number>(game?.community.length ?? 0);
+  let winnerPopup = $state<WinnerPopupState | null>(null);
   let tokensUsed = $state(0);
   let tokenHistory = $state<number[]>([]);
 
   let aiLoopRunning = false;
   let dealAnimationToken = 0;
+  let announcedResultKey = '';
   let dealSoundTimers: number[] = [];
   let hasTrackedGame = Boolean(game);
   let trackedHandKey: string | null = game ? handKey(game) : null;
@@ -303,6 +413,13 @@
     return calculatePlayerOdds(game, humanPlayer.id, {
       discardIndices: isDrawTurn ? selectedDiscardIndices : undefined,
     });
+  });
+  const madeHandPreview = $derived.by(() => {
+    if (!game || !humanPlayer) return null;
+    const preview = analyzePlayerHand(game, humanPlayer.id);
+    if (!preview) return null;
+    if (preview.rank.category <= 0) return null;
+    return preview;
   });
   const statusText = $derived.by(() => {
     if (!game) return $kt('status_waiting_setup');
@@ -382,6 +499,8 @@
     const players = buildPlayersFromSetup(seatConfigs, humanSeatNumber);
     game = createNewGame(players, selectedVariant, 1);
     thinkingPlayerId = null;
+    winnerPopup = null;
+    announcedResultKey = '';
     selectedDiscardIndices = [];
     tokensUsed = 0;
     tokenHistory = [];
@@ -400,6 +519,7 @@
 
     game = createNewGame(players, game.variant, game.handNumber + 1);
     thinkingPlayerId = null;
+    winnerPopup = null;
     selectedDiscardIndices = [];
     tokensUsed = 0;
     tokenHistory = [];
@@ -417,6 +537,8 @@
     }
     game = null;
     thinkingPlayerId = null;
+    winnerPopup = null;
+    announcedResultKey = '';
     selectedDiscardIndices = [];
     speechMap = emptySpeechMap();
     clearPokerState();
@@ -462,6 +584,10 @@
     if (action === 'draw' || action === 'stand') {
       selectedDiscardIndices = [];
     }
+  }
+
+  function closeWinnerPopup(): void {
+    winnerPopup = null;
   }
 
   function clearDealSoundTimers(): void {
@@ -741,6 +867,8 @@
       trackedHandKey = null;
       trackedCommunityCount = 0;
       visibleCommunityCount = 0;
+      winnerPopup = null;
+      announcedResultKey = '';
       return;
     }
 
@@ -776,6 +904,26 @@
     } else if (game.community.length < visibleCommunityCount) {
       visibleCommunityCount = game.community.length;
     }
+  });
+
+  $effect(() => {
+    if (!game || game.phase !== 'done') {
+      if (winnerPopup && game && game.phase !== 'done') winnerPopup = null;
+      return;
+    }
+
+    const resultKey = `${game.handNumber}:${game.winnerIds.join(',')}:${game.lastAction}`;
+    if (announcedResultKey === resultKey) return;
+    announcedResultKey = resultKey;
+
+    winnerPopup = {
+      handNumber: game.handNumber,
+      winners: winnerNames(game),
+      handLabel: winnerHandLabel(game),
+      pot: parsePotFromAction(game.lastAction),
+      split: game.winnerIds.length > 1,
+    };
+    playPokerWinJingle();
   });
 
   $effect(() => {
@@ -1099,15 +1247,24 @@
 {:else}
   <div class="board">
     <div class="topbar panel">
-      <div class="status-group">
-        <h3>{statusText}</h3>
+      <div class="status-group left">
+        <p class="status-kicker">{$kt('phase')}</p>
+        <h3>{phaseLabel(game.phase, $locale)}</h3>
+        <p>{statusText}</p>
+      </div>
+
+      <div class="title-chip">
+        <span>{variantLabel(game.variant, $locale)}</span>
+      </div>
+
+      <div class="status-group right">
+        <p class="status-kicker">TABLE</p>
+        <h3>{$kt('pot')}: {game.pot}</h3>
         <p>
-          {$kt('variant')}: {variantLabel(game.variant, $locale)} ·
-          {$kt('phase')}: {phaseLabel(game.phase, $locale)} ·
-          {$kt('pot')}: {game.pot} ·
-          {$kt('current_bet')}: {game.currentBet}
+          {$kt('current_bet')}: {game.currentBet} · {$kt('participants')}: {game.players.length}
         </p>
       </div>
+
       <div class="actions">
         <button class="ghost-btn" type="button" onclick={newHand}>{$kt('new_hand')}</button>
         <button class="ghost-btn" type="button" onclick={backToSetup}>{$kt('change_mode')}</button>
@@ -1160,20 +1317,27 @@
               class="seat"
               class:turn={currentPlayer?.id === player.id}
               class:human={player.role === 'human'}
+              class:classic-human={game.variant === 'classic' && player.role === 'human'}
               class:thinking={thinkingPlayerId === player.id}
               style={seatPosition(idx, game.players.length)}
             >
-              <header>
-                <strong>
-                  {player.name}
-                  {#if player.role === 'human'}
-                    <span class="you-chip inline">{$kt('you_badge')}</span>
-                  {/if}
-                </strong>
-                <small>{roleLabel(player.role)}</small>
+              <header class="seat-head">
+                <div class="seat-avatar" style={seatAvatarStyle(player)}>{avatarInitial(player.name)}</div>
+                <div class="seat-meta">
+                  <strong>
+                    {player.name}
+                    {#if player.role === 'human'}
+                      <span class="you-chip inline">{$kt('you_badge')}</span>
+                    {/if}
+                  </strong>
+                  <small>{roleLabel(player.role)}</small>
+                </div>
               </header>
               <p class="chips">{$kt('chips')}: {chipBoard[player.id] ?? player.chips}</p>
-              <div class="seat-cards" class:human-cards={player.role === 'human'}>
+              <div
+                class="seat-cards"
+                class:human-cards={player.role === 'human'}
+              >
                 {#if !isInitialDealAnimating && canRevealCards(player)}
                   {#each player.hole as card, cardIndex (card.id)}
                     {#if isDrawTurn && humanPlayer?.id === player.id}
@@ -1261,6 +1425,21 @@
                 <b>{oddsSummary.totalOutcomes} · {oddsSummary.exact ? $kt('odds_mode_exact') : $kt('odds_mode_sample')}</b>
               </p>
             </div>
+            {#if madeHandPreview}
+              <div class="odds-highlight">
+                <p class="odds-highlight-head">
+                  <span>{$kt('odds_key_cards')}</span>
+                  <b>{localizedHandLabel(madeHandPreview.rank.label, madeHandPreview.rank.category)}</b>
+                </p>
+                <div class="combo-cards">
+                  {#each madeHandPreview.keyCards as card (card.id)}
+                    <span class="mini-card combo-card card-face" class:red={isRedSuit(card)}>
+                      <img class="card-img" src={cardImageUri(card)} alt={cardLabel(card)} draggable="false" />
+                    </span>
+                  {/each}
+                </div>
+              </div>
+            {/if}
             <ul>
               {#if oddsSummary.odds.length === 0}
                 <li class="empty">{$kt('odds_none')}</li>
@@ -1310,6 +1489,28 @@
         {/if}
       </aside>
     </div>
+
+    {#if winnerPopup}
+      <div class="winner-overlay" role="dialog" aria-modal="true">
+        <div class="winner-popup">
+          <p class="winner-hand">{$kt('popup_hand_no')} #{winnerPopup.handNumber}</p>
+          <h3>{winnerPopup.split ? $kt('popup_multi_title') : $kt('popup_title')}</h3>
+          <p class="winner-names">{winnerPopup.winners.join(' · ')}</p>
+          <div class="winner-meta">
+            {#if winnerPopup.handLabel}
+              <span>{$kt('popup_hand')}: <b>{winnerPopup.handLabel}</b></span>
+            {/if}
+            {#if winnerPopup.pot !== null}
+              <span>{$kt('popup_pot')}: <b>{winnerPopup.pot}</b></span>
+            {/if}
+          </div>
+          <div class="winner-actions">
+            <button type="button" class="winner-btn primary" onclick={newHand}>{$kt('new_hand')}</button>
+            <button type="button" class="winner-btn" onclick={closeWinnerPopup}>{$kt('popup_close')}</button>
+          </div>
+        </div>
+      </div>
+    {/if}
   </div>
 {/if}
 
@@ -1609,8 +1810,8 @@
   .table-stage {
     --seat-card-w: 38px;
     --seat-card-h: 54px;
-    --community-card-w: 62px;
-    --community-card-h: 88px;
+    --community-card-w: 86px;
+    --community-card-h: 124px;
     --deal-card-w: 38px;
     --deal-card-h: 54px;
     --deck-card-w: 38px;
@@ -1777,6 +1978,10 @@
 
   .seat.human {
     border-color: rgba(109, 221, 196, 0.7);
+  }
+
+  .seat.classic-human {
+    width: 288px;
   }
 
   .seat.thinking {
@@ -2004,6 +2209,43 @@
     font-size: 11px;
   }
 
+  .odds-highlight {
+    margin-bottom: 8px;
+    padding: 8px;
+    border-radius: 9px;
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-elevated);
+  }
+
+  .odds-highlight-head {
+    margin: 0 0 6px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .odds-highlight-head span {
+    color: var(--color-text-muted);
+  }
+
+  .odds-highlight-head b {
+    color: var(--color-text);
+  }
+
+  .combo-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .combo-cards .mini-card.combo-card {
+    width: 46px;
+    height: 66px;
+    border-radius: 7px;
+  }
+
   .odds-panel li {
     border: 1px solid var(--color-border);
     border-radius: 8px;
@@ -2080,18 +2322,526 @@
     font-size: 11px;
   }
 
+  .board {
+    gap: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(113, 125, 255, 0.32);
+    background:
+      radial-gradient(120% 160% at 50% -20%, rgba(48, 95, 255, 0.25), transparent 55%),
+      radial-gradient(95% 110% at 85% 90%, rgba(255, 116, 67, 0.12), transparent 62%),
+      linear-gradient(155deg, #17173d 0%, #0e1230 60%, #0a0e27 100%);
+    box-shadow:
+      0 24px 40px rgba(8, 10, 26, 0.58),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .board .panel {
+    background: linear-gradient(180deg, rgba(22, 26, 66, 0.72), rgba(13, 17, 46, 0.78));
+    border: 1px solid rgba(98, 114, 216, 0.35);
+    backdrop-filter: blur(8px);
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-radius: 14px;
+  }
+
+  .status-group.left {
+    text-align: left;
+  }
+
+  .status-group.right {
+    text-align: right;
+  }
+
+  .status-group .status-kicker {
+    margin: 0 0 2px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    color: rgba(158, 173, 255, 0.76);
+    text-transform: uppercase;
+  }
+
+  .status-group h3 {
+    margin: 0;
+    font-size: 16px;
+    letter-spacing: 0.03em;
+    color: #f4f6ff;
+  }
+
+  .status-group p {
+    margin: 2px 0 0;
+    font-size: 11px;
+    color: rgba(215, 224, 255, 0.72);
+  }
+
+  .title-chip {
+    position: relative;
+    min-width: 210px;
+    height: 44px;
+    padding: 0 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 139, 90, 0.55);
+    background: linear-gradient(180deg, rgba(45, 48, 106, 0.92), rgba(24, 28, 76, 0.88));
+    box-shadow: 0 8px 16px rgba(14, 16, 39, 0.45);
+  }
+
+  .title-chip::before,
+  .title-chip::after {
+    content: '';
+    position: absolute;
+    top: 5px;
+    bottom: 5px;
+    width: 42px;
+    border-top: 3px solid rgba(255, 126, 79, 0.85);
+    border-bottom: 3px solid rgba(255, 126, 79, 0.55);
+    opacity: 0.84;
+  }
+
+  .title-chip::before {
+    left: -58px;
+    border-left: 2px solid rgba(255, 126, 79, 0.6);
+    border-top-left-radius: 8px;
+    border-bottom-left-radius: 8px;
+  }
+
+  .title-chip::after {
+    right: -58px;
+    border-right: 2px solid rgba(255, 126, 79, 0.6);
+    border-top-right-radius: 8px;
+    border-bottom-right-radius: 8px;
+  }
+
+  .title-chip span {
+    font-size: 20px;
+    line-height: 1;
+    letter-spacing: 0.06em;
+    font-weight: 850;
+    text-transform: uppercase;
+    color: #edf0ff;
+  }
+
+  .actions {
+    justify-self: end;
+    display: inline-flex;
+    gap: 8px;
+  }
+
+  .ghost-btn {
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #dfe7ff;
+    border: 1px solid rgba(106, 127, 230, 0.6);
+    background: linear-gradient(180deg, rgba(63, 77, 150, 0.6), rgba(32, 40, 96, 0.76));
+  }
+
+  .ghost-btn:hover {
+    border-color: rgba(255, 143, 95, 0.8);
+    color: #fff6ed;
+  }
+
+  .layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .table-wrap.panel {
+    padding: 0;
+    border: none;
+    background: transparent;
+    backdrop-filter: none;
+  }
+
+  .table-stage {
+    min-height: 640px;
+    border-radius: 18px;
+    border: 1px solid rgba(104, 124, 255, 0.36);
+    background:
+      radial-gradient(66% 52% at 50% 58%, rgba(27, 47, 106, 0.24), transparent 65%),
+      radial-gradient(110% 120% at 50% -20%, rgba(57, 88, 224, 0.2), transparent 62%),
+      linear-gradient(168deg, rgba(20, 25, 70, 0.85), rgba(11, 15, 43, 0.9));
+    box-shadow:
+      inset 0 0 0 1px rgba(160, 179, 255, 0.06),
+      0 20px 36px rgba(9, 11, 30, 0.6);
+  }
+
+  .table-stage::before,
+  .table-stage::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 56%;
+    transform: translate(-50%, -50%);
+    border-radius: 999px;
+    pointer-events: none;
+  }
+
+  .table-stage::before {
+    width: min(88%, 910px);
+    height: min(56%, 330px);
+    border: 2px solid rgba(98, 122, 255, 0.88);
+    box-shadow:
+      0 0 0 6px rgba(45, 60, 145, 0.24),
+      0 0 24px rgba(83, 117, 255, 0.5);
+    z-index: 1;
+  }
+
+  .table-stage::after {
+    width: min(84%, 860px);
+    height: min(50%, 295px);
+    border: 2px solid rgba(255, 145, 95, 0.72);
+    box-shadow: 0 0 14px rgba(255, 145, 95, 0.3);
+    z-index: 1;
+  }
+
+  .table-canvas {
+    opacity: 0.34;
+    filter: saturate(1.12) brightness(0.95);
+  }
+
+  .deck-stack {
+    border-color: rgba(255, 184, 132, 0.72);
+    box-shadow: 0 10px 18px rgba(8, 10, 30, 0.45), 0 0 12px rgba(255, 132, 82, 0.24);
+  }
+
+  .center-panel {
+    z-index: 3;
+    border-radius: 14px;
+    padding: 11px 14px;
+    min-width: 430px;
+    max-width: 720px;
+    border: 1px solid rgba(93, 117, 255, 0.6);
+    background: linear-gradient(180deg, rgba(17, 23, 65, 0.88), rgba(11, 16, 51, 0.86));
+    box-shadow: 0 12px 20px rgba(8, 11, 32, 0.48);
+  }
+
+  .center-panel h4 {
+    font-size: 13px;
+    letter-spacing: 0.08em;
+    color: rgba(231, 236, 255, 0.95);
+  }
+
+  .community-cards {
+    gap: 10px;
+  }
+
+  .community-cards .mini-card {
+    box-shadow: 0 8px 14px rgba(0, 0, 0, 0.38);
+  }
+
+  .seat {
+    z-index: 4;
+    width: 236px;
+    border-radius: 18px;
+    padding: 10px 11px;
+    border: 1px solid rgba(103, 124, 244, 0.62);
+    background: linear-gradient(180deg, rgba(57, 68, 151, 0.7), rgba(33, 41, 109, 0.72));
+    box-shadow: 0 14px 24px rgba(8, 10, 27, 0.52);
+  }
+
+  .seat.turn {
+    border-color: rgba(255, 152, 100, 0.95);
+    box-shadow: 0 0 0 2px rgba(255, 150, 97, 0.2), 0 14px 28px rgba(7, 10, 28, 0.58);
+  }
+
+  .seat.human {
+    border-color: rgba(76, 220, 255, 0.86);
+    box-shadow: 0 0 0 2px rgba(76, 220, 255, 0.18), 0 14px 28px rgba(7, 10, 28, 0.58);
+  }
+
+  .seat.classic-human {
+    width: 288px;
+  }
+
+  .seat-head {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .seat-avatar {
+    --avatar-h: 210;
+    --avatar-h2: 252;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fbff;
+    border: 2px solid rgba(230, 236, 255, 0.6);
+    background:
+      radial-gradient(circle at 28% 26%, hsl(var(--avatar-h2) 88% 76%), transparent 42%),
+      linear-gradient(155deg, hsl(var(--avatar-h) 65% 42%), hsl(var(--avatar-h2) 62% 52%));
+    box-shadow: 0 0 0 3px rgba(95, 115, 243, 0.22);
+  }
+
+  .seat-meta {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .seat-meta strong {
+    display: inline-flex;
+    align-items: center;
+    max-width: 165px;
+    font-size: 12px;
+    color: #f4f7ff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .seat-meta small {
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    color: rgba(230, 236, 255, 0.82);
+  }
+
+  .chips,
+  .bet {
+    font-size: 11px;
+    color: rgba(235, 240, 255, 0.86);
+  }
+
+  .seat-cards {
+    gap: 5px;
+    margin-top: 7px;
+  }
+
+  .mini-card {
+    border-color: rgba(203, 214, 255, 0.75);
+    box-shadow: 0 4px 9px rgba(0, 0, 0, 0.33);
+  }
+
+  .mini-card.back {
+    background: linear-gradient(145deg, #242d59, #7a2244);
+    border-color: rgba(224, 232, 255, 0.72);
+  }
+
+  .speech {
+    margin-top: 7px;
+    padding: 4px 7px;
+    border-radius: 7px;
+    background: rgba(9, 16, 48, 0.5);
+    color: rgba(190, 255, 226, 0.95);
+  }
+
+  .human-action.panel {
+    margin-top: 2px;
+    border-radius: 14px;
+    border: 1px solid rgba(112, 129, 237, 0.58);
+    background: linear-gradient(180deg, rgba(19, 24, 69, 0.86), rgba(12, 15, 50, 0.86));
+    box-shadow: 0 12px 20px rgba(9, 12, 33, 0.42);
+  }
+
+  .human-top strong {
+    font-size: 15px;
+    color: #f4f6ff;
+  }
+
+  .human-top p {
+    color: rgba(219, 227, 255, 0.78);
+  }
+
+  .action-row {
+    gap: 10px;
+  }
+
+  .action-row button {
+    min-height: 50px;
+    border-radius: 12px;
+    border: 1px solid rgba(102, 124, 236, 0.7);
+    background: linear-gradient(180deg, rgba(74, 89, 176, 0.74), rgba(44, 55, 130, 0.82));
+    color: #eef2ff;
+    font-size: 20px;
+    font-weight: 760;
+    letter-spacing: 0.01em;
+  }
+
+  .action-row button:hover:not(:disabled) {
+    border-color: rgba(255, 149, 99, 0.95);
+    color: #fff6ed;
+    box-shadow: 0 6px 14px rgba(14, 17, 46, 0.4);
+  }
+
+  .side-column {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+
+  .side-column > .panel {
+    min-height: 160px;
+  }
+
+  .odds-panel h4,
+  .list-panel h4,
+  .log-panel h4,
+  .token-section h4 {
+    color: #edf1ff;
+    letter-spacing: 0.04em;
+  }
+
+  .odds-panel li,
+  .list-panel li,
+  .log-panel li {
+    border-color: rgba(107, 124, 224, 0.35);
+    background: rgba(32, 41, 103, 0.36);
+    color: rgba(231, 237, 255, 0.85);
+  }
+
+  .odds-highlight {
+    border-color: rgba(107, 124, 224, 0.45);
+    background: rgba(32, 41, 103, 0.42);
+  }
+
+  .odds-meta span,
+  .odds-highlight-head span,
+  .empty {
+    color: rgba(194, 206, 252, 0.72);
+  }
+
+  .winner-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 22px;
+    background: radial-gradient(circle at 50% 35%, rgba(110, 94, 255, 0.28), rgba(7, 8, 20, 0.82) 68%);
+    backdrop-filter: blur(4px);
+  }
+
+  .winner-popup {
+    width: min(560px, 100%);
+    border-radius: 20px;
+    padding: 24px 24px 20px;
+    border: 1px solid rgba(152, 167, 255, 0.6);
+    background:
+      radial-gradient(120% 90% at 50% 0%, rgba(255, 120, 188, 0.18), transparent 55%),
+      linear-gradient(160deg, rgba(42, 46, 112, 0.96), rgba(21, 25, 74, 0.96));
+    box-shadow:
+      0 28px 46px rgba(8, 11, 29, 0.66),
+      0 0 26px rgba(118, 138, 255, 0.34);
+    text-align: center;
+    animation: winnerPopIn 260ms cubic-bezier(0.2, 0.84, 0.21, 1);
+  }
+
+  @keyframes winnerPopIn {
+    from {
+      opacity: 0;
+      transform: translateY(14px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .winner-hand {
+    margin: 0 0 10px;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(208, 219, 255, 0.8);
+  }
+
+  .winner-popup h3 {
+    margin: 0;
+    font-size: 36px;
+    font-weight: 850;
+    letter-spacing: 0.04em;
+    color: #f8f1ff;
+    text-transform: uppercase;
+    text-shadow: 0 0 18px rgba(255, 157, 210, 0.42);
+  }
+
+  .winner-names {
+    margin: 11px 0 0;
+    font-size: 20px;
+    font-weight: 700;
+    color: #e9eeff;
+    letter-spacing: 0.02em;
+  }
+
+  .winner-meta {
+    margin-top: 14px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    color: rgba(223, 231, 255, 0.86);
+    font-size: 13px;
+  }
+
+  .winner-meta b {
+    color: #ffffff;
+  }
+
+  .winner-actions {
+    margin-top: 20px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .winner-btn {
+    min-width: 128px;
+    min-height: 44px;
+    border-radius: 12px;
+    border: 1px solid rgba(130, 148, 246, 0.7);
+    background: linear-gradient(180deg, rgba(72, 84, 165, 0.72), rgba(39, 47, 114, 0.82));
+    color: #eef2ff;
+    font-size: 14px;
+    font-weight: 750;
+    cursor: pointer;
+  }
+
+  .winner-btn.primary {
+    border-color: rgba(255, 151, 105, 0.88);
+    background: linear-gradient(180deg, rgba(255, 143, 108, 0.9), rgba(213, 86, 86, 0.9));
+    color: #fffaf5;
+  }
+
+  .winner-btn:hover {
+    filter: brightness(1.08);
+  }
+
   @media (max-width: 1200px) {
     .layout {
       grid-template-columns: 1fr;
     }
 
-    .side-column {
-      flex-direction: row;
-      align-items: stretch;
+    .topbar {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     }
 
-    .side-column > section {
-      flex: 1;
+    .actions {
+      grid-column: 1 / -1;
+      justify-self: stretch;
+      justify-content: flex-end;
+    }
+
+    .side-column {
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
     }
   }
 
@@ -2108,18 +2858,22 @@
     .table-stage {
       --seat-card-w: 34px;
       --seat-card-h: 49px;
-      --community-card-w: 54px;
-      --community-card-h: 77px;
+      --community-card-w: 72px;
+      --community-card-h: 104px;
       --deal-card-w: 34px;
       --deal-card-h: 49px;
       --deck-card-w: 34px;
       --deck-card-h: 49px;
-      min-height: 640px;
+      min-height: 670px;
     }
 
     .seat {
-      width: 164px;
+      width: 190px;
       padding: 7px;
+    }
+
+    .seat.classic-human {
+      width: 244px;
     }
 
     .seat-cards.human-cards {
@@ -2130,23 +2884,52 @@
       width: calc(var(--seat-card-w) * 1.16);
       height: calc(var(--seat-card-h) * 1.16);
     }
+
+    .topbar {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+
+    .status-group.left,
+    .status-group.right {
+      text-align: left;
+    }
+
+    .title-chip {
+      justify-self: center;
+      min-width: 190px;
+      height: 40px;
+    }
+
+    .title-chip span {
+      font-size: 17px;
+    }
+
+    .actions {
+      justify-self: stretch;
+      justify-content: space-between;
+    }
   }
 
   @media (max-width: 720px) {
     .table-stage {
       --seat-card-w: 32px;
       --seat-card-h: 46px;
-      --community-card-w: 48px;
-      --community-card-h: 69px;
+      --community-card-w: 64px;
+      --community-card-h: 92px;
       --deal-card-w: 32px;
       --deal-card-h: 46px;
       --deck-card-w: 32px;
       --deck-card-h: 46px;
-      min-height: 720px;
+      min-height: 740px;
     }
 
     .seat {
-      width: 146px;
+      width: 172px;
+    }
+
+    .seat.classic-human {
+      width: 226px;
     }
 
     .seat-cards.human-cards {
@@ -2159,21 +2942,33 @@
     }
 
     .side-column {
-      flex-direction: column;
+      grid-template-columns: 1fr;
+    }
+
+    .combo-cards .mini-card.combo-card {
+      width: 42px;
+      height: 60px;
     }
 
     .actions {
-      flex-direction: column;
-      align-items: stretch;
+      gap: 6px;
     }
 
-    .topbar {
-      flex-direction: column;
-      align-items: flex-start;
+    .action-row button {
+      min-height: 44px;
+      font-size: 16px;
     }
 
     .action-row {
       grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .winner-popup h3 {
+      font-size: 30px;
+    }
+
+    .winner-names {
+      font-size: 17px;
     }
   }
 </style>

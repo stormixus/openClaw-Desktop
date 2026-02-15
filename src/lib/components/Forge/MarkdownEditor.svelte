@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { Editor } from "@tiptap/core";
+  import { t } from "$lib/i18n";
   import StarterKit from "@tiptap/starter-kit";
   import { marked } from "marked";
   import DOMPurify from "dompurify";
@@ -233,30 +234,30 @@
 <div class="markdown-editor">
   {#if editable}
     <div class="toolbar">
-      <button class="tool-btn" onclick={toggleBold} title="Bold">
+      <button class="tool-btn" onclick={toggleBold} title={$t("forge.markdown.tool.bold")}>
         <Bold size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleItalic} title="Italic">
+      <button class="tool-btn" onclick={toggleItalic} title={$t("forge.markdown.tool.italic")}>
         <Italic size={16} />
       </button>
       <div class="divider"></div>
-      <button class="tool-btn" onclick={toggleH1} title="Heading 1">
+      <button class="tool-btn" onclick={toggleH1} title={$t("forge.markdown.tool.heading1")}>
         <Heading1 size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleH2} title="Heading 2">
+      <button class="tool-btn" onclick={toggleH2} title={$t("forge.markdown.tool.heading2")}>
         <Heading2 size={16} />
       </button>
       <div class="divider"></div>
-      <button class="tool-btn" onclick={toggleBullet} title="Bullet List">
+      <button class="tool-btn" onclick={toggleBullet} title={$t("forge.markdown.tool.bullet_list")}>
         <List size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleOrdered} title="Ordered List">
+      <button class="tool-btn" onclick={toggleOrdered} title={$t("forge.markdown.tool.ordered_list")}>
         <ListOrdered size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleQuote} title="Quote">
+      <button class="tool-btn" onclick={toggleQuote} title={$t("forge.markdown.tool.quote")}>
         <Quote size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleCode} title="Code Block">
+      <button class="tool-btn" onclick={toggleCode} title={$t("forge.markdown.tool.code_block")}>
         <Code2 size={16} />
       </button>
     </div>

@@ -61,6 +61,12 @@ export interface PokerOddsSummary {
   odds: PokerOddsEntry[];
 }
 
+export interface PokerHandPreview {
+  rank: HandRank;
+  bestCards: PokerCard[];
+  keyCards: PokerCard[];
+}
+
 export interface PokerState {
   variant: PokerVariant;
   players: PokerPlayer[];
@@ -119,6 +125,13 @@ const HAND_LABELS = [
   'Straight Flush',
 ] as const;
 export const HAND_CATEGORY_LABELS = [...HAND_LABELS] as const;
+
+const SUIT_ORDER: Record<Suit, number> = {
+  S: 4,
+  H: 3,
+  D: 2,
+  C: 1,
+};
 
 const LOG_LIMIT = 40;
 const INITIAL_CHIPS = 1200;
@@ -475,35 +488,169 @@ function evaluateFive(cards: PokerCard[]): HandRank {
   return { category: 0, tiebreakers: ranks, label: HAND_LABELS[0] };
 }
 
-function evaluateSeven(cards: PokerCard[]): HandRank {
-  let best = evaluateFive(cards.slice(0, 5));
-  for (const pick of chooseFiveFromSeven(cards)) {
-    const rank = evaluateFive(pick);
-    if (rankCompare(rank, best) > 0) best = rank;
+function compareCardsDesc(a: PokerCard, b: PokerCard): number {
+  if (a.rank !== b.rank) return b.rank - a.rank;
+  return SUIT_ORDER[b.suit] - SUIT_ORDER[a.suit];
+}
+
+function sortCardsDesc(cards: PokerCard[]): PokerCard[] {
+  return [...cards].sort(compareCardsDesc);
+}
+
+function compareCardSetDesc(a: PokerCard[], b: PokerCard[]): number {
+  const aSorted = sortCardsDesc(a);
+  const bSorted = sortCardsDesc(b);
+  const len = Math.max(aSorted.length, bSorted.length);
+  for (let i = 0; i < len; i++) {
+    const aCard = aSorted[i];
+    const bCard = bSorted[i];
+    if (!aCard && bCard) return -1;
+    if (aCard && !bCard) return 1;
+    if (!aCard || !bCard) continue;
+    if (aCard.rank !== bCard.rank) return aCard.rank - bCard.rank;
+    const suitCmp = SUIT_ORDER[aCard.suit] - SUIT_ORDER[bCard.suit];
+    if (suitCmp !== 0) return suitCmp;
   }
-  return best;
+  return 0;
+}
+
+function bestFiveFromCards(cards: PokerCard[]): { rank: HandRank; cards: PokerCard[] } | null {
+  const available = cards.slice(0, 7);
+  if (available.length < 5) return null;
+
+  let bestCards = available.slice(0, 5);
+  let bestRank = evaluateFive(bestCards);
+
+  if (available.length === 5) {
+    return { rank: bestRank, cards: bestCards };
+  }
+
+  if (available.length === 6) {
+    for (let skip = 0; skip < 6; skip++) {
+      const pick = available.filter((_, idx) => idx !== skip);
+      const rank = evaluateFive(pick);
+      const cmp = rankCompare(rank, bestRank);
+      if (cmp > 0 || (cmp === 0 && compareCardSetDesc(pick, bestCards) > 0)) {
+        bestRank = rank;
+        bestCards = pick;
+      }
+    }
+    return { rank: bestRank, cards: bestCards };
+  }
+
+  for (const pick of chooseFiveFromSeven(available)) {
+    const rank = evaluateFive(pick);
+    const cmp = rankCompare(rank, bestRank);
+    if (cmp > 0 || (cmp === 0 && compareCardSetDesc(pick, bestCards) > 0)) {
+      bestRank = rank;
+      bestCards = pick;
+    }
+  }
+  return { rank: bestRank, cards: bestCards };
+}
+
+function straightRanks(high: number): number[] {
+  if (high === 5) return [5, 4, 3, 2, 14];
+  return [high, high - 1, high - 2, high - 3, high - 4];
+}
+
+function selectStraightCards(cards: PokerCard[], high: number): PokerCard[] {
+  const sorted = sortCardsDesc(cards);
+  const needed = straightRanks(high);
+  const picked: PokerCard[] = [];
+
+  for (const rank of needed) {
+    const found = sorted.find((card) => card.rank === rank && !picked.some((used) => used.id === card.id));
+    if (!found) continue;
+    picked.push(found);
+  }
+
+  return picked;
+}
+
+function cardsOfRank(cards: PokerCard[], rank: number, count: number): PokerCard[] {
+  return sortCardsDesc(cards)
+    .filter((card) => card.rank === rank)
+    .slice(0, count);
+}
+
+function keyCardsFromBestFive(bestCards: PokerCard[], rank: HandRank): PokerCard[] {
+  if (rank.category === 8) {
+    return selectStraightCards(bestCards, rank.tiebreakers[0] ?? 5);
+  }
+
+  if (rank.category === 7) {
+    return cardsOfRank(bestCards, rank.tiebreakers[0] ?? 0, 4);
+  }
+
+  if (rank.category === 6) {
+    const trip = cardsOfRank(bestCards, rank.tiebreakers[0] ?? 0, 3);
+    const pair = cardsOfRank(bestCards, rank.tiebreakers[1] ?? 0, 2);
+    return [...trip, ...pair];
+  }
+
+  if (rank.category === 5) {
+    return sortCardsDesc(bestCards);
+  }
+
+  if (rank.category === 4) {
+    return selectStraightCards(bestCards, rank.tiebreakers[0] ?? 5);
+  }
+
+  if (rank.category === 3) {
+    return cardsOfRank(bestCards, rank.tiebreakers[0] ?? 0, 3);
+  }
+
+  if (rank.category === 2) {
+    const highPair = cardsOfRank(bestCards, rank.tiebreakers[0] ?? 0, 2);
+    const lowPair = cardsOfRank(bestCards, rank.tiebreakers[1] ?? 0, 2);
+    return [...highPair, ...lowPair];
+  }
+
+  if (rank.category === 1) {
+    return cardsOfRank(bestCards, rank.tiebreakers[0] ?? 0, 2);
+  }
+
+  const high = rank.tiebreakers[0] ?? Math.max(...bestCards.map((card) => card.rank));
+  const pick = cardsOfRank(bestCards, high, 1);
+  return pick.length ? pick : sortCardsDesc(bestCards).slice(0, 1);
+}
+
+function evaluateSeven(cards: PokerCard[]): HandRank {
+  const best = bestFiveFromCards(cards.slice(0, 7));
+  if (!best) throw new Error('At least 5 cards are required to evaluate a hand.');
+  return best.rank;
 }
 
 function evaluateBestFromAvailable(cards: PokerCard[]): HandRank | null {
-  if (cards.length < 5) return null;
-  if (cards.length === 5) return evaluateFive(cards);
-  if (cards.length === 6) {
-    let best = evaluateFive(cards.slice(0, 5));
-    for (let skip = 0; skip < 6; skip++) {
-      const picked = cards.filter((_, idx) => idx !== skip);
-      const rank = evaluateFive(picked);
-      if (rankCompare(rank, best) > 0) best = rank;
-    }
-    return best;
-  }
-  return evaluateSeven(cards.slice(0, 7));
+  return bestFiveFromCards(cards)?.rank ?? null;
 }
 
 function evaluatePlayerHand(state: PokerState, player: PokerPlayer): HandRank {
-  if (state.variant === 'classic') {
-    return evaluateFive(player.hole.slice(0, 5));
-  }
-  return evaluateSeven([...player.hole, ...state.community]);
+  const available = state.variant === 'classic'
+    ? player.hole.slice(0, 5)
+    : [...player.hole, ...state.community].slice(0, 7);
+  const best = bestFiveFromCards(available);
+  if (!best) throw new Error('Not enough cards to evaluate player hand.');
+  return best.rank;
+}
+
+export function analyzePlayerHand(state: PokerState, playerId: string): PokerHandPreview | null {
+  const player = getPlayerById(state, playerId);
+  const available = state.variant === 'classic'
+    ? player.hole.slice(0, 5)
+    : [...player.hole, ...state.community].slice(0, 7);
+  const best = bestFiveFromCards(available);
+  if (!best) return null;
+
+  const bestCards = sortCardsDesc(best.cards);
+  const keyCards = sortCardsDesc(keyCardsFromBestFive(best.cards, best.rank));
+
+  return {
+    rank: best.rank,
+    bestCards,
+    keyCards,
+  };
 }
 
 function awardPotAtShowdown(state: PokerState): PokerState {

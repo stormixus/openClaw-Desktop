@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CheckCircle2, AlertTriangle, Braces, Minimize2, WandSparkles } from "@lucide/svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     content?: string;
@@ -16,7 +17,7 @@
 
   function normalizeError(err: unknown): string {
     if (err instanceof Error) return err.message;
-    return "Invalid JSON";
+    return $t("forge.json.invalid");
   }
 
   function validateJson(raw: string): void {
@@ -77,7 +78,7 @@
     <div class="toolbar-left">
       <span class="mode-pill">
         <Braces size={14} />
-        JSON
+        {$t("forge.json.mode")}
       </span>
       {#if parseError}
         <span class="status error">
@@ -87,20 +88,20 @@
       {:else}
         <span class="status valid">
           <CheckCircle2 size={13} />
-          Valid JSON
+          {$t("forge.json.valid")}
         </span>
       {/if}
     </div>
 
     {#if editable}
       <div class="toolbar-right">
-        <button class="action-btn" onclick={formatJson} title="Pretty format (2 spaces)">
+        <button class="action-btn" onclick={formatJson} title={$t("forge.json.format_title")}>
           <WandSparkles size={14} />
-          Format
+          {$t("forge.json.format")}
         </button>
-        <button class="action-btn" onclick={minifyJson} title="Minify JSON">
+        <button class="action-btn" onclick={minifyJson} title={$t("forge.json.minify_title")}>
           <Minimize2 size={14} />
-          Minify
+          {$t("forge.json.minify")}
         </button>
       </div>
     {/if}

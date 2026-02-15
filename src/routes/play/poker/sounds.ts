@@ -158,3 +158,64 @@ export function playPokerDealCard(pan = 0): void {
     // audio api unavailable
   }
 }
+
+export function playPokerWinJingle(): void {
+  try {
+    const ctx = ensureAudioContext();
+    if (!ctx) return;
+    if (ctx.state === 'suspended') void ctx.resume();
+
+    const now = ctx.currentTime + 0.02;
+    const master = ctx.createGain();
+    master.gain.value = 0.72;
+    master.connect(ctx.destination);
+
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    notes.forEach((freq, idx) => {
+      const start = now + idx * 0.11;
+      const end = start + 0.24;
+
+      const osc = ctx.createOscillator();
+      osc.type = idx % 2 === 0 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(0.13, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, end);
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(4500, start);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(master);
+
+      osc.start(start);
+      osc.stop(end + 0.01);
+    });
+
+    const bass = ctx.createOscillator();
+    bass.type = 'sine';
+    bass.frequency.setValueAtTime(130.81, now);
+    bass.frequency.exponentialRampToValueAtTime(98, now + 0.42);
+
+    const bassGain = ctx.createGain();
+    bassGain.gain.setValueAtTime(0.0001, now);
+    bassGain.gain.exponentialRampToValueAtTime(0.08, now + 0.03);
+    bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.45);
+
+    bass.connect(bassGain);
+    bassGain.connect(master);
+    bass.start(now);
+    bass.stop(now + 0.46);
+
+    window.setTimeout(() => {
+      bassGain.disconnect();
+      master.disconnect();
+    }, 900);
+  } catch {
+    // audio api unavailable
+  }
+}

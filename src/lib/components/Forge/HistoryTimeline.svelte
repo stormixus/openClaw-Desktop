@@ -18,8 +18,8 @@
 
   // Mock history if empty
   const items = $derived(history.length > 0 ? history : [
-    { id: "1", timestamp: new Date().toISOString(), author: "user", summary: "Initial version" },
-    { id: "2", timestamp: new Date(Date.now() - 1000 * 60).toISOString(), author: "agent", summary: "Updated formatting" }
+    { id: "1", timestamp: new Date().toISOString(), author: "user", summary: $t("forge.history.initial_version") },
+    { id: "2", timestamp: new Date(Date.now() - 1000 * 60).toISOString(), author: "agent", summary: $t("forge.history.updated_formatting") }
   ] as HistoryItem[]);
 
   function formatTime(iso: string) {
@@ -31,7 +31,7 @@
   <div class="header">
     <h3>
       <History size={16} />
-      <span>Change History</span>
+      <span>{$t("forge.history.title")}</span>
     </h3>
   </div>
 
@@ -49,14 +49,14 @@
 
         <div class="timeline-content">
           <div class="meta">
-            <span class="author">{item.author === "agent" ? "Assistant" : "You"}</span>
+            <span class="author">{item.author === "agent" ? $t("forge.history.author.assistant") : $t("forge.history.author.you")}</span>
             <span class="time">{formatTime(item.timestamp)}</span>
           </div>
           <div class="summary">{item.summary}</div>
 
-          <button class="restore-btn" onclick={() => onrestore?.(item.id)} title="Restore this version">
+          <button class="restore-btn" onclick={() => onrestore?.(item.id)} title={$t("forge.history.restore_title")}>
             <RotateCcw size={12} />
-            <span>Restore</span>
+            <span>{$t("forge.history.restore")}</span>
           </button>
         </div>
       </div>

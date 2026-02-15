@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { getSystemFonts, loadSystemFonts } from "$lib/stores/fonts.svelte";
+  import { t } from "$lib/i18n";
   import { Editor, Extension, Mark, mergeAttributes } from "@tiptap/core";
   import StarterKit from "@tiptap/starter-kit";
   import Underline from "@tiptap/extension-underline";
@@ -187,7 +188,7 @@
   });
 
   const FONT_FAMILY_OPTIONS = $derived([
-    { label: "기본", value: "" },
+    { label: $t("forge.word.font_default"), value: "" },
     ...getSystemFonts().map((f) => ({
       label: f,
       value: f.includes(" ") ? `'${f}'` : f,
@@ -384,7 +385,7 @@
     if (!editor || !onInlinePrompt || inlinePromptBusy) return;
     const instruction = inlinePromptInstruction.trim();
     if (!instruction) {
-      inlinePromptError = "명령을 입력해주세요.";
+      inlinePromptError = $t("forge.inline.error.no_instruction");
       return;
     }
 
@@ -393,7 +394,7 @@
     try {
       const rewritten = (await onInlinePrompt(inlineSelectedText, instruction)).trim();
       if (!rewritten) {
-        throw new Error("AI 응답이 비어 있습니다.");
+        throw new Error($t("forge.inline.error.empty_response"));
       }
 
       const from = inlineSelectionFrom;
@@ -410,7 +411,7 @@
         .run();
       closeInlinePrompt();
     } catch (err: unknown) {
-      inlinePromptError = err instanceof Error ? err.message : "AI 수정 요청에 실패했습니다.";
+      inlinePromptError = err instanceof Error ? err.message : $t("forge.inline.error.request_failed");
     } finally {
       inlinePromptBusy = false;
     }
@@ -624,46 +625,46 @@
 <div class="word-editor">
   {#if editable}
     <div class="toolbar">
-      <button class="tool-btn" class:active={activeParagraph} onclick={setParagraph} title="Paragraph">
+      <button class="tool-btn" class:active={activeParagraph} onclick={setParagraph} title={$t("forge.word.tool.paragraph")}>
         <Pilcrow size={16} />
       </button>
-      <button class="tool-btn" class:active={activeH1} onclick={() => toggleHeading(1)} title="Heading 1">
+      <button class="tool-btn" class:active={activeH1} onclick={() => toggleHeading(1)} title={$t("forge.word.tool.heading1")}>
         <Heading1 size={16} />
       </button>
-      <button class="tool-btn" class:active={activeH2} onclick={() => toggleHeading(2)} title="Heading 2">
+      <button class="tool-btn" class:active={activeH2} onclick={() => toggleHeading(2)} title={$t("forge.word.tool.heading2")}>
         <Heading2 size={16} />
       </button>
-      <button class="tool-btn" class:active={activeH3} onclick={() => toggleHeading(3)} title="Heading 3">
+      <button class="tool-btn" class:active={activeH3} onclick={() => toggleHeading(3)} title={$t("forge.word.tool.heading3")}>
         <Heading3 size={16} />
       </button>
       <div class="divider"></div>
-      <button class="tool-btn" class:active={activeBold} onclick={toggleBold} title="Bold">
+      <button class="tool-btn" class:active={activeBold} onclick={toggleBold} title={$t("forge.word.tool.bold")}>
         <Bold size={16} />
       </button>
-      <button class="tool-btn" class:active={activeItalic} onclick={toggleItalic} title="Italic">
+      <button class="tool-btn" class:active={activeItalic} onclick={toggleItalic} title={$t("forge.word.tool.italic")}>
         <Italic size={16} />
       </button>
-      <button class="tool-btn" class:active={activeUnderline} onclick={toggleUnderline} title="Underline">
+      <button class="tool-btn" class:active={activeUnderline} onclick={toggleUnderline} title={$t("forge.word.tool.underline")}>
         <UnderlineIcon size={16} />
       </button>
-      <button class="tool-btn" class:active={activeStrike} onclick={toggleStrike} title="Strike">
+      <button class="tool-btn" class:active={activeStrike} onclick={toggleStrike} title={$t("forge.word.tool.strike")}>
         <Strikethrough size={16} />
       </button>
-      <button class="tool-btn" class:active={activeCode} onclick={toggleInlineCode} title="Inline Code">
+      <button class="tool-btn" class:active={activeCode} onclick={toggleInlineCode} title={$t("forge.word.tool.inline_code")}>
         <Code2 size={16} />
       </button>
-      <button class="tool-btn" class:active={activeSuperscript} onclick={toggleSuperscript} title="Superscript">
+      <button class="tool-btn" class:active={activeSuperscript} onclick={toggleSuperscript} title={$t("forge.word.tool.superscript")}>
         <SuperscriptIcon size={16} />
       </button>
-      <button class="tool-btn" class:active={activeSubscript} onclick={toggleSubscript} title="Subscript">
+      <button class="tool-btn" class:active={activeSubscript} onclick={toggleSubscript} title={$t("forge.word.tool.subscript")}>
         <SubscriptIcon size={16} />
       </button>
-      <button class="tool-btn" class:active={activeBlockquote} onclick={toggleBlockQuote} title="Blockquote">
+      <button class="tool-btn" class:active={activeBlockquote} onclick={toggleBlockQuote} title={$t("forge.word.tool.blockquote")}>
         <Quote size={16} />
       </button>
       <div class="divider"></div>
       <div class="font-family-control">
-        <select value={currentFontFamily} onchange={applyFontFamily} aria-label="Font family">
+        <select value={currentFontFamily} onchange={applyFontFamily} aria-label={$t("forge.word.aria.font_family")}>
           {#each FONT_FAMILY_OPTIONS as opt}
             <option value={opt.value}>{opt.label}</option>
           {/each}
@@ -671,7 +672,7 @@
       </div>
       <div class="font-size-control">
         <Type size={14} />
-        <select value={currentFontSize} onchange={applyFontSize} aria-label="Font size">
+        <select value={currentFontSize} onchange={applyFontSize} aria-label={$t("forge.word.aria.font_size")}>
           {#each FONT_SIZE_OPTIONS as size}
             <option value={`${size}`}>{size}</option>
           {/each}
@@ -679,15 +680,15 @@
       </div>
       <div class="color-control" class:active={activeTextColor}>
         <span class="color-label">A</span>
-        <input type="color" value={currentTextColor} onchange={applyTextColor} aria-label="Text color" />
-        <button class="color-reset" type="button" onclick={clearTextColor} title="Clear text color">
+        <input type="color" value={currentTextColor} onchange={applyTextColor} aria-label={$t("forge.word.aria.text_color")} />
+        <button class="color-reset" type="button" onclick={clearTextColor} title={$t("forge.word.tool.clear_text_color")}>
           x
         </button>
       </div>
       <div class="color-control" class:active={activeHighlight}>
         <span class="color-label">HL</span>
-        <input type="color" value={currentHighlightColor} onchange={applyHighlightColor} aria-label="Highlight color" />
-        <button class="color-reset" type="button" onclick={clearHighlight} title="Clear highlight">
+        <input type="color" value={currentHighlightColor} onchange={applyHighlightColor} aria-label={$t("forge.word.aria.highlight_color")} />
+        <button class="color-reset" type="button" onclick={clearHighlight} title={$t("forge.word.tool.clear_highlight")}>
           x
         </button>
       </div>
@@ -696,7 +697,7 @@
         class="tool-btn"
         class:active={currentAlign === "left"}
         onclick={() => applyAlignment("left")}
-        title="Align Left"
+        title={$t("forge.word.tool.align_left")}
       >
         <AlignLeft size={16} />
       </button>
@@ -704,7 +705,7 @@
         class="tool-btn"
         class:active={currentAlign === "center"}
         onclick={() => applyAlignment("center")}
-        title="Align Center"
+        title={$t("forge.word.tool.align_center")}
       >
         <AlignCenter size={16} />
       </button>
@@ -712,7 +713,7 @@
         class="tool-btn"
         class:active={currentAlign === "right"}
         onclick={() => applyAlignment("right")}
-        title="Align Right"
+        title={$t("forge.word.tool.align_right")}
       >
         <AlignRight size={16} />
       </button>
@@ -720,19 +721,19 @@
         class="tool-btn"
         class:active={currentAlign === "justify"}
         onclick={() => applyAlignment("justify")}
-        title="Justify"
+        title={$t("forge.word.tool.align_justify")}
       >
         <AlignJustify size={16} />
       </button>
       <div class="divider"></div>
-      <button class="tool-btn" onclick={toggleBulletList} title="Bullet List">
+      <button class="tool-btn" onclick={toggleBulletList} title={$t("forge.word.tool.bullet_list")}>
         <List size={16} />
       </button>
-      <button class="tool-btn" onclick={toggleOrderedList} title="Ordered List">
+      <button class="tool-btn" onclick={toggleOrderedList} title={$t("forge.word.tool.ordered_list")}>
         <ListOrdered size={16} />
       </button>
       <div class="divider"></div>
-      <button class="tool-btn" onclick={insertTable} title="Insert Table">
+      <button class="tool-btn" onclick={insertTable} title={$t("forge.word.tool.insert_table")}>
         <TableIcon size={16} />
       </button>
     </div>
@@ -748,14 +749,14 @@
       style={`left:${inlinePromptX}px; top:${inlinePromptY}px;`}
     >
       <div class="inline-agent-head">
-        <strong>선택 텍스트 AI 수정</strong>
+        <strong>{$t("forge.inline.header")}</strong>
         <span>{selectedPreviewText()}</span>
       </div>
       <textarea
         class="inline-agent-input"
         bind:this={inlinePromptInputEl}
         bind:value={inlinePromptInstruction}
-        placeholder='예: "좀 더 길게", "좀 더 구체적으로"'
+        placeholder={$t("forge.inline.placeholder")}
         onkeydown={handleInlinePromptKeydown}
       ></textarea>
       {#if inlinePromptError}
@@ -763,10 +764,10 @@
       {/if}
       <div class="inline-agent-actions">
         <button type="button" class="inline-btn secondary" onclick={closeInlinePrompt} disabled={inlinePromptBusy}>
-          취소
+          {$t("forge.inline.cancel")}
         </button>
         <button type="button" class="inline-btn primary" onclick={submitInlinePrompt} disabled={inlinePromptBusy}>
-          {inlinePromptBusy ? "처리 중..." : "적용"}
+          {inlinePromptBusy ? $t("forge.inline.processing") : $t("forge.inline.apply")}
         </button>
       </div>
     </div>

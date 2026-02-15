@@ -28,6 +28,7 @@
     WandSparkles,
   } from "@lucide/svelte";
   import { pdfEditorStore } from "$lib/stores/pdfEditor.svelte";
+  import { t } from "$lib/i18n";
   import type { PdfBlock, PdfLayoutResultRaw } from "$lib/types/pdfEditor";
 
   interface Props {
@@ -97,26 +98,11 @@
 
   // Prioritized languages shown at top of the list.
   const PRIORITY_LANGS = ["kor", "eng", "jpn", "chi_sim", "chi_tra", "deu", "fra", "spa"];
-  const LANG_LABELS: Record<string, string> = {
-    kor: "한국어",
-    eng: "영어",
-    jpn: "일본어",
-    chi_sim: "중국어(간체)",
-    chi_tra: "중국어(번체)",
-    deu: "독일어",
-    fra: "프랑스어",
-    spa: "스페인어",
-    rus: "러시아어",
-    ara: "아랍어",
-    tha: "태국어",
-    hin: "힌디어",
-  };
-
   let autoDetectedLangs = $state<string[]>([]);
   let detectedLangSource = $state<LangDetectionSource | null>(null);
   let lastLangDetection = $state<LangDetectionResult | null>(null);
   let analysisMethod = $state<AnalysisMethod>("idle");
-  let analysisMethodNote = $state<string>("분석 준비됨");
+  let analysisMethodNote = $state<string>($t("forge.pdf.analysis.ready"));
   let analysisStatus = $state<string>("");
   let analysisRunning = $state(false);
   let effectiveOcrLangs = $state<string[]>(["kor", "eng"]);
@@ -137,6 +123,15 @@
   const hasLayout = $derived(store.hasLayout);
   const isAnalyzing = $derived(analysisRunning || store.isAnalyzing);
 
+  function tr(key: string, vars?: Record<string, string | number>): string {
+    let text: string = $t(key);
+    if (!vars) return text;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+    return text;
+  }
+
   function formatError(err: unknown): string {
     if (err instanceof Error) return err.message;
     return String(err);
@@ -149,7 +144,8 @@
   }
 
   function langLabel(lang: string): string {
-    return LANG_LABELS[lang] ?? lang;
+    const translated = $t(`forge.pdf.lang.${lang}`);
+    return translated === `forge.pdf.lang.${lang}` ? lang : translated;
   }
 
   function orderedAvailableLangs(): string[] {
@@ -191,27 +187,27 @@
   }
 
   function methodLabel(method: AnalysisMethod): string {
-    if (method === "pdfjsText") return "내장 텍스트(pdf.js)";
-    if (method === "tesseractOcr") return "Tesseract OCR";
-    return "분석 전";
+    if (method === "pdfjsText") return $t("forge.pdf.method.pdfjs");
+    if (method === "tesseractOcr") return $t("forge.pdf.method.tesseract");
+    return $t("forge.pdf.method.idle");
   }
 
   function sourceLabel(source: LangDetectionSource | null): string {
-    if (source === "embeddedText") return "내장 텍스트 기반 (신뢰 높음)";
-    if (source === "weakEmbeddedText") return "내장 텍스트 기반 (신뢰 낮음)";
-    if (source === "noEmbeddedText") return "내장 텍스트 없음";
-    return "아직 분석 안 됨";
+    if (source === "embeddedText") return $t("forge.pdf.source.embedded_high");
+    if (source === "weakEmbeddedText") return $t("forge.pdf.source.embedded_low");
+    if (source === "noEmbeddedText") return $t("forge.pdf.source.none");
+    return $t("forge.pdf.source.not_analyzed");
   }
 
   function scriptSummary(counts: Record<string, number>): string {
     const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 3);
-    if (ranked.length === 0) return "문자 신호 없음";
+    if (ranked.length === 0) return $t("forge.pdf.script.none");
     return ranked.map(([lang, count]) => `${langLabel(lang)} ${count}`).join(" · ");
   }
 
   function fontHintSummary(hints: string[]): string {
     if (!hints || hints.length === 0) return "";
-    return `폰트 힌트: ${hints.map((lang) => langLabel(lang)).join(", ")}`;
+    return tr("forge.pdf.font_hint_prefix", { langs: hints.map((lang) => langLabel(lang)).join(", ") });
   }
 
   function mergeLangs(primary: Iterable<string>, secondary: Iterable<string>): string[] {
@@ -579,7 +575,7 @@
     detectedLangSource = null;
     lastLangDetection = null;
     analysisMethod = "idle";
-    analysisMethodNote = "분석 준비됨";
+    analysisMethodNote = $t("forge.pdf.analysis.ready");
     analysisStatus = "";
     analysisRunning = false;
     effectiveOcrLangs = ensureCoreOcrLangs(selectedLangs);
@@ -798,7 +794,7 @@
       if (store.selectedBlockId === block.id && editorMode === "select" && editingBlockId !== block.id) {
         const handle = document.createElement("div");
         handle.className = "block-resize-handle";
-        handle.title = "박스 크기 조절";
+        handle.title = $t("forge.pdf.tool.resize_box");
         handle.addEventListener("mousedown", (e) => onBlockResizeMouseDown(e, block.id));
         div.appendChild(handle);
       }
@@ -857,14 +853,14 @@
             return btn;
           };
 
-          const downBtn = createIconBtn("폰트 크기 줄이기", Minus, () => onBlockAdjustFontSize(block.id, -1));
-          const upBtn = createIconBtn("폰트 크기 키우기", Plus, () => onBlockAdjustFontSize(block.id, 1));
+          const downBtn = createIconBtn($t("forge.pdf.tool.font_down"), Minus, () => onBlockAdjustFontSize(block.id, -1));
+          const upBtn = createIconBtn($t("forge.pdf.tool.font_up"), Plus, () => onBlockAdjustFontSize(block.id, 1));
           tb.appendChild(downBtn);
 
           const fontChip = document.createElement("span");
           fontChip.className = "block-tool-font-size";
           fontChip.textContent = `${Math.round(previewFontPx)}px`;
-          fontChip.title = "현재 박스 폰트 크기";
+          fontChip.title = $t("forge.pdf.tool.font_current");
           tb.appendChild(fontChip);
 
           tb.appendChild(upBtn);
@@ -875,10 +871,10 @@
             action: () => void;
             extraClass?: string;
           }> = [
-            { title: "편집", icon: Pencil, action: () => onBlockDblClick(null, block.id) },
-            { title: "배경색 채우기", icon: PaintBucket, action: () => onBlockFillBackground(block.id) },
-            { title: "삭제", icon: Trash2, action: () => onBlockDelete(block.id), extraClass: "danger" },
-            { title: "AI 다시쓰기", icon: WandSparkles, action: () => handleAiRewriteClick(block.id) },
+            { title: $t("forge.pdf.tool.edit"), icon: Pencil, action: () => onBlockDblClick(null, block.id) },
+            { title: $t("forge.pdf.tool.fill_bg"), icon: PaintBucket, action: () => onBlockFillBackground(block.id) },
+            { title: $t("forge.pdf.tool.delete"), icon: Trash2, action: () => onBlockDelete(block.id), extraClass: "danger" },
+            { title: $t("forge.pdf.tool.ai_rewrite"), icon: WandSparkles, action: () => handleAiRewriteClick(block.id) },
           ];
 
           for (const tool of tools) {
@@ -1395,7 +1391,7 @@
         if (extracted.trim()) {
           ocrResult = extracted;
         } else {
-          throw new Error("OCR returned empty text.");
+          throw new Error($t("forge.pdf.error.empty_ocr_result"));
         }
       } catch (directErr) {
         const fallbackText = await fallbackFromRenderedPages();
@@ -1916,9 +1912,9 @@
     analyzeError = null;
     analysisRunning = true;
     showAnalysisBannerNow();
-    analysisStatus = "내장 텍스트를 점검하고 언어 힌트를 찾는 중...";
+    analysisStatus = $t("forge.pdf.analysis.checking_embedded");
     analysisMethod = "idle";
-    analysisMethodNote = "분석 준비 중";
+    analysisMethodNote = $t("forge.pdf.analysis.preparing");
     autoDetectedLangs = [];
     detectedLangSource = null;
     lastLangDetection = null;
@@ -1929,16 +1925,20 @@
       detectedLangSource = langDetection.source;
 
       // First: try building layout from pdf.js embedded text (fast, accurate for text PDFs)
-      analysisStatus = "내장 텍스트 기반 레이아웃을 구성하는 중...";
+      analysisStatus = $t("forge.pdf.analysis.building_layout_embedded");
       const builtFromPdfJs = await tryBuildLayoutFromPdfJs(langDetection);
 
       if (builtFromPdfJs) {
         analysisMethod = "pdfjsText";
-        analysisMethodNote = "내장 텍스트로 레이아웃 구성이 완료되었습니다.";
+        analysisMethodNote = $t("forge.pdf.analysis.layout_ready_embedded");
         if (langDetection.source === "embeddedText" || langDetection.source === "weakEmbeddedText") {
-          analysisStatus = `내장 텍스트 감지 완료 (${langDetection.totalChars}/${langDetection.rawChars}자 인식, 샘플 신뢰도 ${Math.round(langDetection.recognizedRatio * 100)}%).`;
+          analysisStatus = tr("forge.pdf.analysis.detected_embedded_detail", {
+            total: langDetection.totalChars,
+            raw: langDetection.rawChars,
+            ratio: Math.round(langDetection.recognizedRatio * 100),
+          });
         } else {
-          analysisStatus = "내장 텍스트로 레이아웃을 구성했습니다.";
+          analysisStatus = $t("forge.pdf.analysis.layout_built_embedded");
         }
         // Even in pdf.js mode, keep user's OCR language selection visible to avoid "Detected: eng" confusion.
         effectiveOcrLangs = ensureCoreOcrLangs(mergeLangs(selectedLangs, autoDetectedLangs));
@@ -1967,15 +1967,15 @@
 
       // Fallback: use tesseract OCR for scanned/image PDFs
       analysisMethod = "tesseractOcr";
-      analysisMethodNote = "내장 텍스트 신뢰도가 낮아 Tesseract OCR을 실행합니다.";
+      analysisMethodNote = $t("forge.pdf.analysis.fallback_note");
       if (langDetection.source === "noEmbeddedText") {
-        analysisStatus = "내장 텍스트가 없어 선택한 OCR 언어로 진행합니다.";
+        analysisStatus = $t("forge.pdf.analysis.no_embedded_use_ocr");
       } else if (langDetection.source === "weakEmbeddedText") {
         analysisStatus = langDetection.fontHints.length > 0
-          ? "내장 텍스트가 불완전하고 폰트 힌트가 있어 OCR로 전환합니다."
-          : "내장 텍스트가 불완전하여 OCR로 전환합니다.";
+          ? $t("forge.pdf.analysis.weak_embedded_with_hint")
+          : $t("forge.pdf.analysis.weak_embedded");
       } else {
-        analysisStatus = "내장 텍스트만으로는 부족해 OCR을 실행합니다.";
+        analysisStatus = $t("forge.pdf.analysis.insufficient_embedded");
       }
 
       // Merge auto-detected with user-selected languages
@@ -1984,15 +1984,21 @@
       effectiveOcrLangs = allLangs;
 
       // Auto-download missing tessdata files
-      analysisStatus = `OCR 언어 데이터 확인 중: ${allLangs.join(", ")}...`;
+      analysisStatus = tr("forge.pdf.analysis.checking_lang_data", {
+        langs: allLangs.join(", "),
+      });
       let autoTessdataDir: string | undefined;
       try {
         autoTessdataDir = await invoke<string>("doc_ocr_ensure_langs", { langs: allLangs });
-        analysisStatus = `준비 완료. OCR 실행 언어: ${allLangs.join(" + ")}.`;
+        analysisStatus = tr("forge.pdf.analysis.ready_langs", {
+          langs: allLangs.join(" + "),
+        });
       } catch (dlErr) {
         // Non-fatal: continue with whatever tessdata is available
         console.warn("Auto-download tessdata failed:", dlErr);
-        analysisStatus = `일부 언어 데이터 자동 다운로드에 실패했습니다. ${allLangs.join(" + ")}로 계속 진행합니다.`;
+        analysisStatus = tr("forge.pdf.analysis.partial_lang_download", {
+          langs: allLangs.join(" + "),
+        });
       }
 
       const effectiveTessdataDir = tessdataDir.trim().length > 0
@@ -2011,7 +2017,7 @@
         canvas.width = Math.ceil(viewport.width);
         canvas.height = Math.ceil(viewport.height);
         const ctx = canvas.getContext("2d");
-        if (!ctx) throw new Error(`Failed to get canvas context for page ${i}`);
+        if (!ctx) throw new Error(tr("forge.pdf.error.canvas_context", { page: i }));
         await page.render({ canvasContext: ctx, viewport }).promise;
         pageImages.push(canvas.toDataURL("image/png"));
         ocrCanvases.push(canvas);
@@ -2026,7 +2032,7 @@
         ocrLang,
         effectiveTessdataDir,
       );
-      analysisStatus = `OCR 레이아웃 완료 (${pageCount}페이지).`;
+      analysisStatus = tr("forge.pdf.analysis.layout_done", { pages: pageCount });
 
       // Sample background colors from rendered canvases
       store.sampleBlockBgColors(ocrCanvases);
@@ -2040,8 +2046,8 @@
       ocrError = msg;
       analyzeError = msg;
       analysisMethod = "idle";
-      analysisMethodNote = "분석 실패";
-      analysisStatus = "분석에 실패했습니다. 아래 오류를 확인하세요.";
+      analysisMethodNote = $t("forge.pdf.analysis.failed_note");
+      analysisStatus = $t("forge.pdf.analysis.failed_status");
     } finally {
       analysisRunning = false;
       hideAnalysisBannerSoon(analyzeError ? 2200 : 1400);
@@ -2160,41 +2166,41 @@
 <div class="pdf-viewer">
   <div class="toolbar">
     <div class="toolbar-left">
-      <button class="tool-btn" onclick={zoomOut} title="Zoom out (⌘/Ctrl -)"><ZoomOut size={16} /></button>
-      <button class="tool-btn" onclick={zoomIn} title="Zoom in (⌘/Ctrl +)"><ZoomIn size={16} /></button>
-      <span class="meta">{Math.round(zoom * 100)}% · {pageCount} pages</span>
+      <button class="tool-btn" onclick={zoomOut} title={$t("forge.pdf.toolbar.zoom_out")}><ZoomOut size={16} /></button>
+      <button class="tool-btn" onclick={zoomIn} title={$t("forge.pdf.toolbar.zoom_in")}><ZoomIn size={16} /></button>
+      <span class="meta">{tr("forge.pdf.toolbar.meta", { zoom: Math.round(zoom * 100), pages: pageCount })}</span>
     </div>
 
     <div class="toolbar-center">
       {#if hasLayout}
-        <button class="tool-btn" class:active={editorMode === "select"} onclick={() => (editorMode = "select")} title="블록 선택">
+        <button class="tool-btn" class:active={editorMode === "select"} onclick={() => (editorMode = "select")} title={$t("forge.pdf.toolbar.mode_select")}>
           <MousePointer size={16} />
         </button>
       {/if}
-      <button class="tool-btn" class:active={editorMode === "highlight"} onclick={() => setModeWithInit("highlight")} title="하이라이트">
+      <button class="tool-btn" class:active={editorMode === "highlight"} onclick={() => setModeWithInit("highlight")} title={$t("forge.pdf.toolbar.mode_highlight")}>
         <Highlighter size={16} />
       </button>
-      <button class="tool-btn" class:active={editorMode === "comment"} onclick={() => setModeWithInit("comment")} title="코멘트">
+      <button class="tool-btn" class:active={editorMode === "comment"} onclick={() => setModeWithInit("comment")} title={$t("forge.pdf.toolbar.mode_comment")}>
         <MessageSquareText size={16} />
       </button>
-      <button class="tool-btn" class:active={editorMode === "insertText"} onclick={() => setModeWithInit("insertText")} title="텍스트 삽입">
+      <button class="tool-btn" class:active={editorMode === "insertText"} onclick={() => setModeWithInit("insertText")} title={$t("forge.pdf.toolbar.mode_insert_text")}>
         <Type size={16} />
       </button>
       <div class="toolbar-divider"></div>
-      <button class="tool-btn" onclick={() => store.undoOp()} disabled={!store.canUndo} title="Undo"><Undo size={16} /></button>
-      <button class="tool-btn" onclick={() => store.redoOp()} disabled={!store.canRedo} title="Redo"><Redo size={16} /></button>
+      <button class="tool-btn" onclick={() => store.undoOp()} disabled={!store.canUndo} title={$t("forge.pdf.toolbar.undo")}><Undo size={16} /></button>
+      <button class="tool-btn" onclick={() => store.redoOp()} disabled={!store.canRedo} title={$t("forge.pdf.toolbar.redo")}><Redo size={16} /></button>
     </div>
 
     <div class="toolbar-right">
-      <button class="tool-btn" class:active={isAnalyzing} onclick={analyze} disabled={isAnalyzing || isLoading} title="OCR 레이아웃 분석">
+      <button class="tool-btn" class:active={isAnalyzing} onclick={analyze} disabled={isAnalyzing || isLoading} title={$t("forge.pdf.toolbar.analyze_layout")}>
         {#if isAnalyzing}<Loader2 size={16} class="spin" />{:else}<Sparkles size={16} />{/if}
       </button>
-      <button class="tool-btn" onclick={() => (showOcrSettings = !showOcrSettings)} title="OCR 설정"><SlidersHorizontal size={16} /></button>
-      <button class="tool-btn" onclick={runOcr} disabled={ocrRunning} title="텍스트 추출 (OCR)">
+      <button class="tool-btn" onclick={() => (showOcrSettings = !showOcrSettings)} title={$t("forge.pdf.toolbar.ocr_settings")}><SlidersHorizontal size={16} /></button>
+      <button class="tool-btn" onclick={runOcr} disabled={ocrRunning} title={$t("forge.pdf.toolbar.ocr_extract")}>
         {#if ocrRunning}<Loader2 size={16} class="spin" />{:else}<ScanText size={16} />{/if}
       </button>
-      <button class="tool-btn" onclick={loadPdf} title="PDF 다시 로드"><RefreshCw size={16} /></button>
-      <button class="tool-btn" onclick={() => (showOcrPanel = !showOcrPanel)} title="OCR 패널 토글">
+      <button class="tool-btn" onclick={loadPdf} title={$t("forge.pdf.toolbar.reload")}><RefreshCw size={16} /></button>
+      <button class="tool-btn" onclick={() => (showOcrPanel = !showOcrPanel)} title={$t("forge.pdf.toolbar.toggle_panel")}>
         {#if showOcrPanel}<PanelRightClose size={16} />{:else}<PanelRightOpen size={16} />{/if}
       </button>
     </div>
@@ -2204,8 +2210,8 @@
     <div class="ocr-settings">
       <div class="ocr-settings-head">
         <div>
-          <div class="ocr-settings-title">OCR 설정</div>
-          <div class="ocr-settings-subtitle">자동 감지는 참고값이며, 실제 OCR은 사용자 선택 언어와 감지 언어를 합쳐 실행됩니다.</div>
+          <div class="ocr-settings-title">{$t("forge.pdf.ocr.settings_title")}</div>
+          <div class="ocr-settings-subtitle">{$t("forge.pdf.ocr.settings_subtitle")}</div>
         </div>
         <div class="method-pill" class:pdfjs={analysisMethod === "pdfjsText"} class:tesseract={analysisMethod === "tesseractOcr"}>
           {methodLabel(analysisMethod)}
@@ -2213,32 +2219,37 @@
       </div>
 
       <div class="ocr-section">
-        <div class="ocr-section-title">언어 설정</div>
+        <div class="ocr-section-title">{$t("forge.pdf.ocr.language_title")}</div>
         <div class="ocr-quick-presets">
-          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["kor", "eng"])}>한국어 + 영어</button>
-          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["eng"])}>영어만</button>
-          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["jpn", "eng"])}>일본어 + 영어</button>
+          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["kor", "eng"])}>{$t("forge.pdf.ocr.preset_ko_en")}</button>
+          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["eng"])}>{$t("forge.pdf.ocr.preset_en")}</button>
+          <button class="preset-btn" type="button" onclick={() => applyLangPreset(["jpn", "eng"])}>{$t("forge.pdf.ocr.preset_ja_en")}</button>
         </div>
 
         <div class="ocr-langs-meta">
           <div class="ocr-langs-meta-item">
-            <span class="ocr-settings-label">사용자 선택</span>
+            <span class="ocr-settings-label">{$t("forge.pdf.ocr.user_selected")}</span>
             <span class="ocr-meta-value">{[...selectedLangs].map((lang) => langLabel(lang)).join(", ")}</span>
           </div>
           <div class="ocr-langs-meta-item">
-            <span class="ocr-settings-label">자동 감지</span>
+            <span class="ocr-settings-label">{$t("forge.pdf.ocr.auto_detected")}</span>
             <span class="ocr-meta-value">
               {#if detectedLangSource === "embeddedText" || detectedLangSource === "weakEmbeddedText"}
-                {autoDetectedLangs.length > 0 ? autoDetectedLangs.map((lang) => langLabel(lang)).join(", ") : "강한 신호 없음"}
+                {autoDetectedLangs.length > 0 ? autoDetectedLangs.map((lang) => langLabel(lang)).join(", ") : $t("forge.pdf.ocr.auto_no_signal")}
               {:else if detectedLangSource === "noEmbeddedText"}
-                내장 텍스트 없음
+                {$t("forge.pdf.ocr.auto_no_embedded")}
               {:else}
-                아직 분석 안 됨
+                {$t("forge.pdf.ocr.auto_not_analyzed")}
               {/if}
             </span>
             {#if lastLangDetection}
               <small class="ocr-meta-sub">
-                {sourceLabel(lastLangDetection.source)} · 샘플 {lastLangDetection.totalChars}/{lastLangDetection.rawChars}자 · 신뢰도 {Math.round(lastLangDetection.recognizedRatio * 100)}%
+                {tr("forge.pdf.ocr.sample_meta", {
+                  source: sourceLabel(lastLangDetection.source),
+                  total: lastLangDetection.totalChars,
+                  raw: lastLangDetection.rawChars,
+                  ratio: Math.round(lastLangDetection.recognizedRatio * 100),
+                })}
               </small>
               <small class="ocr-meta-sub">{scriptSummary(lastLangDetection.scriptCounts)}</small>
               {#if lastLangDetection.fontHints.length > 0}
@@ -2247,15 +2258,15 @@
             {/if}
           </div>
           <div class="ocr-langs-meta-item">
-            <span class="ocr-settings-label">실행 언어</span>
-            <span class="ocr-meta-value">{effectiveOcrLangs.map((lang) => langLabel(lang)).join(", ") || "없음"}</span>
-            <small class="ocr-meta-sub">코드: {effectiveOcrLangs.join(" + ") || ocrLang || "eng"}</small>
+            <span class="ocr-settings-label">{$t("forge.pdf.ocr.run_lang")}</span>
+            <span class="ocr-meta-value">{effectiveOcrLangs.map((lang) => langLabel(lang)).join(", ") || $t("forge.pdf.none")}</span>
+            <small class="ocr-meta-sub">{tr("forge.pdf.ocr.code_prefix", { codes: effectiveOcrLangs.join(" + ") || ocrLang || "eng" })}</small>
           </div>
         </div>
 
         {#if availableLangs.length > 0}
           <div class="lang-select-section">
-            <span class="ocr-settings-label">언어 목록</span>
+            <span class="ocr-settings-label">{$t("forge.pdf.ocr.lang_list")}</span>
             <div class="lang-checkboxes">
               {#each orderedAvailableLangs() as lang}
                 <label class="lang-checkbox" class:priority={PRIORITY_LANGS.includes(lang)} class:selected={selectedLangs.has(lang)}>
@@ -2268,25 +2279,25 @@
           </div>
         {:else}
           <label class="ocr-field">
-            OCR 언어 코드
-            <input type="text" bind:value={ocrLang} placeholder="kor+eng" />
+            {$t("forge.pdf.ocr.lang_code")}
+            <input type="text" bind:value={ocrLang} placeholder={$t("forge.pdf.ocr.lang_code_placeholder")} />
           </label>
         {/if}
       </div>
 
       <div class="ocr-section">
-        <div class="ocr-section-title">Tessdata</div>
+        <div class="ocr-section-title">{$t("forge.pdf.ocr.tessdata_title")}</div>
         <label class="ocr-field">
-          Tessdata 경로 (선택)
-          <input type="text" bind:value={tessdataDir} placeholder="/path/to/tessdata" />
+          {$t("forge.pdf.ocr.tessdata_path")}
+          <input type="text" bind:value={tessdataDir} placeholder={$t("forge.pdf.ocr.tessdata_placeholder")} />
         </label>
       </div>
 
       {#if editorMode === "highlight"}
         <div class="ocr-section">
-          <div class="ocr-section-title">하이라이트</div>
+          <div class="ocr-section-title">{$t("forge.pdf.ocr.highlight_title")}</div>
           <label class="ocr-field">
-            하이라이트 색상
+            {$t("forge.pdf.ocr.highlight_color")}
             <input type="color" bind:value={highlightColor} />
           </label>
         </div>
@@ -2300,18 +2311,18 @@
         <Loader2 size={14} class="spin" />
       {/if}
       <div class="analysis-status-copy">
-        <span class="analysis-status-label">분석 상태</span>
+        <span class="analysis-status-label">{$t("forge.pdf.analysis.status_label")}</span>
         <strong>{methodLabel(analysisMethod)}</strong>
         <span>{analysisStatus || analysisMethodNote}</span>
         {#if lastLangDetection}
-          <span class="analysis-detected">자동 감지 근거: {scriptSummary(lastLangDetection.scriptCounts)}</span>
+          <span class="analysis-detected">{tr("forge.pdf.analysis.auto_detect_basis", { summary: scriptSummary(lastLangDetection.scriptCounts) })}</span>
           {#if lastLangDetection.fontHints.length > 0}
             <span class="analysis-detected">{fontHintSummary(lastLangDetection.fontHints)}</span>
           {/if}
         {/if}
       </div>
       <div class="analysis-used-langs">
-        실행 언어: {effectiveOcrLangs.join(" + ") || ocrLang || "eng"}
+        {tr("forge.pdf.analysis.run_lang", { langs: effectiveOcrLangs.join(" + ") || ocrLang || "eng" })}
         {#if detectedLangSource}
           <small>{sourceLabel(detectedLangSource)}</small>
         {/if}
@@ -2328,19 +2339,19 @@
   {/if}
 
   <div class="viewer-body">
-    <aside class="page-sidebar" aria-label="페이지 미리보기">
+    <aside class="page-sidebar" aria-label={$t("forge.pdf.sidebar.aria")}>
       <div class="page-sidebar-scroll">
         {#each pageThumbnails as thumb}
           <button
             type="button"
             class="thumb-item"
             class:active={activePage === thumb.page}
-            title={`페이지 ${thumb.page}`}
+            title={tr("forge.pdf.sidebar.page_title", { page: thumb.page })}
             onclick={() => scrollToPage(thumb.page)}
           >
             <div class="thumb-sheet">
               {#if thumb.dataUrl}
-                <img src={thumb.dataUrl} alt={`페이지 ${thumb.page} 미리보기`} />
+                <img src={thumb.dataUrl} alt={tr("forge.pdf.sidebar.page_preview_alt", { page: thumb.page })} />
               {:else}
                 <div class="thumb-placeholder"></div>
               {/if}
@@ -2373,7 +2384,7 @@
         {#if isLoading}
           <div class="loading-overlay">
             <Loader2 size={26} class="spin" />
-            <span>PDF 렌더링 중...</span>
+            <span>{$t("forge.pdf.loading_render")}</span>
           </div>
         {/if}
       {/if}
@@ -2383,7 +2394,7 @@
       <aside class="ocr-panel">
         <div class="ocr-header">
           <ScanText size={16} />
-          <span>OCR 텍스트</span>
+          <span>{$t("forge.pdf.ocr_text_title")}</span>
         </div>
         {#if ocrError}
           <div class="ocr-error">{ocrError}</div>
@@ -2391,7 +2402,7 @@
         {#if ocrResult}
           <pre>{ocrResult}</pre>
         {:else if !ocrRunning}
-          <div class="ocr-placeholder">OCR를 실행하면 추출 텍스트가 여기에 표시됩니다.</div>
+          <div class="ocr-placeholder">{$t("forge.pdf.ocr_placeholder")}</div>
         {/if}
       </aside>
     {/if}

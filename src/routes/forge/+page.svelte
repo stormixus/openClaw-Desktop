@@ -131,6 +131,15 @@
   let prevDocIdForWindow = $state<string | null>(null);
   let unlistenNativeFileDrop: (() => void) | null = null;
 
+  function tr(key: string, vars?: Record<string, string | number>): string {
+    let text: string = $t(key);
+    if (!vars) return text;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+    return text;
+  }
+
   function htmlToPlainText(input: string): string {
     if (!input) return "";
     return input
@@ -605,7 +614,7 @@
 
     if (!doc) {
       docStore.isLoading = false;
-      openFileError = `문서 열기 시간이 초과되었습니다 (${Math.round(OPEN_DOC_TIMEOUT_MS / 1000)}초). 파일이 너무 복잡하거나 변환이 지연되고 있습니다.`;
+      openFileError = tr("forge.error.open_timeout", { seconds: Math.round(OPEN_DOC_TIMEOUT_MS / 1000) });
       return;
     }
 
@@ -621,7 +630,7 @@
       .filter((path) => isSupportedDroppedPath(path));
 
     if (droppedPaths.length === 0) {
-      openFileError = "지원되는 문서 파일이 아닙니다. (pdf/docx/hwp/xlsx/pptx/txt/md/json 등)";
+      openFileError = $t("forge.error.unsupported_drop");
       return;
     }
 
@@ -629,7 +638,7 @@
       await openDocumentByPath(droppedPaths[0]);
     } catch (err: unknown) {
       console.error("Failed to open dropped file:", err);
-      openFileError = err instanceof Error ? err.message : "드롭한 파일을 열지 못했습니다.";
+      openFileError = err instanceof Error ? err.message : $t("forge.error.drop_open_failed");
     }
   }
 
@@ -687,20 +696,20 @@
       let filters;
       switch (filterType) {
         case 'spreadsheet':
-          filters = [{ name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv', 'ods'] }];
+          filters = [{ name: $t('forge.filter.spreadsheets'), extensions: ['xlsx', 'xls', 'csv', 'ods'] }];
           break;
         case 'document':
-          filters = [{ name: 'Documents', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] }];
+          filters = [{ name: $t('forge.filter.documents'), extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] }];
           break;
         case 'presentation':
-          filters = [{ name: 'Presentations', extensions: ['pptx', 'ppt'] }];
+          filters = [{ name: $t('forge.filter.presentations'), extensions: ['pptx', 'ppt'] }];
           break;
         default:
           filters = [
-            { name: 'All Supported', extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx', 'pptx', 'ppt'] },
-            { name: 'Spreadsheets', extensions: ['xlsx', 'xls', 'csv', 'ods'] },
-            { name: 'Text', extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] },
-            { name: 'Presentations', extensions: ['pptx', 'ppt'] }
+            { name: $t('forge.filter.all_supported'), extensions: ['xlsx', 'xls', 'csv', 'ods', 'txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx', 'pptx', 'ppt'] },
+            { name: $t('forge.filter.spreadsheets'), extensions: ['xlsx', 'xls', 'csv', 'ods'] },
+            { name: $t('forge.filter.text'), extensions: ['txt', 'md', 'json', 'pdf', 'docx', 'doc', 'hwp', 'hwpx'] },
+            { name: $t('forge.filter.presentations'), extensions: ['pptx', 'ppt'] }
           ];
       }
 
@@ -711,18 +720,18 @@
       }
     } catch (err: unknown) {
       console.error("Failed to open file dialog:", err);
-      openFileError = err instanceof Error ? err.message : "파일을 열지 못했습니다.";
+      openFileError = err instanceof Error ? err.message : $t("forge.error.open_failed");
     }
   }
 
   let showNewDocMenu = $state(false);
 
-  const newDocTypes = [
-    { ext: 'txt', label: '텍스트', icon: 'txt' },
-    { ext: 'md', label: '마크다운', icon: 'md' },
-    { ext: 'docx', label: 'Word 문서', icon: 'docx' },
-    { ext: 'xlsx', label: '스프레드시트', icon: 'xlsx' },
-  ] as const;
+  const newDocTypes = $derived([
+    { ext: 'txt', label: $t('forge.new_doc.text'), icon: 'txt' },
+    { ext: 'md', label: $t('forge.new_doc.markdown'), icon: 'md' },
+    { ext: 'docx', label: $t('forge.new_doc.word'), icon: 'docx' },
+    { ext: 'xlsx', label: $t('forge.new_doc.spreadsheet'), icon: 'xlsx' },
+  ] as const);
 
   async function handleNewDocument(ext: string) {
     showNewDocMenu = false;
@@ -736,7 +745,7 @@
       }
     } catch (err: unknown) {
       console.error("Failed to create new document:", err);
-      openFileError = err instanceof Error ? err.message : "새 문서를 만들지 못했습니다.";
+      openFileError = err instanceof Error ? err.message : $t("forge.error.new_doc_failed");
     }
   }
 
@@ -816,14 +825,14 @@
 
   function buildInlineRewritePrompt(instruction: string, selectedText: string): string {
     return [
-      "아래 [선택 텍스트]를 [사용자 지시]대로 수정하세요.",
-      "반드시 수정된 최종 텍스트만 출력하세요.",
-      "설명, 따옴표, 코드블록 마크다운은 절대 포함하지 마세요.",
+      $t("forge.inline_prompt.line1"),
+      $t("forge.inline_prompt.line2"),
+      $t("forge.inline_prompt.line3"),
       "",
-      "[사용자 지시]",
+      $t("forge.inline_prompt.instruction_label"),
       instruction,
       "",
-      "[선택 텍스트]",
+      $t("forge.inline_prompt.selected_text_label"),
       selectedText,
     ].join("\n");
   }
@@ -831,11 +840,11 @@
   async function handleInlineRewrite(selectedText: string, instruction: string): Promise<string> {
     const cleanText = selectedText.trim();
     const cleanInstruction = instruction.trim();
-    if (!cleanText) throw new Error("선택된 텍스트가 없습니다.");
-    if (!cleanInstruction) throw new Error("명령을 입력해주세요.");
-    if (!gatewayStore.activeGatewayId) throw new Error("게이트웨이에 연결되어 있지 않습니다.");
+    if (!cleanText) throw new Error($t("forge.error.inline_no_selection"));
+    if (!cleanInstruction) throw new Error($t("forge.error.inline_no_instruction"));
+    if (!gatewayStore.activeGatewayId) throw new Error($t("forge.error.inline_gateway_disconnected"));
     if (gatewayStore.isStreaming || pendingRewriteBlockId || pendingInlineRewrite) {
-      throw new Error("다른 AI 작업이 진행 중입니다. 잠시 후 다시 시도해주세요.");
+      throw new Error($t("forge.error.inline_busy"));
     }
 
     const prompt = buildInlineRewritePrompt(cleanInstruction, cleanText);
@@ -846,7 +855,7 @@
       const timeoutId = setTimeout(() => {
         if (!pendingInlineRewrite || pendingInlineRewrite.requestId !== requestId) return;
         pendingInlineRewrite = null;
-        reject(new Error("AI 응답 시간이 초과되었습니다. 다시 시도해주세요."));
+        reject(new Error($t("forge.error.inline_timeout")));
       }, INLINE_REWRITE_TIMEOUT_MS);
 
       pendingInlineRewrite = {
@@ -862,7 +871,7 @@
           clearTimeout(timeoutId);
           pendingInlineRewrite = null;
         }
-        reject(err instanceof Error ? err : new Error("AI 요청 전송에 실패했습니다."));
+        reject(err instanceof Error ? err : new Error($t("forge.error.inline_send_failed")));
       });
     });
   }
@@ -966,7 +975,7 @@
         text = await extractPdfTextViaRasterOcr(activeDoc.id, lang, effectiveTessdataDir);
       }
       if (!text.trim()) {
-        throw new Error("OCR 결과가 비어 있습니다. 언어 데이터/스캔 품질을 확인해주세요.");
+        throw new Error($t("forge.error.ocr_empty"));
       }
 
       pdfOcrText = text;
@@ -975,7 +984,7 @@
       updateForgeContent(text);
     } catch (err: any) {
       console.error("OCR extraction failed:", err);
-      openFileError = `OCR 추출 실패: ${err.message || err}`;
+      openFileError = tr("forge.error.ocr_extract_failed", { error: err.message || err });
     } finally {
       pdfOcrLoading = false;
     }
@@ -995,7 +1004,7 @@
     try {
       const { save } = await import('@tauri-apps/plugin-dialog');
       const savePath = await save({
-        filters: [{ name: 'Word Document', extensions: ['docx'] }],
+        filters: [{ name: $t('forge.new_doc.word'), extensions: ['docx'] }],
         defaultPath: activeDoc?.fileName.replace(/\.pdf$/i, '.docx') ?? 'document.docx',
       });
       if (savePath) {
@@ -1003,18 +1012,18 @@
       }
     } catch (err: any) {
       console.error("Save as DOCX failed:", err);
-      openFileError = `DOCX 저장 실패: ${err.message || err}`;
+      openFileError = tr("forge.error.save_docx_failed", { error: err.message || err });
     }
   }
 
   // PDF AI Rewrite handler
   function handlePdfAiRewrite(blockId: string, text: string) {
     if (!gatewayStore.activeGatewayId) {
-      openFileError = "AI Rewrite: 게이트웨이에 연결되어 있지 않습니다.";
+      openFileError = $t("forge.error.ai_rewrite_gateway");
       return;
     }
     pendingRewriteBlockId = blockId;
-    sendMessage(`다음 텍스트를 개선해서 다시 작성해주세요. 수정된 텍스트만 답변해주세요:\n\n${text}`);
+    sendMessage(tr("forge.ai_rewrite.prompt", { text }));
   }
 
   // Watch for AI response to apply rewrite
@@ -1051,7 +1060,7 @@
 
     const rewritten = latest.content?.trim();
     if (!rewritten) {
-      pending.reject(new Error("AI 응답이 비어 있습니다. 다시 시도해주세요."));
+      pending.reject(new Error($t("forge.error.inline_empty_response")));
       return;
     }
     pending.resolve(rewritten);
@@ -1065,7 +1074,7 @@
     try {
       const { save } = await import('@tauri-apps/plugin-dialog');
       const savePath = await save({
-        filters: [{ name: 'PDF Document', extensions: ['pdf'] }],
+        filters: [{ name: 'PDF', extensions: ['pdf'] }],
         defaultPath: activeDoc.fileName.replace(/\.pdf$/i, '-edited.pdf'),
       });
       if (!savePath) return;
@@ -1217,7 +1226,7 @@
       });
     } catch (err: any) {
       console.error("PDF export failed:", err);
-      openFileError = `PDF 내보내기 실패: ${err.message || err}`;
+      openFileError = tr("forge.error.pdf_export_failed", { error: err.message || err });
     }
   }
 
@@ -1287,7 +1296,7 @@
 <div
   class="forge-page"
   role="main"
-  aria-label="Forge workspace"
+  aria-label={$t("forge.workspace_aria")}
   class:resizing-pane={isResizingPane}
   class:file-drag-over={isFileDragOver}
   ondragenter={handleForgeDragEnter}
@@ -1301,58 +1310,58 @@
       <div class="toolbar-left">
         <span class="doc-title">{activeDoc.fileName}</span>
         {#if activeDoc.modified}
-          <span class="modified-badge">Modified</span>
+          <span class="modified-badge">{$t("forge.toolbar.modified")}</span>
         {/if}
       </div>
 
       <div class="toolbar-center">
         {#if activeDoc.docType === 'pdf'}
           {#if pdfOcrMode}
-            <button class="tool-btn active" onclick={handlePdfOcrBack} title="PDF 원본 보기">
+            <button class="tool-btn active" onclick={handlePdfOcrBack} title={$t("forge.toolbar.pdf_view_original_title")}>
               <FileText size={18} />
             </button>
-            <button class="action-btn ocr-save" onclick={handleSaveAsDocx} title="DOCX로 저장">
+            <button class="action-btn ocr-save" onclick={handleSaveAsDocx} title={$t("forge.toolbar.save_docx_title")}>
               <Save size={16} />
-              .docx 저장
+              {$t("forge.toolbar.save_docx")}
             </button>
           {:else}
             <button
               class="action-btn ocr-btn"
               onclick={handlePdfOcrEdit}
               disabled={pdfOcrLoading}
-              title="OCR로 텍스트 추출 후 편집"
+              title={$t("forge.toolbar.ocr_edit_title")}
             >
               {#if pdfOcrLoading}
                 <Loader2 size={16} class="spin" />
-                OCR 추출 중...
+                {$t("forge.toolbar.ocr_loading")}
               {:else}
                 <FileText size={16} />
-                OCR 편집
+                {$t("forge.toolbar.ocr_edit")}
               {/if}
             </button>
             {#if pdfEditorStore.hasLayout}
               <button
                 class="action-btn pdf-export-btn"
                 onclick={handlePdfExport}
-                title="편집된 PDF 내보내기"
+                title={$t("forge.toolbar.export_pdf_title")}
               >
                 <Save size={16} />
-                Export PDF
+                {$t("forge.toolbar.export_pdf")}
               </button>
             {/if}
           {/if}
         {:else}
-          <button class="tool-btn" onclick={handleUndo} title="Undo">
+          <button class="tool-btn" onclick={handleUndo} title={$t("forge.toolbar.undo")}>
             <Undo size={18} />
           </button>
-          <button class="tool-btn" onclick={handleRedo} title="Redo">
+          <button class="tool-btn" onclick={handleRedo} title={$t("forge.toolbar.redo")}>
             <Redo size={18} />
           </button>
         {/if}
       </div>
 
       <div class="toolbar-right">
-        <button class="tool-btn" onclick={toggleChatPane} title={chatOpen ? 'Hide Chat' : 'Show Chat'}>
+        <button class="tool-btn" onclick={toggleChatPane} title={chatOpen ? $t("forge.toolbar.chat_hide") : $t("forge.toolbar.chat_show")}>
           {#if chatOpen}
             <PanelRightClose size={18} />
           {:else}
@@ -1361,7 +1370,7 @@
         </button>
         <button class="action-btn secondary" onclick={handleClose}>
           <X size={16} />
-          Close
+          {$t("forge.toolbar.close")}
         </button>
         <button
           class="action-btn primary"
@@ -1371,18 +1380,18 @@
             !canSave
               ? (
                   isLegacyDoc
-                    ? ".doc 저장은 지원되지 않습니다. .docx로 저장하세요."
+                    ? $t("forge.toolbar.save_disabled_doc")
                     : isHanwordDoc
-                      ? ".hwp/.hwpx 직접 저장은 아직 지원되지 않습니다. .docx로 저장하세요."
+                      ? $t("forge.toolbar.save_disabled_hwp")
                       : activeDoc?.docType === "presentation"
-                        ? "프레젠테이션은 저장이 지원되지 않습니다."
-                        : "PDF는 저장이 지원되지 않습니다."
+                        ? $t("forge.toolbar.save_disabled_presentation")
+                        : $t("forge.toolbar.save_disabled_pdf")
                 )
-              : "Save"
+              : $t("forge.toolbar.save")
           }
         >
           <Save size={16} />
-          Save
+          {$t("forge.toolbar.save")}
         </button>
       </div>
     </div>
@@ -1397,7 +1406,7 @@
         {#if isAgentEditing && activeDoc.docType !== 'presentation'}
           <div class="agent-editing-banner">
             <div class="agent-editing-spinner"></div>
-            <span>AI가 문서를 수정하고 있습니다...</span>
+            <span>{$t("forge.banner.agent_editing")}</span>
           </div>
         {/if}
         {#if activeDoc.docType === 'excel'}
@@ -1434,7 +1443,7 @@
               />
             {:else}
               <div class="word-fallback-banner">
-                문서가 복잡해서 안정 모드(텍스트 편집)로 열었습니다.
+                {$t("forge.banner.word_fallback")}
               </div>
               <PlainTextEditor
                 content={wordPlainFallbackContent}
@@ -1466,7 +1475,7 @@
         {:else}
           <div class="placeholder-view">
             <FileText size={48} />
-            <p>Preview not available for {activeDoc.docType} files yet.</p>
+            <p>{tr("forge.placeholder.preview_unavailable", { type: activeDoc.docType })}</p>
           </div>
         {/if}
       </div>
@@ -1475,7 +1484,7 @@
         <button
           type="button"
           class="pane-resizer"
-          aria-label="Resize chat panel"
+          aria-label={$t("forge.chat.resize_panel")}
           onmousedown={startPaneResize}
         ></button>
         <div class="chat-side">
@@ -1493,15 +1502,15 @@
                 {/if}
               </div>
               <p>{activeGatewayState?.status === "error" ? $t("gateway.status.error") : $t("gateway.status.disconnected")}</p>
-              <span class="chat-status-hint">Connect a gateway to chat</span>
+              <span class="chat-status-hint">{$t("forge.chat.connect_hint")}</span>
             </div>
           {:else}
             <div class="chat-status">
               <div class="chat-status-icon">
                 <MessageSquare size={24} />
               </div>
-              <p>No gateway configured</p>
-              <a href="/settings" class="chat-status-link">Add Gateway</a>
+              <p>{$t("forge.chat.no_gateway")}</p>
+              <a href="/settings" class="chat-status-link">{$t("forge.chat.add_gateway")}</a>
             </div>
           {/if}
         </div>
@@ -1515,8 +1524,8 @@
         <div class="icon-container">
           <Hammer size={32} strokeWidth={1.5} />
         </div>
-        <h2>문서 협업 도구</h2>
-        <p>파일을 열고 AI와 함께 수정안을 만들고 승인하세요</p>
+        <h2>{$t("forge.landing.title")}</h2>
+        <p>{$t("forge.landing.subtitle")}</p>
         {#if openFileError}
           <div class="open-error">
             <AlertCircle size={14} />
@@ -1526,18 +1535,18 @@
 
         <div class="collab-hero">
           <div class="collab-hero-left">
-            <h3>Forge Document Collaboration</h3>
-            <p>문서/스프레드시트를 열어 AI 제안 패치를 검토하고, 승인/반려로 협업 흐름을 관리할 수 있습니다.</p>
+            <h3>{$t("forge.landing.hero_title")}</h3>
+            <p>{$t("forge.landing.hero_desc")}</p>
           </div>
           <div class="collab-hero-actions">
             <button class="collab-open-btn" onclick={() => handleOpenFile('document')}>
               <Upload size={18} />
-              문서 열기
+              {$t("forge.landing.open_document")}
             </button>
             <div class="new-doc-dropdown">
               <button class="collab-new-btn" onclick={() => showNewDocMenu = !showNewDocMenu}>
                 <FilePlus2 size={18} />
-                새 문서
+                {$t("forge.landing.new_document")}
                 <ChevronDown size={14} />
               </button>
               {#if showNewDocMenu}
@@ -1559,34 +1568,34 @@
             <div class="feature-icon">
               <Theater size={24} strokeWidth={1.5} />
             </div>
-            <h3>NPC Personas</h3>
-            <p>Create and customize AI characters</p>
-            <span class="badge">Ready</span>
+            <h3>{$t("forge.feature.npc_title")}</h3>
+            <p>{$t("forge.feature.npc_desc")}</p>
+            <span class="badge">{$t("forge.feature.badge_ready")}</span>
           </a>
 
           <button class="feature-card" onclick={() => handleOpenFile('spreadsheet')}>
             <div class="feature-icon">
               <Table2 size={24} strokeWidth={1.5} />
             </div>
-            <h3>Spreadsheets</h3>
-            <p>Edit Excel and CSV files</p>
+            <h3>{$t("forge.feature.sheets_title")}</h3>
+            <p>{$t("forge.feature.sheets_desc")}</p>
           </button>
 
           <button class="feature-card collab" onclick={() => handleOpenFile('document')}>
             <div class="feature-icon">
               <FileText size={24} strokeWidth={1.5} />
             </div>
-            <h3>문서 협업</h3>
-            <p>Text/Markdown/PDF/DOCX/HWP 문서 열기</p>
-            <span class="badge">Core</span>
+            <h3>{$t("forge.feature.doc_collab_title")}</h3>
+            <p>{$t("forge.feature.doc_collab_desc")}</p>
+            <span class="badge">{$t("forge.feature.badge_core")}</span>
           </button>
 
           <button class="feature-card" onclick={() => handleOpenFile('presentation')}>
             <div class="feature-icon">
               <Presentation size={24} strokeWidth={1.5} />
             </div>
-            <h3>Presentations</h3>
-            <p>PPTX 슬라이드 뷰어</p>
+            <h3>{$t("forge.feature.presentation_title")}</h3>
+            <p>{$t("forge.feature.presentation_desc")}</p>
           </button>
         </div>
 
@@ -1594,10 +1603,10 @@
           <button class="open-btn" onclick={() => handleOpenFile()}>
             {#if isLoading}
               <Loader2 size={20} class="spin" />
-              Opening...
+              {$t("forge.action.opening")}
             {:else}
               <Upload size={20} />
-              Open File...
+              {$t("forge.action.open_file")}
             {/if}
           </button>
         </div>
@@ -1612,7 +1621,7 @@
       fileName={activeDoc.fileName}
       preview={{
         changes: pendingPatch.changes || [],
-        summary: pendingPatch.summary || "Proposed changes"
+        summary: pendingPatch.summary || $t("forge.approval.proposed_changes")
       }}
       onApprove={handleApprovePatch}
       onReject={handleRejectPatch}
@@ -1624,7 +1633,7 @@
       <div class="forge-drop-content">
         <Upload size={26} />
         <strong>{$t("file.drop")}</strong>
-        <span>파일을 놓으면 Forge 편집기로 바로 열립니다.</span>
+        <span>{$t("forge.drop.hint")}</span>
       </div>
     </div>
   {/if}

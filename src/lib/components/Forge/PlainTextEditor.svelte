@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { AlignLeft } from "@lucide/svelte";
+  import { t } from "$lib/i18n";
 
   interface Props {
     content?: string;
@@ -101,7 +102,7 @@
     if (!onInlinePrompt || inlinePromptBusy) return;
     const instruction = inlinePromptInstruction.trim();
     if (!instruction) {
-      inlinePromptError = "명령을 입력해주세요.";
+      inlinePromptError = $t("forge.inline.error.no_instruction");
       return;
     }
 
@@ -110,7 +111,7 @@
     try {
       const rewritten = (await onInlinePrompt(inlineSelectedText, instruction)).trim();
       if (!rewritten) {
-        throw new Error("AI 응답이 비어 있습니다.");
+        throw new Error($t("forge.inline.error.empty_response"));
       }
       const next = `${text.slice(0, inlineSelectionStart)}${rewritten}${text.slice(inlineSelectionEnd)}`;
       text = next;
@@ -123,7 +124,7 @@
         textareaEl.setSelectionRange(caret, caret);
       });
     } catch (err: unknown) {
-      inlinePromptError = err instanceof Error ? err.message : "AI 수정 요청에 실패했습니다.";
+      inlinePromptError = err instanceof Error ? err.message : $t("forge.inline.error.request_failed");
     } finally {
       inlinePromptBusy = false;
     }
@@ -174,7 +175,7 @@
   <div class="toolbar">
     <span class="mode-pill">
       <AlignLeft size={14} />
-      Plain Text
+      {$t("forge.editor.plain_text")}
     </span>
   </div>
 
@@ -197,14 +198,14 @@
       style={`left:${inlinePromptX}px; top:${inlinePromptY}px;`}
     >
       <div class="inline-agent-head">
-        <strong>선택 텍스트 AI 수정</strong>
+        <strong>{$t("forge.inline.header")}</strong>
         <span>{selectedPreviewText()}</span>
       </div>
       <textarea
         class="inline-agent-input"
         bind:this={inlinePromptInputEl}
         bind:value={inlinePromptInstruction}
-        placeholder='예: "좀 더 길게", "좀 더 구체적으로"'
+        placeholder={$t("forge.inline.placeholder")}
         onkeydown={handleInlinePromptKeydown}
       ></textarea>
       {#if inlinePromptError}
@@ -212,10 +213,10 @@
       {/if}
       <div class="inline-agent-actions">
         <button type="button" class="inline-btn secondary" onclick={closeInlinePrompt} disabled={inlinePromptBusy}>
-          취소
+          {$t("forge.inline.cancel")}
         </button>
         <button type="button" class="inline-btn primary" onclick={submitInlinePrompt} disabled={inlinePromptBusy}>
-          {inlinePromptBusy ? "처리 중..." : "적용"}
+          {inlinePromptBusy ? $t("forge.inline.processing") : $t("forge.inline.apply")}
         </button>
       </div>
     </div>

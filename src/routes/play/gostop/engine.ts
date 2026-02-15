@@ -52,7 +52,11 @@ export interface ScoreSummary {
   ribbon: number;
   pi: number;
   brightScore: number;
+  godoriScore: number;
   animalScore: number;
+  hongdanScore: number;
+  cheongdanScore: number;
+  chodanScore: number;
   ribbonScore: number;
   piScore: number;
   total: number;
@@ -61,7 +65,7 @@ export interface ScoreSummary {
 export type ScoreBoard = Record<PlayerId, ScoreSummary>;
 
 const LOG_LIMIT = 24;
-const WIN_SCORE = 7;
+const WIN_SCORE = 3;
 const HAND_SIZE = 7;
 const TABLE_SIZE = 6;
 
@@ -375,7 +379,11 @@ function newScore(): ScoreSummary {
     ribbon: 0,
     pi: 0,
     brightScore: 0,
+    godoriScore: 0,
     animalScore: 0,
+    hongdanScore: 0,
+    cheongdanScore: 0,
+    chodanScore: 0,
     ribbonScore: 0,
     piScore: 0,
     total: 0,
@@ -693,54 +701,78 @@ export function formatCard(card: HwatuCard, locale: string): string {
 }
 
 export function scoreCaptured(cards: HwatuCard[]): ScoreSummary {
-  const bright = cards.filter((card) => card.kind === 'bright').length;
-  const animal = cards.filter((card) => card.kind === 'animal').length;
-  const ribbon = cards.filter((card) => card.kind === 'ribbon').length;
-  const pi = cards.filter((card) => card.kind === 'pi').length;
+  const bright = cards.filter((c) => c.kind === 'bright').length;
+  const animal = cards.filter((c) => c.kind === 'animal').length;
+  const ribbon = cards.filter((c) => c.kind === 'ribbon').length;
+  const pi = cards.filter((c) => c.kind === 'pi').length;
 
-  const brightScore = bright >= 5 ? 15 : bright >= 3 ? bright : 0;
+  // 비삼광: 3 bright including rain (month 12) = 2 points
+  const hasRainBright = cards.some((c) => c.kind === 'bright' && c.month === 12);
+  let brightScore: number;
+  if (bright >= 5) brightScore = 15;
+  else if (bright === 4) brightScore = 4;
+  else if (bright === 3) brightScore = hasRainBright ? 2 : 3;
+  else brightScore = 0;
+
+  // 고도리: month 2 + 4 + 8 animal cards = 5 points
+  const animalMonths = new Set(cards.filter((c) => c.kind === 'animal').map((c) => c.month));
+  const godoriScore = (animalMonths.has(2) && animalMonths.has(4) && animalMonths.has(8)) ? 5 : 0;
   const animalScore = animal >= 5 ? animal - 4 : 0;
+
+  // 홍단: month 1+2+3 ribbons = 3 points
+  const ribbonMonths = new Set(cards.filter((c) => c.kind === 'ribbon').map((c) => c.month));
+  const hongdanScore = (ribbonMonths.has(1) && ribbonMonths.has(2) && ribbonMonths.has(3)) ? 3 : 0;
+  // 청단: month 6+9+10 ribbons = 3 points
+  const cheongdanScore = (ribbonMonths.has(6) && ribbonMonths.has(9) && ribbonMonths.has(10)) ? 3 : 0;
+  // 초단: month 4+5+7 ribbons = 3 points
+  const chodanScore = (ribbonMonths.has(4) && ribbonMonths.has(5) && ribbonMonths.has(7)) ? 3 : 0;
   const ribbonScore = ribbon >= 5 ? ribbon - 4 : 0;
+
   const piScore = pi >= 10 ? pi - 9 : 0;
-  const total = brightScore + animalScore + ribbonScore + piScore;
+
+  const total = brightScore + godoriScore + animalScore
+    + hongdanScore + cheongdanScore + chodanScore + ribbonScore + piScore;
 
   return {
-    bright,
-    animal,
-    ribbon,
-    pi,
-    brightScore,
-    animalScore,
-    ribbonScore,
-    piScore,
-    total,
+    bright, animal, ribbon, pi,
+    brightScore, godoriScore, animalScore,
+    hongdanScore, cheongdanScore, chodanScore, ribbonScore,
+    piScore, total,
   };
 }
 
 export interface PenaltyDetail {
   piBak: PlayerId[];
   gwangBak: PlayerId[];
+  meongdda: boolean;
   multiplier: number;
 }
 
 export function computePenalties(state: GostopState): PenaltyDetail {
   const winnerId = state.winnerId;
   if (!winnerId || winnerId === 'draw') {
-    return { piBak: [], gwangBak: [], multiplier: 1 };
+    return { piBak: [], gwangBak: [], meongdda: false, multiplier: 1 };
   }
 
+  const winnerScore = scoreCaptured(getPlayer(state, winnerId).captured);
   const losers = state.players.filter((p) => p.id !== winnerId);
   const piBak: PlayerId[] = [];
   const gwangBak: PlayerId[] = [];
 
   for (const loser of losers) {
     const score = scoreCaptured(loser.captured);
-    if (score.pi < 1) piBak.push(loser.id);
-    if (score.bright === 0) gwangBak.push(loser.id);
+    // 피박: winner has 10+ pi AND loser has ≤5 pi (but not 0)
+    if (winnerScore.pi >= 10 && score.pi >= 1 && score.pi <= 5) piBak.push(loser.id);
+    // 광박: winner has bright combo AND loser has 0 bright
+    if (winnerScore.brightScore > 0 && score.bright === 0) gwangBak.push(loser.id);
   }
 
-  const multiplier = Math.pow(2, piBak.length + gwangBak.length);
-  return { piBak, gwangBak, multiplier };
+  // 멍따: winner has 7+ animals → ×2
+  const meongdda = winnerScore.animal >= 7;
+
+  let penaltyCount = piBak.length + gwangBak.length + (meongdda ? 1 : 0);
+  const multiplier = penaltyCount > 0 ? Math.pow(2, penaltyCount) : 1;
+  return { piBak, gwangBak, meongdda, multiplier };
 }
 
 export function totalShakeMultiplier(state: GostopState): number {
@@ -755,16 +787,56 @@ export function scoreState(state: GostopState): ScoreBoard {
     human: newScore(),
   };
 
-  const mult = totalShakeMultiplier(state);
+  const shakeMult = totalShakeMultiplier(state);
 
   for (const player of state.players) {
     const base = scoreCaptured(player.captured);
-    board[player.id] = mult > 1
-      ? { ...base, total: base.total * mult }
-      : base;
+    const total = shakeMult > 1 ? base.total * shakeMult : base.total;
+    board[player.id] = { ...base, total };
   }
 
   return board;
+}
+
+/**
+ * Go bonus applied to the winner's final score.
+ * 1고: +1, 2고: +2, 3고(쓰리고): ×2, 4고: ×4, ...
+ */
+export function goMultiplier(goCount: number): { addPoints: number; multiply: number } {
+  if (goCount <= 0) return { addPoints: 0, multiply: 1 };
+  if (goCount === 1) return { addPoints: 1, multiply: 1 };
+  if (goCount === 2) return { addPoints: 2, multiply: 1 };
+  // 3고 이상: ×2^(goCount-2)
+  return { addPoints: 0, multiply: Math.pow(2, goCount - 2) };
+}
+
+export interface FinalPayment {
+  winnerId: PlayerId;
+  baseScore: number;
+  shakeMult: number;
+  goBonus: { addPoints: number; multiply: number };
+  penalties: PenaltyDetail;
+  finalScore: number;
+}
+
+export function computeFinalPayment(state: GostopState): FinalPayment | null {
+  const winnerId = state.winnerId;
+  if (!winnerId || winnerId === 'draw') return null;
+
+  const board = scoreState(state);
+  const baseScore = board[winnerId].total;
+  const shakeMult = totalShakeMultiplier(state);
+  const goBonus = goMultiplier(state.goCount[winnerId]);
+  const penalties = computePenalties(state);
+
+  let finalScore = baseScore;
+  // Apply Go bonus: add points first, then multiply
+  finalScore += goBonus.addPoints;
+  finalScore *= goBonus.multiply;
+  // Apply penalty multiplier
+  finalScore *= penalties.multiplier;
+
+  return { winnerId, baseScore, shakeMult, goBonus, penalties, finalScore };
 }
 
 export function playTurnCard(state: GostopState, cardId: string): GostopState {

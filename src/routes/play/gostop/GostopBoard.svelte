@@ -11,6 +11,7 @@
     chooseProgramGoStop,
     chooseProgramPendingMatch,
     createNewGame,
+    computeFinalPayment,
     computePenalties,
     detectBombs,
     detectShakes,
@@ -111,6 +112,7 @@
   );
   const shakeMult = $derived(game ? totalShakeMultiplier(game) : 1);
   const penalties = $derived(game ? computePenalties(game) : null);
+  const finalPayment = $derived(game ? computeFinalPayment(game) : null);
   const subStatus = $derived.by(() => {
     if (!game) return '';
     let s = `${$kt('turn')}: ${game.turnNumber} · ${$kt('deck')}: ${game.deck.length}`;
@@ -118,6 +120,7 @@
     if (game.winnerId && penalties) {
       if (penalties.piBak.length) s += ` · ${$kt('pi_bak')}`;
       if (penalties.gwangBak.length) s += ` · ${$kt('gwang_bak')}`;
+      if (penalties.meongdda) s += ` · ${$kt('meong_dda')}`;
       if (penalties.multiplier > 1) s += ` · ${$kt('penalty_multiplier')}${penalties.multiplier}`;
     }
     return s;
@@ -699,7 +702,17 @@
                 {/if}
               </div>
               {#if pScore}
-                <span class="opp-score-badge">{pScore.total}</span>
+                <div class="opp-score-col">
+                  <span class="opp-score-badge">{pScore.total}</span>
+                  {#if pScore.godoriScore > 0 || pScore.hongdanScore > 0 || pScore.cheongdanScore > 0 || pScore.chodanScore > 0}
+                    <div class="opp-combos">
+                      {#if pScore.godoriScore > 0}<span class="combo-pill pill-godori">{$kt('godori')}</span>{/if}
+                      {#if pScore.hongdanScore > 0}<span class="combo-pill pill-hongdan">{$kt('hongdan')}</span>{/if}
+                      {#if pScore.cheongdanScore > 0}<span class="combo-pill pill-cheongdan">{$kt('cheongdan')}</span>{/if}
+                      {#if pScore.chodanScore > 0}<span class="combo-pill pill-chodan">{$kt('chodan')}</span>{/if}
+                    </div>
+                  {/if}
+                </div>
               {/if}
             </div>
 
@@ -826,10 +839,20 @@
             <h3 class="go-stop-title">{$kt('go_or_stop')}</h3>
             <p class="go-stop-desc">{$kt('status_go_or_stop')}</p>
             {#if scores}
+              {@const goHs = scores.human}
               <div class="go-stop-stats">
-                <span class="go-stop-score">{$kt('score')}: {scores.human.total}</span>
+                <span class="go-stop-score">{$kt('score')}: {goHs.total}</span>
                 <span class="go-stop-gocount">{$kt('go_count')}: {game.goCount.human}</span>
               </div>
+              {#if goHs.godoriScore > 0 || goHs.hongdanScore > 0 || goHs.cheongdanScore > 0 || goHs.chodanScore > 0 || goHs.brightScore > 0}
+                <div class="go-stop-combos">
+                  {#if goHs.brightScore > 0}<span class="combo-pill pill-bright">{$kt('bright')} +{goHs.brightScore}</span>{/if}
+                  {#if goHs.godoriScore > 0}<span class="combo-pill pill-godori">{$kt('godori')} +{goHs.godoriScore}</span>{/if}
+                  {#if goHs.hongdanScore > 0}<span class="combo-pill pill-hongdan">{$kt('hongdan')} +{goHs.hongdanScore}</span>{/if}
+                  {#if goHs.cheongdanScore > 0}<span class="combo-pill pill-cheongdan">{$kt('cheongdan')} +{goHs.cheongdanScore}</span>{/if}
+                  {#if goHs.chodanScore > 0}<span class="combo-pill pill-chodan">{$kt('chodan')} +{goHs.chodanScore}</span>{/if}
+                </div>
+              {/if}
             {/if}
             <div class="go-stop-buttons">
               <button type="button" class="go-btn" onclick={() => handleGoStop('go')}>
@@ -838,6 +861,87 @@
               <button type="button" class="stop-btn" onclick={() => handleGoStop('stop')}>
                 {$kt('stop_choice')}
               </button>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- ── Winner Results Overlay ── -->
+      {#if game.winnerId && game.winnerId !== 'draw' && finalPayment && scores}
+        {@const winnerName = getPlayerById(game, game.winnerId).name}
+        {@const ws = scores[game.winnerId]}
+        <div class="winner-overlay">
+          <div class="winner-modal">
+            <h3 class="winner-title">{winnerName} {$kt('status_win')}</h3>
+            <div class="score-breakdown">
+              <h4 class="breakdown-heading">{$kt('score_breakdown')}</h4>
+              <div class="breakdown-grid">
+                {#if ws.brightScore > 0}
+                  <span class="bd-label">{$kt('bright_score')}</span>
+                  <span class="bd-value">+{ws.brightScore}</span>
+                {/if}
+                {#if ws.godoriScore > 0}
+                  <span class="bd-label combo-tag">{$kt('godori')}</span>
+                  <span class="bd-value combo-val">+{ws.godoriScore}</span>
+                {/if}
+                {#if ws.animalScore > 0}
+                  <span class="bd-label">{$kt('animal_score')}</span>
+                  <span class="bd-value">+{ws.animalScore}</span>
+                {/if}
+                {#if ws.hongdanScore > 0}
+                  <span class="bd-label combo-tag">{$kt('hongdan')}</span>
+                  <span class="bd-value combo-val">+{ws.hongdanScore}</span>
+                {/if}
+                {#if ws.cheongdanScore > 0}
+                  <span class="bd-label combo-tag">{$kt('cheongdan')}</span>
+                  <span class="bd-value combo-val">+{ws.cheongdanScore}</span>
+                {/if}
+                {#if ws.chodanScore > 0}
+                  <span class="bd-label combo-tag">{$kt('chodan')}</span>
+                  <span class="bd-value combo-val">+{ws.chodanScore}</span>
+                {/if}
+                {#if ws.ribbonScore > 0}
+                  <span class="bd-label">{$kt('ribbon_score')}</span>
+                  <span class="bd-value">+{ws.ribbonScore}</span>
+                {/if}
+                {#if ws.piScore > 0}
+                  <span class="bd-label">{$kt('pi_score')}</span>
+                  <span class="bd-value">+{ws.piScore}</span>
+                {/if}
+                <span class="bd-label bd-total-label">{$kt('base_score')}</span>
+                <span class="bd-value bd-total-value">{finalPayment.baseScore}</span>
+              </div>
+
+              {#if finalPayment.goBonus.addPoints > 0 || finalPayment.goBonus.multiply > 1}
+                <div class="bonus-row">
+                  <span class="bd-label">{$kt('go_bonus')} (Go x{game.goCount[game.winnerId]})</span>
+                  <span class="bd-value">
+                    {#if finalPayment.goBonus.addPoints > 0}+{finalPayment.goBonus.addPoints}{/if}
+                    {#if finalPayment.goBonus.multiply > 1}x{finalPayment.goBonus.multiply}{/if}
+                  </span>
+                </div>
+              {/if}
+
+              {#if penalties && penalties.multiplier > 1}
+                <div class="penalty-row">
+                  <span class="bd-label">{$kt('penalty_label')}</span>
+                  <span class="bd-value">x{penalties.multiplier}
+                    {#if penalties.piBak.length > 0}({$kt('pi_bak')}){/if}
+                    {#if penalties.gwangBak.length > 0}({$kt('gwang_bak')}){/if}
+                    {#if penalties.meongdda}({$kt('meong_dda')}){/if}
+                  </span>
+                </div>
+              {/if}
+
+              <div class="final-row">
+                <span class="final-label">{$kt('final_score')}</span>
+                <span class="final-value">{finalPayment.finalScore}</span>
+              </div>
+            </div>
+
+            <div class="winner-actions">
+              <button type="button" class="btn-action btn-new" onclick={newRound}>{$kt('new_game')}</button>
+              <button type="button" class="btn-action btn-mode" onclick={backToSetup}>{$kt('change_mode')}</button>
             </div>
           </div>
         </div>
@@ -863,6 +967,25 @@
                 <span class="hk hk-ribbon">{kindIcon('ribbon')}{hs.ribbon}</span>
                 <span class="hk hk-pi">{kindIcon('pi')}{hs.pi}</span>
               </div>
+              {#if hs.godoriScore > 0 || hs.hongdanScore > 0 || hs.cheongdanScore > 0 || hs.chodanScore > 0 || hs.brightScore > 0}
+                <div class="combo-pills">
+                  {#if hs.brightScore > 0}
+                    <span class="combo-pill pill-bright">{hs.bright >= 3 && hs.bright < 4 ? $kt('bi_sam_gwang') : $kt('bright')} +{hs.brightScore}</span>
+                  {/if}
+                  {#if hs.godoriScore > 0}
+                    <span class="combo-pill pill-godori">{$kt('godori')} +{hs.godoriScore}</span>
+                  {/if}
+                  {#if hs.hongdanScore > 0}
+                    <span class="combo-pill pill-hongdan">{$kt('hongdan')} +{hs.hongdanScore}</span>
+                  {/if}
+                  {#if hs.cheongdanScore > 0}
+                    <span class="combo-pill pill-cheongdan">{$kt('cheongdan')} +{hs.cheongdanScore}</span>
+                  {/if}
+                  {#if hs.chodanScore > 0}
+                    <span class="combo-pill pill-chodan">{$kt('chodan')} +{hs.chodanScore}</span>
+                  {/if}
+                </div>
+              {/if}
             </div>
           {/if}
         </div>
@@ -1238,6 +1361,14 @@
     flex-shrink: 0;
   }
 
+  .opp-score-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 3px;
+    flex-shrink: 0;
+  }
+
   .opp-score-badge {
     display: inline-flex;
     align-items: center;
@@ -1251,6 +1382,13 @@
     font-weight: 800;
     color: var(--gold);
     flex-shrink: 0;
+  }
+
+  .opp-combos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    justify-content: flex-end;
   }
 
   /* Speech bubble */
@@ -1645,6 +1783,14 @@
     color: rgba(255,213,79,0.7);
   }
 
+  .go-stop-combos {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+    margin-bottom: 12px;
+  }
+
   .go-stop-buttons {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1687,6 +1833,152 @@
     transform: translateY(-2px) scale(1.03);
     filter: brightness(1.1);
     box-shadow: 0 6px 22px rgba(46,125,50,0.45);
+  }
+
+  /* ── Winner Results Overlay ── */
+  .winner-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 15;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.65);
+    border-radius: 20px;
+    animation: overlay-in 250ms ease-out;
+  }
+
+  .winner-modal {
+    background: linear-gradient(160deg, #1b5e20, #0d3311);
+    border: 2px solid var(--gold);
+    border-radius: 18px;
+    padding: 24px 32px;
+    text-align: center;
+    box-shadow: 0 16px 50px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.1);
+    min-width: 320px;
+    max-width: 420px;
+    animation: modal-in 300ms ease-out;
+  }
+
+  .winner-title {
+    margin: 0 0 16px;
+    font-size: 22px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  }
+
+  .score-breakdown {
+    text-align: left;
+    margin-bottom: 16px;
+  }
+
+  .breakdown-heading {
+    margin: 0 0 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: rgba(232,245,224,0.6);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .breakdown-grid {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.2);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .bd-label {
+    font-size: 12px;
+    color: var(--text-felt);
+  }
+
+  .bd-value {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-felt);
+    text-align: right;
+  }
+
+  .combo-tag {
+    color: #ffd54f;
+    font-weight: 700;
+  }
+
+  .combo-val {
+    color: #ffd54f;
+  }
+
+  .bd-total-label {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    font-weight: 700;
+  }
+
+  .bd-total-value {
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(255,255,255,0.15);
+    font-weight: 800;
+    font-size: 14px;
+    color: var(--gold);
+  }
+
+  .bonus-row, .penalty-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text-felt);
+  }
+
+  .bonus-row .bd-value {
+    color: #66bb6a;
+  }
+
+  .penalty-row .bd-value {
+    color: #ef5350;
+  }
+
+  .final-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    margin-top: 6px;
+    border-radius: 10px;
+    background: rgba(255,213,79,0.15);
+    border: 1px solid rgba(255,213,79,0.3);
+  }
+
+  .final-label {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--gold);
+  }
+
+  .final-value {
+    font-size: 24px;
+    font-weight: 900;
+    color: var(--gold);
+    text-shadow: 0 1px 6px rgba(255,213,79,0.4);
+  }
+
+  .winner-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  .winner-actions .btn-action {
+    padding: 10px 20px;
+    font-size: 13px;
   }
 
   /* ── Human Zone ── */
@@ -1762,6 +2054,57 @@
   .hk-animal { color: #ef9a9a; }
   .hk-ribbon { color: #90caf9; }
   .hk-pi { color: #a5d6a7; }
+
+  .combo-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .combo-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 800;
+    animation: combo-pop 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  @keyframes combo-pop {
+    from { transform: scale(0.5); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .pill-bright {
+    background: linear-gradient(135deg, rgba(255,213,79,0.3), rgba(255,179,0,0.2));
+    color: #ffd54f;
+    border: 1px solid rgba(255,213,79,0.4);
+  }
+
+  .pill-godori {
+    background: linear-gradient(135deg, rgba(239,83,80,0.25), rgba(211,47,47,0.15));
+    color: #ef9a9a;
+    border: 1px solid rgba(239,83,80,0.3);
+  }
+
+  .pill-hongdan {
+    background: linear-gradient(135deg, rgba(239,83,80,0.25), rgba(198,40,40,0.15));
+    color: #ef5350;
+    border: 1px solid rgba(239,83,80,0.3);
+  }
+
+  .pill-cheongdan {
+    background: linear-gradient(135deg, rgba(66,165,245,0.25), rgba(30,136,229,0.15));
+    color: #42a5f5;
+    border: 1px solid rgba(66,165,245,0.3);
+  }
+
+  .pill-chodan {
+    background: linear-gradient(135deg, rgba(102,187,106,0.25), rgba(56,142,60,0.15));
+    color: #66bb6a;
+    border: 1px solid rgba(102,187,106,0.3);
+  }
 
   .human-captures {
     padding: 6px 0;
@@ -2118,6 +2461,16 @@
 
     .go-stop-title {
       font-size: 20px;
+    }
+
+    .winner-modal {
+      min-width: auto;
+      margin: 12px;
+      padding: 20px;
+    }
+
+    .winner-title {
+      font-size: 18px;
     }
 
     .go-btn,

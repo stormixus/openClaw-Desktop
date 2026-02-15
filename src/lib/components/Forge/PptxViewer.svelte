@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from "$lib/i18n";
+
   interface SlideData {
     name: string;
     content: string;
@@ -18,6 +20,15 @@
 
   const currentSlide = $derived(slides[currentSlideIndex] ?? null);
   const totalSlides = $derived(slides.length);
+
+  function tr(key: string, vars?: Record<string, string | number>): string {
+    let text: string = $t(key);
+    if (!vars) return text;
+    for (const [name, value] of Object.entries(vars)) {
+      text = text.replaceAll(`{${name}}`, String(value));
+    }
+    return text;
+  }
 
   function selectSlide(index: number) {
     if (index >= 0 && index < totalSlides) {
@@ -66,13 +77,13 @@
 
 <div class="pptx-viewer">
   {#if totalSlides === 0}
-    <div class="empty-state">No slides found</div>
+    <div class="empty-state">{$t("forge.pptx.empty")}</div>
   {:else}
     <div class="viewer-content">
       <!-- Slide sidebar -->
       <div class="sidebar">
         <div class="sidebar-header">
-          {totalSlides} Slides
+          {tr("forge.pptx.slides_count", { count: totalSlides })}
         </div>
         <div class="slide-list">
           {#each slides as slide, i}
@@ -83,7 +94,7 @@
               onclick={() => selectSlide(i)}
             >
               <span class="slide-number">{i + 1}</span>
-              <span class="slide-preview">{stripHtml(slide.content).slice(0, 60) || "(empty)"}</span>
+              <span class="slide-preview">{stripHtml(slide.content).slice(0, 60) || $t("forge.pptx.preview_empty")}</span>
             </button>
           {/each}
         </div>
@@ -94,14 +105,14 @@
         <div class="slide-header">
           <span class="slide-indicator">{currentSlide?.name ?? ""} / {totalSlides}</span>
           {#if editable}
-            <span class="editable-badge">Editable</span>
+            <span class="editable-badge">{$t("forge.pptx.editable")}</span>
           {/if}
         </div>
         <div class="slide-canvas">
           {#if isAgentEditing}
             <div class="agent-editing-overlay">
               <div class="agent-editing-spinner"></div>
-              <span>AI가 슬라이드를 수정하고 있습니다...</span>
+              <span>{$t("forge.pptx.agent_editing")}</span>
             </div>
           {/if}
           {#if currentSlide}
@@ -127,7 +138,7 @@
             disabled={currentSlideIndex === 0}
             onclick={() => selectSlide(currentSlideIndex - 1)}
           >
-            Prev
+            {$t("forge.pptx.prev")}
           </button>
           <span class="nav-indicator">{currentSlideIndex + 1} / {totalSlides}</span>
           <button
@@ -136,7 +147,7 @@
             disabled={currentSlideIndex >= totalSlides - 1}
             onclick={() => selectSlide(currentSlideIndex + 1)}
           >
-            Next
+            {$t("forge.pptx.next")}
           </button>
         </div>
       </div>
