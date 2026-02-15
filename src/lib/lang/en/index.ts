@@ -79,9 +79,16 @@ export default {
   "settings.minimize_to_tray_desc": "Keep running in the background when closed.",
   "settings.chat": "Chat Settings",
   "settings.thinking": "Thinking Level",
+  "settings.thinking.none": "None",
+  "settings.thinking.low": "Low",
+  "settings.thinking.medium": "Medium",
+  "settings.thinking.high": "High",
   "settings.verbose": "Verbose",
+  "settings.verbose.desc": "Show detailed system output in chat.",
   "settings.reasoning": "Reasoning",
+  "settings.reasoning.desc": "Display model reasoning steps.",
   "settings.deliver": "Auto Deliver",
+  "settings.deliver.desc": "Automatically send messages without manual confirmation.",
 
   // Gateway
   "gateway.title": "Gateways",
@@ -104,11 +111,23 @@ export default {
   "gateway.auth.tailscale": "Tailscale",
   "gateway.auth.token": "Token",
   "gateway.auth.password": "Password",
+  "gateway.placeholder.name": "My Gateway",
+  "gateway.placeholder.url": "https://gateway.example.com",
+  "gateway.placeholder.token": "Enter access token...",
+  "gateway.placeholder.password": "Enter password...",
+  "gateway.duplicate": "A gateway with this URL already exists.",
+  "gateway.url_hint": "Enter the full URL including protocol (https://)",
+  "gateway.auth": "Authentication",
+  "gateway.auth.tailscale_desc": "Uses Tailscale network for secure authentication.",
+  "gateway.tab.drag_hint": "Drag to reorder gateways",
+  "gateway.refresh": "Refresh",
   "gateway.confirm_delete": "Are you sure you want to remove this gateway?",
   "gateway.save": "Save Changes",
 
   // Chat
   "message.download": "Download",
+  "message.copy": "Copy",
+  "message.forward": "Forward",
   "chat.placeholder": "Enter your message...",
   "chat.send": "Send",
   "chat.stop": "Stop",
@@ -119,6 +138,7 @@ export default {
   "chat.mode.chat": "Chat",
   "chat.mode.npc": "NPC",
   "chat.npc.empty": "Start a conversation...",
+  "chat.npc_theme": "NPC Theme",
 
   // Model Selector
   "model.title": "Model",
@@ -130,12 +150,17 @@ export default {
   "agent.title": "Agent",
   "agent.select": "Select Agent",
   "agent.current": "Current Agent",
+  "agent.empty": "No agents available",
 
   // Session
   "session.title": "Session",
   "session.new": "New Session",
   "session.select": "Select Session",
   "session.current": "Current Session",
+  "session.refresh": "Refresh Sessions",
+  "session.empty": "No sessions yet",
+  "session.create": "Create Session",
+  "session.current_label": "Current",
 
   // Toolbar
   "toolbar.files": "Add Files",
@@ -431,10 +456,25 @@ export default {
   "games.module.rules3d.desc": "Push word blocks and rewrite world rules in real time.",
   "games.back": "Play",
 
+  // Code Snippets
+  "code.minimize": "Minimize",
+  "code.close": "Close",
+  "code.copy": "Copy",
+
+  // Lightbox
+  "lightbox.hint": "Click to enlarge",
+
+  // Forward
+  "forward.title": "Forward Message",
+  "forward.send_to": "Send to",
+  "forward.empty": "No available destinations",
+
   // Tool Output
   "tool.expand": "Expand",
   "tool.collapse": "Collapse",
   "tool.results": "results",
+  "tool.arguments": "Arguments",
+  "tool.result": "Result",
 
   // Status
   "status.tokens": "tokens",

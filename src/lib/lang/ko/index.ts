@@ -79,9 +79,16 @@ export default {
   "settings.minimize_to_tray_desc": "닫아도 백그라운드에서 계속 실행합니다.",
   "settings.chat": "채팅 설정",
   "settings.thinking": "생각 수준",
+  "settings.thinking.none": "없음",
+  "settings.thinking.low": "낮음",
+  "settings.thinking.medium": "보통",
+  "settings.thinking.high": "높음",
   "settings.verbose": "상세 출력",
+  "settings.verbose.desc": "채팅에 상세 시스템 출력을 표시합니다.",
   "settings.reasoning": "추론 표시",
+  "settings.reasoning.desc": "모델 추론 과정을 표시합니다.",
   "settings.deliver": "자동 전달",
+  "settings.deliver.desc": "수동 확인 없이 자동으로 메시지를 전송합니다.",
 
   // Gateway
   "gateway.title": "게이트웨이",
@@ -104,11 +111,23 @@ export default {
   "gateway.auth.tailscale": "Tailscale",
   "gateway.auth.token": "토큰",
   "gateway.auth.password": "비밀번호",
+  "gateway.placeholder.name": "내 게이트웨이",
+  "gateway.placeholder.url": "https://gateway.example.com",
+  "gateway.placeholder.token": "액세스 토큰 입력...",
+  "gateway.placeholder.password": "비밀번호 입력...",
+  "gateway.duplicate": "이 URL의 게이트웨이가 이미 존재합니다.",
+  "gateway.url_hint": "프로토콜 포함 전체 URL을 입력하세요 (https://)",
+  "gateway.auth": "인증",
+  "gateway.auth.tailscale_desc": "Tailscale 네트워크를 통해 안전하게 인증합니다.",
+  "gateway.tab.drag_hint": "드래그하여 게이트웨이 순서 변경",
+  "gateway.refresh": "새로고침",
   "gateway.confirm_delete": "이 게이트웨이를 삭제하시겠습니까?",
   "gateway.save": "변경 저장",
 
   // Chat
   "message.download": "다운로드",
+  "message.copy": "복사",
+  "message.forward": "전달",
   "chat.placeholder": "메시지를 입력하세요...",
   "chat.send": "전송",
   "chat.stop": "중단",
@@ -119,6 +138,7 @@ export default {
   "chat.mode.chat": "채팅",
   "chat.mode.npc": "NPC",
   "chat.npc.empty": "대화를 시작하세요...",
+  "chat.npc_theme": "NPC 테마",
 
   // Model Selector
   "model.title": "모델",
@@ -130,12 +150,17 @@ export default {
   "agent.title": "에이전트",
   "agent.select": "에이전트 선택",
   "agent.current": "현재 에이전트",
+  "agent.empty": "사용 가능한 에이전트 없음",
 
   // Session
   "session.title": "세션",
   "session.new": "새 세션",
   "session.select": "세션 선택",
   "session.current": "현재 세션",
+  "session.refresh": "세션 새로고침",
+  "session.empty": "세션이 없습니다",
+  "session.create": "세션 생성",
+  "session.current_label": "현재",
 
   // Toolbar
   "toolbar.files": "파일 추가",
@@ -431,10 +456,25 @@ export default {
   "games.module.rules3d.desc": "규칙 블록을 밀어 세계 규칙을 바꾸는 퍼즐.",
   "games.back": "플레이",
 
+  // Code Snippets
+  "code.minimize": "최소화",
+  "code.close": "닫기",
+  "code.copy": "복사",
+
+  // Lightbox
+  "lightbox.hint": "클릭하여 확대",
+
+  // Forward
+  "forward.title": "메시지 전달",
+  "forward.send_to": "전달 대상",
+  "forward.empty": "전달 가능한 대상이 없습니다",
+
   // Tool Output
   "tool.expand": "펼치기",
   "tool.collapse": "접기",
   "tool.results": "결과",
+  "tool.arguments": "인자",
+  "tool.result": "결과",
 
   // Status
   "status.tokens": "토큰",
