@@ -140,4 +140,4 @@ src-tauri/
 
 ## License
 
-Private &mdash; All rights reserved.
+[MIT License](./LICENSE)
