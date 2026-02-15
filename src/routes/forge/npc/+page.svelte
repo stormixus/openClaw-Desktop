@@ -21,6 +21,7 @@
     NpcSpringAxis,
   } from "$lib/gateway/npcThemeTypes";
   import { Plus, Trash2, Save, Image as ImageIcon, MessageSquare, Monitor, Smile, Eye, Upload, RotateCcw, X, Play, Pause, Sparkles, Code2, WandSparkles } from "@lucide/svelte";
+  import { t } from "$lib/i18n";
 
   // State
   let editingTheme = $state<NpcTheme | null>(null);
@@ -475,12 +476,12 @@
   function createNewTheme() {
     editingTheme = {
       id: `custom_${Date.now()}`,
-      name: "New Persona",
-      description: "A new custom character",
+      name: $t("npc.default_name"),
+      description: $t("npc.default_desc"),
       avatar: { default: "🤖" },
       background: "default",
       characterFolder: "",
-      systemPrompt: "You are a helpful assistant.",
+      systemPrompt: $t("npc.default_prompt"),
       animationRig: createDefaultAnimationRig(),
       builtIn: false,
     };
@@ -1450,17 +1451,17 @@
 </script>
 
 <svelte:head>
-  <title>Forge — NPC Personas | openClaw Desktop</title>
+  <title>{$t("forge.title")} — {$t("npc.page_title")} | {$t("app.title")}</title>
 </svelte:head>
 
 <div class="forge-container">
   <!-- Sidebar: Theme List -->
   <aside class="forge-sidebar">
     <div class="sidebar-header">
-      <h2>🎭 Personas</h2>
+      <h2>{$t("npc.sidebar_title")}</h2>
       <button class="new-btn" onclick={createNewTheme}>
         <Plus size={16} />
-        New
+        {$t("npc.new")}
       </button>
     </div>
 
@@ -1483,7 +1484,7 @@
             <span class="theme-desc">{theme.description}</span>
           </div>
           {#if theme.builtIn}
-            <span class="built-in-badge">Built-in</span>
+            <span class="built-in-badge">{$t("npc.built_in")}</span>
           {/if}
         </button>
       {/each}
@@ -1499,14 +1500,14 @@
             type="text"
             bind:value={editingTheme.name}
             class="title-input"
-            placeholder="Persona Name"
+            placeholder={$t("npc.placeholder_name")}
             disabled={editingTheme.builtIn}
           />
           <input
             type="text"
             bind:value={editingTheme.description}
             class="desc-input"
-            placeholder="Short description..."
+            placeholder={$t("npc.placeholder_desc")}
             disabled={editingTheme.builtIn}
           />
         </div>
@@ -1519,7 +1520,7 @@
           {#if !editingTheme.builtIn}
             <button class="action-btn save" onclick={handleSave}>
               <Save size={18} />
-              Save
+              {$t("npc.save")}
             </button>
           {/if}
         </div>
@@ -1531,12 +1532,12 @@
 
           <!-- Visuals Section -->
           <section class="config-section">
-            <h3><Monitor size={16} /> Visuals</h3>
+            <h3><Monitor size={16} /> {$t("npc.visuals")}</h3>
 
             <!-- Background selection -->
             <div class="input-group">
               <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label>Background</label>
+              <label>{$t("npc.background")}</label>
               <div class="preset-grid">
                 {#each BG_PRESETS as preset}
                   <button
@@ -1545,7 +1546,7 @@
                     style="background: {preset.gradient}"
                     onclick={() => { if (editingTheme) editingTheme.background = preset.id; }}
                     disabled={editingTheme.builtIn}
-                    title={preset.label}
+                    title={$t("npc.bg." + preset.id)}
                   >
                     {#if editingTheme.background === preset.id}
                       <span class="check">✓</span>
@@ -1558,7 +1559,7 @@
                 <input
                   type="text"
                   bind:value={editingTheme.background}
-                  placeholder="Or paste image URL..."
+                  placeholder={$t("npc.placeholder_image_url")}
                   disabled={editingTheme.builtIn}
                 />
               </div>
@@ -1567,7 +1568,7 @@
             <!-- Character Folder -->
             <div class="input-group">
               <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label>Character Images Folder</label>
+              <label>{$t("npc.character_folder")}</label>
               <div class="url-input">
                 <Smile size={16} />
                 <input
@@ -1577,7 +1578,7 @@
                   disabled={editingTheme.builtIn}
                 />
               </div>
-              <p class="hint">Folder with expression SVGs: neutral.svg, happy.svg, etc.</p>
+              <p class="hint">{$t("npc.character_folder_hint")}</p>
             </div>
           </section>
 
@@ -1585,15 +1586,15 @@
           {#if editingTheme.backgrounds || editingTheme.backgroundImage}
             <section class="config-section">
               <div class="section-header-row">
-                <h3><ImageIcon size={16} /> Backgrounds</h3>
+                <h3><ImageIcon size={16} /> {$t("npc.backgrounds")}</h3>
                 {#if originalBgs}
-                  <button class="rollback-btn" onclick={handleBgRollbackAll} title="Rollback all backgrounds to original">
+                  <button class="rollback-btn" onclick={handleBgRollbackAll} title={$t("npc.rollback_all_bg")}>
                     <RotateCcw size={14} />
-                    Rollback
+                    {$t("npc.rollback")}
                   </button>
                 {/if}
               </div>
-              <p class="hint" style="margin-bottom: 12px">Per-emotion background images. Click an emotion tab above to preview.</p>
+              <p class="hint" style="margin-bottom: 12px">{$t("npc.bg_hint")}</p>
               <div class="bg-grid">
                 {#each BG_EMOTIONS as bgKey}
                   {@const src = getBgSrc(bgKey)}
@@ -1608,12 +1609,12 @@
                       previewEmotion = bgKey === "default" ? "neutral" : bgKey;
                     }}>
                       {#if src}
-                        <img src={src} alt={BG_EMOTION_LABELS[bgKey]} />
+                        <img src={src} alt={$t("npc.bg_emotion." + bgKey)} />
                       {:else}
                         <span class="bg-empty">--</span>
                       {/if}
                     </button>
-                    <span class="bg-label">{BG_EMOTION_LABELS[bgKey]}</span>
+                    <span class="bg-label">{$t("npc.bg_emotion." + bgKey)}</span>
                     <div class="part-actions">
                       <!-- svelte-ignore a11y_click_events_have_key_events -->
                       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -1642,11 +1643,11 @@
           {#if editingTheme.characterParts}
             <section class="config-section">
               <div class="section-header-row">
-                <h3><ImageIcon size={16} /> Character Parts</h3>
+                <h3><ImageIcon size={16} /> {$t("npc.character_parts")}</h3>
                 {#if originalParts}
-                  <button class="rollback-btn" onclick={handleRollbackAll} title="Rollback all parts to original">
+                  <button class="rollback-btn" onclick={handleRollbackAll} title={$t("npc.rollback_all_parts")}>
                     <RotateCcw size={14} />
-                    Rollback
+                    {$t("npc.rollback")}
                   </button>
                 {/if}
               </div>
@@ -1667,12 +1668,12 @@
                   }}>
                     <div class="part-thumb">
                       {#if src}
-                        <img src={src} alt={label} />
+                        <img src={src} alt={$t("npc.part." + key)} />
                       {:else}
                         <span class="part-empty">--</span>
                       {/if}
                     </div>
-                    <span class="part-label">{label}</span>
+                    <span class="part-label">{$t("npc.part." + key)}</span>
                     <div class="part-actions">
                       <!-- svelte-ignore a11y_click_events_have_key_events -->
                       <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
@@ -1701,8 +1702,8 @@
                 {@const origin = getPartOrigin(selectedPart)}
                 <div class="offset-controls">
                   <div class="offset-header">
-                    <span class="offset-title">{PART_KEYS.find(p => p.key === selectedPart)?.label} — Position</span>
-                    <button class="offset-reset" onclick={() => resetPartOffset(selectedPart!)}>Reset</button>
+                    <span class="offset-title">{$t("npc.part." + selectedPart)} — {$t("npc.position")}</span>
+                    <button class="offset-reset" onclick={() => resetPartOffset(selectedPart!)}>{$t("npc.reset")}</button>
                   </div>
                   <div class="offset-row">
                     <!-- svelte-ignore a11y_label_has_associated_control -->
@@ -1722,8 +1723,8 @@
 
                 <div class="offset-controls">
                   <div class="offset-header">
-                    <span class="offset-title">{PART_KEYS.find(p => p.key === selectedPart)?.label} — Pivot</span>
-                    <button class="offset-reset" onclick={() => resetPartOrigin(selectedPart!)}>Reset</button>
+                    <span class="offset-title">{$t("npc.part." + selectedPart)} — {$t("npc.pivot")}</span>
+                    <button class="offset-reset" onclick={() => resetPartOrigin(selectedPart!)}>{$t("npc.reset")}</button>
                   </div>
                   <div class="offset-row">
                     <!-- svelte-ignore a11y_label_has_associated_control -->
@@ -1747,24 +1748,24 @@
           <!-- Animation Rig Section -->
           <section class="config-section">
             <div class="section-header-row">
-              <h3><Sparkles size={16} /> Motion Rig</h3>
+              <h3><Sparkles size={16} /> {$t("npc.motion_rig")}</h3>
               <div class="rig-actions">
-                <button class="offset-reset" onclick={autoTuneRig} title={editingTheme.builtIn ? "Auto tune preview (built-in)" : "Auto tune spring + mesh"}>
+                <button class="offset-reset" onclick={autoTuneRig} title={$t(editingTheme.builtIn ? "npc.auto_tune_builtin" : "npc.auto_tune_custom")}>
                   <Sparkles size={12} />
-                  Auto Tune
+                  {$t("npc.auto_tune")}
                 </button>
-                <button class="offset-reset" onclick={formatRigJson} title="Prettify JSON">
+                <button class="offset-reset" onclick={formatRigJson} title={$t("npc.prettify_json")}>
                   <Code2 size={12} />
-                  Format
+                  {$t("npc.format")}
                 </button>
                 {#if !editingTheme.builtIn}
-                  <button class="offset-reset" onclick={applyRigJson} title="Apply to preview">
+                  <button class="offset-reset" onclick={applyRigJson} title={$t("npc.apply_preview")}>
                     <WandSparkles size={12} />
-                    Apply
+                    {$t("npc.apply")}
                   </button>
-                  <button class="offset-reset" onclick={resetRigJson} title="Reset to default rig">
+                  <button class="offset-reset" onclick={resetRigJson} title={$t("npc.reset_rig")}>
                     <RotateCcw size={12} />
-                    Reset
+                    {$t("npc.reset")}
                   </button>
                 {/if}
               </div>
@@ -1773,7 +1774,7 @@
             <div class="motion-toolbar">
               <div class="motion-item">
                 <!-- svelte-ignore a11y_label_has_associated_control -->
-                <label>Motion</label>
+                <label>{$t("npc.motion")}</label>
                 <select bind:value={previewMotion}>
                   {#each motionOptions as motionName}
                     <option value={motionName}>{motionName}</option>
@@ -1782,11 +1783,11 @@
               </div>
               <div class="motion-item">
                 <!-- svelte-ignore a11y_label_has_associated_control -->
-                <label>Speed</label>
+                <label>{$t("npc.speed")}</label>
                 <input type="range" min="0.2" max="2.5" step="0.1" bind:value={previewSpeed} />
                 <span class="offset-value">{previewSpeed.toFixed(1)}x</span>
               </div>
-              <button class="play-toggle" onclick={togglePlayback} title={animationPlaying ? "Pause" : "Play"}>
+              <button class="play-toggle" onclick={togglePlayback} title={animationPlaying ? $t("npc.pause") : $t("npc.play")}>
                 {#if animationPlaying}
                   <Pause size={14} />
                 {:else}
@@ -1805,23 +1806,23 @@
             {#if rigJsonError}
               <p class="rig-error">{rigJsonError}</p>
             {/if}
-            <p class="hint">`Auto Tune`은 항상 보입니다. built-in에서는 프리뷰 튜닝만, custom에서는 저장 가능한 rig 튜닝입니다.</p>
+            <p class="hint">{$t("npc.rig_hint")}</p>
           </section>
 
           <!-- Expression Avatars Section -->
           <section class="config-section">
-            <h3><Smile size={16} /> Expression Avatars</h3>
-            <p class="hint" style="margin-bottom: 12px">Emoji or URL per expression (fallback to Default)</p>
+            <h3><Smile size={16} /> {$t("npc.expression_avatars")}</h3>
+            <p class="hint" style="margin-bottom: 12px">{$t("npc.avatar_hint")}</p>
             <div class="expression-grid">
               {#each EXPRESSIONS as expr}
                 <div class="expression-item">
                   <!-- svelte-ignore a11y_label_has_associated_control -->
-                  <label>{EXPRESSION_LABELS[expr]}</label>
+                  <label>{$t("npc.expr." + expr)}</label>
                   <input
                     type="text"
                     value={getAvatarExpression(expr === "neutral" ? "default" : expr)}
                     oninput={(e) => setAvatarExpression(expr === "neutral" ? "default" : expr, (e.target as HTMLInputElement).value)}
-                    placeholder={expr === "neutral" ? "Required" : "Optional"}
+                    placeholder={expr === "neutral" ? $t("npc.required") : $t("npc.optional")}
                     disabled={editingTheme.builtIn}
                   />
                 </div>
@@ -1831,18 +1832,18 @@
 
           <!-- Personality Section -->
           <section class="config-section">
-            <h3><MessageSquare size={16} /> Personality</h3>
+            <h3><MessageSquare size={16} /> {$t("npc.personality")}</h3>
 
             <div class="input-group">
               <!-- svelte-ignore a11y_label_has_associated_control -->
-              <label>System Prompt</label>
+              <label>{$t("npc.system_prompt")}</label>
               <textarea
                 bind:value={editingTheme.systemPrompt}
                 rows="6"
-                placeholder="You are a..."
+                placeholder={$t("npc.placeholder_prompt")}
                 disabled={editingTheme.builtIn}
               ></textarea>
-              <p class="hint">Define how the character speaks and behaves.</p>
+              <p class="hint">{$t("npc.prompt_hint")}</p>
             </div>
           </section>
         </div>
@@ -1851,13 +1852,13 @@
         <div class="preview-panel">
           <div class="preview-header">
             <div class="preview-header-main">
-              <span class="preview-label"><Eye size={14} /> Preview</span>
+              <span class="preview-label"><Eye size={14} /> {$t("npc.preview")}</span>
               <div class="renderer-switch">
                 <button class="renderer-tab" class:active={useCanvasRenderer} onclick={() => { useCanvasRenderer = true; }}>
-                  Canvas
+                  {$t("npc.canvas")}
                 </button>
                 <button class="renderer-tab" class:active={!useCanvasRenderer} onclick={() => { useCanvasRenderer = false; }}>
-                  DOM
+                  {$t("npc.dom")}
                 </button>
               </div>
             </div>
@@ -1867,9 +1868,9 @@
                   class="emotion-tab"
                   class:active={previewEmotion === expr}
                   onclick={() => { previewEmotion = expr; }}
-                  title={EXPRESSION_LABELS[expr]}
+                  title={$t("npc.expr." + expr)}
                 >
-                  {EXPRESSION_LABELS[expr].split(" ")[0]}
+                  {$t("npc.expr." + expr).split(" ")[0]}
                 </button>
               {/each}
             </div>
@@ -1930,7 +1931,7 @@
               <!-- Dialogue box -->
               <div class="preview-dialogue">
                 <span class="preview-name">{editingTheme.name}</span>
-                <p class="preview-text">Hello! I'm ready to chat. Ask me anything.</p>
+                <p class="preview-text">{$t("npc.preview_dialogue")}</p>
               </div>
             </div>
           </div>
@@ -1938,15 +1939,15 @@
       </div>
 
       {#if savedToast}
-        <div class="save-toast">✓ Saved!</div>
+        <div class="save-toast">✓ {$t("npc.saved")}</div>
       {/if}
 
     {:else}
       <div class="empty-state">
         <div class="empty-icon">🔨</div>
-        <h2>Select a Persona to Edit</h2>
-        <p>Or create a new one to get started.</p>
-        <button class="primary-btn" onclick={createNewTheme}>Create New</button>
+        <h2>{$t("npc.empty_title")}</h2>
+        <p>{$t("npc.empty_desc")}</p>
+        <button class="primary-btn" onclick={createNewTheme}>{$t("npc.create_new")}</button>
       </div>
     {/if}
   </main>

@@ -208,7 +208,7 @@
   const { content = "", editable = true, onchange, onInlinePrompt }: Props = $props();
 
   let element: HTMLElement;
-  let editor: Editor | null = $state(null);
+  let editor: Editor | null = $state.raw(null);
   let applyingExternalContent = false;
   let lastExternalContent: string | null = null;
   let skipInitialUpdate = true;

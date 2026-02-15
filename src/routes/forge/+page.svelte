@@ -804,7 +804,6 @@
 
   function handleTextChange(newContent: string) {
     if (!activeDoc || activeDoc.docType !== 'text') return;
-    activeDoc.modified = true;
     pendingTextContent = newContent;
 
     // Keep forge context fresh for next chat message
@@ -1233,17 +1232,12 @@
   // Slide editing handler for PPTX
   function handleSlideChange(slideIndex: number, content: string) {
     if (!activeDoc || activeDoc.docType !== 'presentation') return;
-    // Update local state
-    if (activeDoc.sheets[slideIndex]) {
-      activeDoc.sheets[slideIndex].rows = [[{ type: 'string' as const, value: content }]];
-      activeDoc.modified = true;
-    }
-    // Sync to backend
+    // Sync to backend (store handles local state updates)
     setTextContent(activeDoc.id, content, 'html', slideIndex);
-    // Update forge context
-    const fullContent = activeDoc.sheets.map(s =>
-      (s.rows[0]?.[0]?.value as string) ?? ""
-    ).join('\n---\n');
+    // Update forge context using current local snapshot plus the edited slide.
+    const fullContent = activeDoc.sheets
+      .map((sheet, idx) => (idx === slideIndex ? content : ((sheet.rows[0]?.[0]?.value as string) ?? "")))
+      .join('\n---\n');
     updateForgeContent(fullContent);
   }
 

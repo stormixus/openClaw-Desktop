@@ -25,8 +25,13 @@
   const { content = "", editable = true, onchange }: Props = $props();
 
   let element: HTMLElement;
-  let editor: Editor | null = $state(null);
+  let editor: Editor | null = $state.raw(null);
   let applyingExternal = false;
+  let lastEmittedMd = "";
+  let suppressInitialUpdate = true;
+
+  const TEXT_NODE = typeof Node !== "undefined" ? Node.TEXT_NODE : 3;
+  const ELEMENT_NODE = typeof Node !== "undefined" ? Node.ELEMENT_NODE : 1;
 
   marked.setOptions({
     gfm: true,
@@ -34,8 +39,12 @@
   });
 
   async function markdownToHtml(markdown: string): Promise<string> {
-    const parsed = await Promise.resolve(marked.parse(markdown ?? ""));
-    return DOMPurify.sanitize(parsed as string);
+    try {
+      const parsed = await Promise.resolve(marked.parse(markdown ?? ""));
+      return DOMPurify.sanitize(typeof parsed === "string" ? parsed : String(parsed ?? ""));
+    } catch {
+      return DOMPurify.sanitize(markdown ?? "");
+    }
   }
 
   function escapeInline(text: string): string {
@@ -53,10 +62,10 @@
   }
 
   function renderInline(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       return escapeInline(node.textContent ?? "");
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    if (node.nodeType !== ELEMENT_NODE) return "";
 
     const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
@@ -104,11 +113,11 @@
   }
 
   function renderBlock(node: Node): string {
-    if (node.nodeType === Node.TEXT_NODE) {
+    if (node.nodeType === TEXT_NODE) {
       const text = collapseSpace(node.textContent ?? "");
       return text ? `${text}\n\n` : "";
     }
-    if (node.nodeType !== Node.ELEMENT_NODE) return "";
+    if (node.nodeType !== ELEMENT_NODE) return "";
 
     const element = node as HTMLElement;
     const tag = element.tagName.toLowerCase();
@@ -155,47 +164,70 @@
 
   function htmlToMarkdown(html: string): string {
     if (typeof window === "undefined") return html;
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-    const markdown = Array.from(doc.body.childNodes).map(renderBlock).join("");
-    return markdown
-      .replace(/\n{3,}/g, "\n\n")
-      .replace(/[ \t]+\n/g, "\n")
-      .trim();
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      const markdown = Array.from(doc.body.childNodes).map(renderBlock).join("");
+      return markdown
+        .replace(/\n{3,}/g, "\n\n")
+        .replace(/[ \t]+\n/g, "\n")
+        .trim();
+    } catch {
+      return html ?? "";
+    }
   }
 
   async function applyMarkdown(markdown: string): Promise<void> {
     if (!editor) return;
+    const targetEditor = editor;
     const html = await markdownToHtml(markdown);
-    const current = htmlToMarkdown(editor.getHTML());
+    const current = htmlToMarkdown(targetEditor.getHTML());
     if (current === (markdown ?? "").trim()) return;
     applyingExternal = true;
-    editor.commands.setContent(html);
-    applyingExternal = false;
+    try {
+      targetEditor.commands.setContent(html);
+    } finally {
+      applyingExternal = false;
+    }
   }
 
   onMount(async () => {
-    const initialHtml = await markdownToHtml(content);
-    editor = new Editor({
-      element,
-      extensions: [StarterKit],
-      content: initialHtml,
-      editable,
-      onUpdate: ({ editor }) => {
-        if (applyingExternal) return;
-        onchange?.(htmlToMarkdown(editor.getHTML()));
-      },
-    });
+    suppressInitialUpdate = true;
+    lastEmittedMd = content ?? "";
+    try {
+      const initialHtml = await markdownToHtml(content);
+      editor = new Editor({
+        element,
+        extensions: [StarterKit],
+        content: initialHtml,
+        editable,
+        onUpdate: ({ editor }) => {
+          if (applyingExternal || suppressInitialUpdate) return;
+          const md = htmlToMarkdown(editor.getHTML());
+          lastEmittedMd = md;
+          onchange?.(md);
+        },
+      });
+    } finally {
+      queueMicrotask(() => {
+        suppressInitialUpdate = false;
+      });
+    }
   });
 
   onDestroy(() => {
+    suppressInitialUpdate = true;
     editor?.destroy();
   });
 
   $effect(() => {
     if (!editor) return;
+    const incoming = content ?? "";
+    // Skip if the incoming content matches what we last emitted (prevents infinite loop)
+    if (incoming === lastEmittedMd) return;
     if (!editor.isFocused) {
-      void applyMarkdown(content ?? "");
+      lastEmittedMd = incoming;
+      void applyMarkdown(incoming);
     }
   });
 

@@ -14,6 +14,7 @@ openclaw-source
 .claude
 .codex
 
-# Docs/specs (keep only README.md)
+# Docs/specs (keep README.md and docs/ directory)
 *.md
 !README.md
+!docs/*.md
